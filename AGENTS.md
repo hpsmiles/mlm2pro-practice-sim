@@ -33,6 +33,11 @@ Android tablet golf-sim & practice app for the **Rapsodo MLM2PRO** launch monito
 
 ## Conventions for This Repo
 
-- No repo-wide commands exist yet (empty repo, no build files). As the project scaffolds, update this file with exact Gradle commands: build, install, unit tests, and how to run a single test.
+- Windows: JDK is not on `PATH` — set `$env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"` before any Gradle command.
+- Build everything (assemble + tests): `.\gradlew.bat build`
+- Run all unit tests: `.\gradlew.bat test`
+- One module's tests: `.\gradlew.bat :core:ble:test`
+- One test class: `.\gradlew.bat :core:ble:test --tests "com.hpsmiles.golfsim.core.ble.ScaffoldSmokeTest"`
+- Install debug build on a connected tablet: `.\gradlew.bat :app:installDebug`
 - BLE parsing and physics code must be unit-testable without a physical MLM2PRO — keep the byte-decoder and ball-flight ODE pure/deterministic (given inputs → same outputs).
 - Do not add cloud/PC dependencies; single-device constraint is a hard architectural boundary.
