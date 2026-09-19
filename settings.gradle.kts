@@ -21,3 +21,5 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = "mlm2pro-practice-sim"
+
+include(":core:ble")
