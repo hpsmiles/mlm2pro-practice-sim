@@ -74,6 +74,7 @@ The M0 marker object `Mlm2proBle` and its smoke test are removed once real tests
 - `MeasurementParser.parse(payload: ByteArray): BallDataResult` — input is the decrypted payload. All-zero 20 bytes → `Misread`. Length ≠ 20 → `Malformed`.
 - `EventParser.parse(payload: ByteArray): Mlm2proEvent?` — `null` only for an empty payload; any other byte string maps to a variant (known code or `Unknown`). Never throws.
 - `Mlm2proDecoder.decode(characteristic: Characteristic, notification: ByteArray, key: ByteArray): Mlm2proMessage` — decrypts, routes by characteristic, dispatches to the right parser. The single entry point M4's GATT layer will call.
+- `Mlm2proDecoder.decode(characteristicUuid: String, notification: ByteArray, key: ByteArray): Mlm2proMessage` — overload taking a raw GATT characteristic UUID (what Android's BLE stack hands over); resolves case-insensitively via `Characteristic.fromUuid`, yielding `Unrecognized(uuid)` for anything outside the enum. The M4 GATT layer calls this form.
 
 ## 5. Data model
 
