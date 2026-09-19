@@ -22,7 +22,7 @@ Android tablet golf-sim & practice app for the **Rapsodo MLM2PRO** launch monito
 
 ## Data Acquisition (BLE)
 
-- Parse MLM2PRO BLE advertisement/GATT data using reverse-engineered byte mappings from open-source repos: **MLM2PRO-BT-APP**, **flighthook**.
+- Parse MLM2PRO GATT notification data using reverse-engineered byte mappings from open-source repos: **Duwaynef/MLM2PRO-BT-APP** (C#, MIT — ships the written protocol spec `mlm2pro.md`) and **springbok/MLM2PRO-GSPro-Connector** (Python, GPL — independent corroboration, reference-only, no code copying). `flighthook` has no MLM2PRO BLE code and is not a reference.
 - Raw ball metrics captured on-device: Ball Speed, Launch Angle, Launch Direction, Spin, Spin Axis.
 - Treat third-party byte-mapping tables as reference data to re-verify against live captures — protocol details may drift between monitor firmware versions.
 
