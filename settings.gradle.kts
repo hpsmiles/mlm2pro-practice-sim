@@ -25,3 +25,5 @@ rootProject.name = "mlm2pro-practice-sim"
 include(":core:ble")
 
 include(":core:physics")
+
+include(":app")
