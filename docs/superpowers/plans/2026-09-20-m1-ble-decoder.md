@@ -543,7 +543,7 @@ class GoldenFixturesTest(private val fixtureName: String, private val fixture: P
     private fun assertShot(payload: ByteArray) {
         val result = MeasurementParser.parse(payload)
         val shot = result as? BallDataResult.Shot
-            ?: fail("$fixtureName should parse to a Shot, was $result")
+            ?: throw AssertionError("$fixtureName should parse to a Shot, was $result")
         assertEquals(d("clubHeadSpeed"), shot.data.clubHeadSpeed, 1e-9)
         assertEquals(d("ballSpeed"), shot.data.ballSpeed, 1e-9)
         assertEquals(d("launchDirection"), shot.data.launchDirection, 1e-9)
@@ -567,12 +567,14 @@ class GoldenFixturesTest(private val fixtureName: String, private val fixture: P
 
         private fun goldenFiles(): List<File> =
             GoldenFixturesTest::class.java.classLoader.getResources("golden").toList()
-                .map(::File)
+                .map { File(it.toURI()) }
                 .flatMap { dir -> dir.walkTopDown().filter { f -> f.isFile && f.name.endsWith(".properties") } }
                 .sortedBy { it.name }
     }
 }
 ```
+
+**Amendment (post-implementation, commit `af11eab`):** two compile-level fixes to the snippet above are canonical: `?: throw AssertionError(...)` instead of `?: fail(...)` (JUnit4 `Assert.fail` returns `Unit` in Kotlin, which defeats elvis smart-cast to `BallDataResult.Shot`), and `.map { File(it.toURI()) }` instead of `.map(::File)` (no `File(URL)` constructor exists; `toURI()` also URL-decodes the space in the workspace path). The `fail` import remains in use by the unknown-type branch.
 
 - [ ] **Step 3: Run the harness (passes immediately — the parser already exists; this proves the harness and seed files agree)**
 
