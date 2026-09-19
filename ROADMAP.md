@@ -14,7 +14,7 @@ Gradle + Kotlin + Jetpack Compose project, minSdk 31, module layout, `.gitignore
 
 ## M1 — BLE Byte-Decoder (pure Kotlin, TDD)
 
-Port MLM2PRO byte mappings from open-source references (MLM2PRO-BT-APP, flighthook). Capture real advertisement/GATT payloads with the device in the shed and commit them as golden fixtures. Decoder is pure and deterministic: raw bytes → Ball Speed, Launch Angle, Launch Direction, Spin, Spin Axis.
+Port MLM2PRO byte mappings from open-source references (Duwaynef/MLM2PRO-BT-APP, springbok/MLM2PRO-GSPro-Connector). Capture real GATT notification payloads with the device in the shed and commit them as golden fixtures. Decoder is pure and deterministic: raw bytes → Ball Speed, Launch Angle, Launch Direction, Spin, Spin Axis.
 
 **Exit:** decoder reproduces all captured metrics for every golden fixture.
 

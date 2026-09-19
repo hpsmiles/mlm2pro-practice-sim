@@ -22,7 +22,7 @@ Android tablet golf-sim & practice app for the **Rapsodo MLM2PRO** launch monito
 
 ## Data Acquisition (BLE)
 
-- Parse MLM2PRO BLE advertisement/GATT data using reverse-engineered byte mappings from open-source repos: **MLM2PRO-BT-APP**, **flighthook**.
+- Parse MLM2PRO GATT notification data using reverse-engineered byte mappings from open-source repos: **Duwaynef/MLM2PRO-BT-APP** (C#, MIT — ships the written protocol spec `mlm2pro.md`) and **springbok/MLM2PRO-GSPro-Connector** (Python, GPL — independent corroboration, reference-only, no code copying). `flighthook` has no MLM2PRO BLE code and is not a reference.
 - Raw ball metrics captured on-device: Ball Speed, Launch Angle, Launch Direction, Spin, Spin Axis.
 - Treat third-party byte-mapping tables as reference data to re-verify against live captures — protocol details may drift between monitor firmware versions.
 
@@ -37,7 +37,7 @@ Android tablet golf-sim & practice app for the **Rapsodo MLM2PRO** launch monito
 - Build everything (assemble + tests): `.\gradlew.bat build`
 - Run all unit tests: `.\gradlew.bat test`
 - One module's tests: `.\gradlew.bat :core:ble:test`
-- One test class: `.\gradlew.bat :core:ble:test --tests "com.hpsmiles.golfsim.core.ble.ScaffoldSmokeTest"`
+- One test class: `.\gradlew.bat :core:ble:test --tests "com.hpsmiles.golfsim.core.ble.Mlm2proDecoderTest"`
 - Install debug build on a connected tablet: `.\gradlew.bat :app:installDebug`
 - BLE parsing and physics code must be unit-testable without a physical MLM2PRO — keep the byte-decoder and ball-flight ODE pure/deterministic (given inputs → same outputs).
 - Do not add cloud/PC dependencies; single-device constraint is a hard architectural boundary.
