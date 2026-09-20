@@ -728,7 +728,7 @@ class GattCryptoTest {
     @Test
     fun maybeDecryptPassesPlaintextThroughWhenNot16ByteAligned() {
         // Auth responses and event payloads arrive raw; malformed ciphertext too.
-        val raw = byteArrayOf(0x02, 0x44, 0x5A, 0x3C, 0xA6, 0x00)
+        val raw = byteArrayOf(0x02, 0x44, 0x5A, 0x3C, 0xA6.toByte(), 0x00)
         val out = Mlm2proGattClient.maybeDecrypt(raw, key)
         assertSame(raw, out)
     }
