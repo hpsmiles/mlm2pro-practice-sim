@@ -527,6 +527,7 @@ git commit -m "feat(core-connect): embedded rapsodo api secret provider"
 **Files:**
 - Modify: `app/src/main/kotlin/com/hpsmiles/golfsim/range/RangeScreen.kt`
 - Modify: `app/src/main/kotlin/com/hpsmiles/golfsim/range/AppRoot.kt`
+- Modify: `app/build.gradle.kts` — gains `implementation(project(":core:connect"))` (Correction applied — a1af7cc deviation 1: hard compile prerequisite; `:app` had no connect dependency in M4a, so any connect-flow UI cannot compile without it)
 
 Assembly-verified task (Android permission/GATT runtime surface — no new unit tests without Robolectric; per the M4a precedent the M4a-file-wins rule applies; sketch is structural).
 
@@ -535,11 +536,18 @@ Assembly-verified task (Android permission/GATT runtime surface — no new unit 
 Add to RangeScreen state (alongside the existing speedMult/views/toggles):
 
 ```kotlin
-    // M4b: live BLE connection state. `demo` defaults true; the DEMO toggle
-    // stays as fallback and simply gates whether FIRE produces demo shots.
-    var demo by remember { mutableStateOf(true) }
-    var statusInfo by remember { mutableStateOf("DEMO MODE - FIRE TO SHOOT") }
+    // (Correction applied — a1af7cc deviation 3: `demo` is hoisted to AppRoot
+    //  [threaded via onDemoChanged] so StatusStrip mirrors the MODE toggle;
+    //  the statusInfo placeholder is dropped — AppRoot describe(state, demo,
+    //  scanning) supersedes it. Only permissionDenied lives here.)
     var permissionDenied by remember { mutableStateOf(false) }
+    // (Correction applied — a1af7cc deviation 2: permission requests go through
+    //  a rememberLauncherForActivityResult(RequestMultiplePermissions()) launcher
+    //  instead of ActivityCompat.requestPermissions; its denial callback drives
+    //  the guidance line functional without MainActivity/holder surgery.)
+    val permissionLauncher = rememberLauncherForActivityResult(
+        RequestMultiplePermissions()
+    ) { results -> permissionDenied = results.values.any { !it } }
 ```
 
 Add a CONNECT button (teal accent when not connected; placed in the TopEnd overlay Column above the VIEW toggle):
@@ -562,14 +570,14 @@ Add a CONNECT button (teal accent when not connected; placed in the TopEnd overl
                                 permissionDenied = false
                                 onConnectRequested()
                             } else {
-                                permissionDenied = false
-                                ActivityCompat.requestPermissions(
-                                    ctx as Activity,
+                                // (Correction applied — a1af7cc deviation 2:
+                                // launcher pattern; user re-taps CONNECT after
+                                // granting — blessed bench path.)
+                                permissionLauncher.launch(
                                     arrayOf(
                                         android.Manifest.permission.BLUETOOTH_SCAN,
                                         android.Manifest.permission.BLUETOOTH_CONNECT
-                                    ),
-                                    1
+                                    )
                                 )
                             }
                         }
@@ -609,7 +617,7 @@ Expected: `BUILD SUCCESSFUL`.
 - [ ] **Step 3: Commit**
 
 ```bash
-git add app/src/main/kotlin/com/hpsmiles/golfsim/range/RangeScreen.kt app/src/main/kotlin/com/hpsmiles/golfsim/range/AppRoot.kt
+git add app/build.gradle.kts app/src/main/kotlin/com/hpsmiles/golfsim/range/RangeScreen.kt app/src/main/kotlin/com/hpsmiles/golfsim/range/AppRoot.kt
 git commit -m "feat(app): connect flow with runtime permissions and live status"
 ```
 
