@@ -713,6 +713,7 @@ fun MetricRow(
 package com.hpsmiles.golfsim.core.designsystem
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -724,6 +725,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
 
 /** Slim 56 dp navigation rail for landscape (left edge of every screen). */
@@ -757,10 +759,12 @@ fun NavRailButton(
         style = GolfTypography.Status,
         color = if (selected) GolfColors.Teal else GolfColors.TextMuted,
         modifier = modifier
+            .clip(RoundedCornerShape(GolfSpacing.Sm))
             .background(
                 if (selected) GolfColors.Teal40 else GolfColors.Panel,
                 RoundedCornerShape(GolfSpacing.Sm),
             )
+            .clickable(onClick = onClick)
             .padding(horizontal = GolfSpacing.Sm, vertical = GolfSpacing.Xs)
             .size(width = 40.dp, height = 40.dp),
     )
