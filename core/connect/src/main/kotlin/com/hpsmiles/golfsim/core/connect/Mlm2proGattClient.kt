@@ -57,6 +57,10 @@ class Mlm2proGattClient(
     private var gatt: BluetoothGatt? = null
     private var clockMs: () -> Long = { System.currentTimeMillis() }
 
+    // Lint contract (all @RequiresPermission members): the Phase B app layer
+    // owns the runtime BLUETOOTH_CONNECT/BLUETOOTH_SCAN request; the :app
+    // manifest declares both permissions. Annotations document the contract.
+    @Suppress("MissingPermission")
     @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
     fun connect(device: BluetoothDevice) {
         _state.value = ConnectionState.Connecting
@@ -88,6 +92,7 @@ class Mlm2proGattClient(
         )
     }
 
+    @Suppress("MissingPermission")
     @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
     fun disconnect() {
         gatt?.disconnect()
@@ -122,6 +127,7 @@ class Mlm2proGattClient(
         sequencer.poll(clockMs()).forEach { performWrite(it) }
     }
 
+    @Suppress("MissingPermission")
     private fun performWrite(write: WriteCommand) {
         val g = gatt ?: return
         val characteristic = when (write.target) {
@@ -134,6 +140,7 @@ class Mlm2proGattClient(
         g.writeCharacteristic(characteristic)
     }
 
+    @Suppress("MissingPermission")
     @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
     private fun subscribe(g: BluetoothGatt, uuid: String) {
         val characteristic = findCharacteristic(g, uuid) ?: return

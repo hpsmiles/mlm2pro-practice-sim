@@ -24,6 +24,10 @@ data class Mlm2proDevice(val name: String, val address: String, val rssi: Int)
  */
 class Mlm2proScanner(private val context: Context) {
 
+    // Lint contract: the Phase B app layer owns the runtime BLUETOOTH_SCAN/
+    // BLUETOOTH_CONNECT request; the :app manifest declares both permissions.
+    // These annotations are permission documentation, not runtime guards.
+    @Suppress("MissingPermission")
     @RequiresPermission(Manifest.permission.BLUETOOTH_SCAN)
     fun scan(): Flow<Mlm2proDevice> = callbackFlow {
         val adapter = BluetoothAdapter.getDefaultAdapter()
