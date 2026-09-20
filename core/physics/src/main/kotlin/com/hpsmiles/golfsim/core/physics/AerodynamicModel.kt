@@ -161,7 +161,7 @@ object AerodynamicModel {
 
     private fun attLowRe(cl: Double, sr: Double): Double {
         val a1 = 1.0 - LOWRE_HS_ATT_MAX * ss01(sr, HS_ATT_S, HS_ATT_E)
-        val a2 = 1.0 - LOWRE_UHS_ATT_MAX * ss01(sr, HS_ATT_S, HS_ATT_E)
+        val a2 = 1.0 - LOWRE_UHS_ATT_MAX * ss01(sr, UHS_ATT_S, UHS_ATT_E)
         return cl * a1 * a2
     }
 
