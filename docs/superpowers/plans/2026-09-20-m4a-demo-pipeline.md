@@ -1897,21 +1897,24 @@ class SecretStore(context: Context) {
 // app/src/main/kotlin/com/hpsmiles/golfsim/settings/SettingsScreen.kt
 package com.hpsmiles.golfsim.settings
 
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.hpsmiles.golfsim.core.designsystem.GolfColors
 import com.hpsmiles.golfsim.core.designsystem.GolfTypography
-import com.hpsmiles.golfsim.core.designsystem.MetricChip
 import com.hpsmiles.golfsim.core.designsystem.SectionCard
-import androidx.compose.material3.Text
 
 /**
  * Phase A settings: only the Rapsodo Secret. Phase B consumes it for the
@@ -1920,11 +1923,14 @@ import androidx.compose.material3.Text
  */
 @Composable
 fun SettingsScreen() {
-    val store = remember { SecretStore(androidx.compose.ui.platform.LocalContext.current) }
+    // LocalContext.current must run in composable scope, not inside
+    // remember's calculation lambda.
+    val context = LocalContext.current
+    val store = remember { SecretStore(context) }
     var text by remember { mutableStateOf(store.getSecret()) }
     var saved by remember { mutableStateOf(false) }
 
-    SectionCard("RAPSHODO AUTH") {
+    SectionCard("RAPSODO AUTH") {
         OutlinedTextField(
             value = text,
             onValueChange = { text = it; saved = false },
@@ -1932,21 +1938,23 @@ fun SettingsScreen() {
             singleLine = true,
             modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
         )
-        MetricChip(
-            label = if (saved) "SAVED" else "SAVE",
-            value = "",
-            unit = "",
-            accent = GolfColors.Amber,
-            modifier = Modifier.padding(bottom = 8.dp)
-                .let { m ->
-                    m.then(
-                        androidx.compose.ui.Modifier.clickableSave { store.setSecret(text); saved = true }
-                    )
-                },
-        )
+        // Plan-note-shipped pattern: SAVE is a Text label inside a Box with
+        // the standard androidx clickable — MetricChip has no onClick variant.
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { store.setSecret(text); saved = true }
+                .padding(bottom = 8.dp)
+        ) {
+            Text(
+                text = if (saved) "SAVED" else "SAVE",
+                style = GolfTypography.MetricLabel,
+                color = if (saved) GolfColors.BleArmedGreen else GolfColors.TextPrimary,
+            )
+        }
         Text(
             text = "Requires Awesome Golf third-party access enabled in the Rapsodo app (Phase B prerequisite).",
-            style = GolfTypography.Status(),
+            style = GolfTypography.Status,
             color = GolfColors.TextMuted,
             modifier = Modifier.fillMaxWidth(),
         )
@@ -1954,7 +1962,7 @@ fun SettingsScreen() {
 }
 ```
 
-NOTE (import-cleanup latitude): the plan's `clickableSave` phrasing above is a compression artifact — the shipped file must instead make the SAVE area a simple `Text` label inside a `Box` with `.clickable { store.setSecret(text); saved = true }` imported from `androidx.compose.foundation.clickable`, and drop any undefined helper. MetricChip's modifier param exists per M3 kit. Behavior: typing updates `text`; tapping SAVE persists via SecretStore and shows SAVED.
+(Correction applied: the block above now matches the shipped file — SAVE is a Text-in-Box with androidx .clickable; GolfTypography.Status is a property read; LocalContext is hoisted. Behavior: typing updates `text`; tapping SAVE persists via SecretStore and shows SAVED.)
 
 - [ ] **Step 3: Rewrite AppRoot.kt with the SETTINGS tab**
 
@@ -1997,8 +2005,10 @@ fun AppRoot() {
         ) {
             Row(modifier = Modifier.weight(1f)) {
                 NavRail {
-                    NavRailButton("RANGE", tab == RangeTab.RANGE) { tab = RangeTab.RANGE }
-                    NavRailButton("SETTINGS", tab == RangeTab.SETTINGS) { tab = RangeTab.SETTINGS }
+                    // Mechanical: NavRailButton(label, selected, onClick, modifier) —
+                    // a trailing lambda would bind to `modifier`, so name onClick.
+                    NavRailButton("RANGE", tab == RangeTab.RANGE, onClick = { tab = RangeTab.RANGE })
+                    NavRailButton("SETTINGS", tab == RangeTab.SETTINGS, onClick = { tab = RangeTab.SETTINGS })
                 }
                 when (tab) {
                     RangeTab.RANGE -> RangeScreen()
