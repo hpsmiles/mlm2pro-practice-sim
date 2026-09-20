@@ -17,8 +17,12 @@ import com.hpsmiles.golfsim.core.ble.Mlm2proCrypto
 import com.hpsmiles.golfsim.core.ble.BallDataResult
 import com.hpsmiles.golfsim.core.ble.Mlm2proMessage
 import com.hpsmiles.golfsim.core.ble.Mlm2proEvent
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.launch
 
 /** Lifecycle state surfaced to the UI (rendered in the range status strip). */
 sealed interface ConnectionState {
@@ -50,9 +54,14 @@ class Mlm2proGattClient(
     private val sequencer: HandshakeSequencer,
     /** M4b notification capture the UI can enable/export (default off). */
     val captureLog: CaptureLog = CaptureLog(),
+    /** M4b FIX 1 (spec §3e): token fetch provider (default HTTP). */
+    private val tokenProvider: RapsodoTokenProvider = HttpRapsodoTokenProvider(),
     ) {
 
     private val gattQueue = GattOpQueue()
+
+    /** FIX 1: scope for the async token fetch (cancelled on disconnect). */
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     private val _state = MutableStateFlow<ConnectionState>(ConnectionState.Disconnected)
     val state: StateFlow<ConnectionState> = _state
@@ -148,6 +157,23 @@ class Mlm2proGattClient(
         // routed by UUID string here; everything else goes through the enum.
         if (uuid.equals(WRITE_RESPONSE_UUID, ignoreCase = true)) {
             sequencer.onWriteResponse(maybeDecrypt(value, sessionKeyBytes), clockMs())
+            // FIX 1 (spec §3e): on WRITE_RESPONSE accept the sequencer parks in
+            // TOKEN_WAIT with the authed userId parsed — fetch the token async.
+            val uid = sequencer.userId
+            if (sequencer.state == HandshakeState.TOKEN_WAIT && uid >= 0) {
+                scope.launch {
+                    when (val result = tokenProvider.fetch(uid, SecretProvider.apiSecret())) {
+                        is TokenResult.Success -> {
+                            // A second WRITE_RESPONSE may have raced the fetch.
+                            if (sequencer.state == HandshakeState.TOKEN_WAIT) {
+                                sequencer.onToken(result.token, clockMs())?.let { performWrite(it) }
+                            }
+                        }
+                        is TokenResult.Failure ->
+                            _state.value = ConnectionState.Faulted("token fetch: ${result.reason}")
+                    }
+                }
+            }
             sequencer.poll(clockMs()).forEach { performWrite(it) }
             return
         }
