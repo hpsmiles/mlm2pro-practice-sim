@@ -496,11 +496,14 @@ object SecretProvider {
     private const val SECRET_ENC_HEX =
         "19605BE9BD42E0B3AEB20003847376012404EC9D72BB5586391F01BE03F031163242C34CD55C2C3E77D10D9A43A677A6"
 
-    // Community-connector convention: the same device AES key (0x00..0x1F)
-    // encrypts this blob. Bench-verify at first live token fetch.
-    private val DEVICE_KEY = ByteArray(32) { it.toByte() }
+    // The web-secret blob decrypts with the connector's PREDETERMINED key
+    // (Duwaynef Encryption.cs parameterless ctor: [26,24,1,38,249,154,...,233,21]),
+    // NOT the M1 session/test key 0x00..0x1F. Same fixed device IV (inside
+    // Mlm2proCrypto). Kotlin Byte literals max 127, so the decimal list cannot
+    // be written as byteArrayOf(249,...) — the hex string form is mechanical.
+    private val PRED_KEY = hexToBytes("1A180126F99A3C3F95B9CD967EA0263D59C7448CFF15FA8337A579FA3179E915")
 
-    fun apiSecret(): String = String(Mlm2proCrypto.decrypt(hexToBytes(SECRET_ENC_HEX), DEVICE_KEY), Charsets.UTF_8)
+    fun apiSecret(): String = String(Mlm2proCrypto.decrypt(hexToBytes(SECRET_ENC_HEX), PRED_KEY), Charsets.UTF_8)
 
     private fun hexToBytes(hex: String): ByteArray =
         hex.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
