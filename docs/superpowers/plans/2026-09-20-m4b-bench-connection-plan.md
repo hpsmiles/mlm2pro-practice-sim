@@ -417,6 +417,8 @@ class Mlm2proGattClient(
 
 **IMPORTANT correction note (plan bug fixed in advance):** the block above is a *structural sketch*. The shipped file must stay close to the M4a `Mlm2proGattClient` (188 lines at HEAD) and add ONLY: (1) `private val gattQueue = GattOpQueue()`, (2) CCCD write inside `subscribe()` queued, (3) `onDescriptorWrite`/both `onCharacteristicWrite` overrides calling `gattQueue.onOperationComplete()`, (4) `performWrite()` body wrapped in `gattQueue.enqueue { ... }`, (5) the 2-arg deprecated `onCharacteristicChanged` override forwarding to the existing `handleNotification(characteristic.uuid, characteristic.value)`, (6) the WRITE_RESPONSE sequencing stays in `handleNotification` exactly as in the M4a file (sequencer.onWriteResponse feeding poll-driven performWrite calls). Do NOT restructure the connection-state machine, do NOT rename existing members, and keep the existing 3-arg override body unchanged. If the sketch above and the M4a file conflict, **the M4a file wins** — the sketch illustrates the queue insertion pattern only.
 
+**SDK-surface update (shipped in 38bc76a, javap-verified):** compileSdk 37's `BluetoothGattCallback` ships only the 3-arg `onCharacteristicWrite(g, characteristic, status)` — a 4-arg variant does not exist at this SDK level, so "both overrides" above collapses to a single 3-arg override calling `gattQueue.onOperationComplete()`. That one callback is where both legacy and API-33 `writeCharacteristic` results report, so queue advancement stays correct on every path.
+
 - [ ] **Step 2: Assemble both modules**
 
 Run: `$env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"; .\gradlew.bat :core:connect:assembleDebug :app:assembleDebug`
