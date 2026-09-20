@@ -106,4 +106,12 @@ class AerodynamicModelTest {
     fun spinDecayIsExponentialWithTwelveSecondTau() {
         assertEquals(100.0 * exp(-1.0 / 12.0), AerodynamicModel.spinDecay(100.0, 1.0), 1e-12)
     }
+
+    @Test
+    fun uhsAttenuationWindowIsPinned() {
+        // Guards the attLowRe UHS-window transcription bug class found by the
+        // T7 tour gate: a2 must ramp over UHS_ATT_S/E (0.58-0.85), not HS. Pin
+        // from CalOf.java at the locked config (Re 72000 = 70k->75k segment).
+        assertEquals(0.2851178052, AerodynamicModel.clOf(72000.0, 0.65), 1e-9)
+    }
 }
