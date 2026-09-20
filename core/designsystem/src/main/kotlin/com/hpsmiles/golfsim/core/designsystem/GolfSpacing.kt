@@ -12,7 +12,9 @@ object GolfSpacing {
     val Xl = 24.dp
     val Xxl = 32.dp
 
-    val NavRailWidth = 56.dp
+    // Wide enough for the longest rail label ("SETTINGS") on one line —
+    // the NavRailButton inner box is NavRailWidth - 2 * Sm.
+    val NavRailWidth = 72.dp
     val StatusStripHeight = 24.dp
     val CornerCard = 14.dp
 }
