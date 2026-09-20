@@ -228,9 +228,11 @@ fun RangeScreen(
                     }
                 }
             }
-            // M4b: CONNECT gate + MODE toggle, above the VIEW toggle.
+            // M4b: CONNECT gate + MODE toggle, BELOW the VIEW toggle.
+            // (Both were anchored TopEnd+Sm and overlapped: the later-drawn
+            // VIEW chip occluded CONNECT and swallowed its taps.)
             Column(
-                modifier = Modifier.align(Alignment.TopEnd).padding(GolfSpacing.Sm),
+                modifier = Modifier.align(Alignment.TopEnd).padding(top = 48.dp, end = GolfSpacing.Sm),
                 horizontalAlignment = Alignment.End,
             ) {
                 Text(
