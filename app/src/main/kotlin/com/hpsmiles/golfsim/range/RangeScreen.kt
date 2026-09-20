@@ -181,7 +181,8 @@ fun RangeScreen(modifier: Modifier = Modifier) {
                         accent = GolfColors.Amber,
                     )
                     Spacer(Modifier.size(GolfSpacing.Xs))
-                    MetricChip("spin", String.format(Locale.US, "%.0f", shot.ballData.totalSpin), "RPM")
+                    // totalSpin is an Int (M1 BallData) — %d, not %.0f (IllegalFormatConversionException).
+                    MetricChip("spin", String.format(Locale.US, "%d", shot.ballData.totalSpin), "RPM")
                     Spacer(Modifier.size(GolfSpacing.Xs))
                     MetricChip("launch", String.format(Locale.US, "%.1f", shot.ballData.launchAngle), "DEG")
                     Spacer(Modifier.size(GolfSpacing.Xs))
