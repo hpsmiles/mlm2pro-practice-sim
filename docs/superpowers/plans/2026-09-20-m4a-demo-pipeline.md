@@ -2228,7 +2228,7 @@ Expected: `Installed on 1 device`.
 
 - [ ] **Step 3: USER TABLET DEMO GATE — do NOT proceed to merge without the user's acceptance**
 
-The user fires demo shots and verifies: tracer animates at real speed with 1x/2x/4x toggles; metrics appear INSTANTLY on fire (never gated by the animation); top-down toggle shows history dots + last landing; DEMO badge visible; Secret entered in SETTINGS persists across an app restart. The implementer reports; the orchestrator runs the gate with the user.
+The user fires demo shots and verifies: tracer animates at real speed with 1x/1.5x/2x/4x toggles; metrics appear INSTANTLY on fire (never gated by the animation); top-down toggle shows history dots + last landing; DEMO badge visible; Secret entered in SETTINGS persists across an app restart. The implementer reports; the orchestrator runs the gate with the user.
 
 - [ ] **Step 4: Push + PR**
 
@@ -2237,7 +2237,7 @@ git push -u origin m4a-demo-pipeline
 gh pr create --title "M4a: Demo pipeline" --body "$(cat <<'EOF'
 ## Summary
 - ShotSource + seeded DemoShotSource in :core:ble; full :core:connect BLE client (handshake sequencer, command encoder, scanner, GATT client, token provider) JVM-tested against pinned wire bytes
-- Range UI in :app: POV canvas + top-down analytics toggle, real-speed playback with 2x/4x, instant metrics, DEMO mode with FIRE button
+- Range UI in :app: POV canvas + top-down analytics toggle, real-speed playback with 1.5x/2x/4x, instant metrics, DEMO mode with FIRE button
 - Settings screen with Rapsodo Secret storage; BLE permissions
 
 ## Test Plan
