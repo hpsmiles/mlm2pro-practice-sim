@@ -42,7 +42,12 @@ class HttpRapsodoTokenProvider : RapsodoTokenProvider {
                 }
                 val body = connection.inputStream.bufferedReader().use { it.readText() }
                 val token = parseToken(body)
-                    ?: return@withContext TokenResult.Failure("token missing in response")
+                if (token == null) {
+                    // Bench diagnostics: response-shape drift must be visible
+                    // in logcat, not a bare "token missing".
+                    android.util.Log.w("BenchToken", "unparsed response body: $body")
+                    return@withContext TokenResult.Failure("token missing in response")
+                }
                 TokenResult.Success(token)
             } catch (e: SecurityException) {
                 // Bench attempt 4: a missing INTERNET manifest permission used
@@ -63,7 +68,10 @@ class HttpRapsodoTokenProvider : RapsodoTokenProvider {
             val idx = body.indexOf("\"token\"")
             if (idx < 0) return null
             val tail = body.substring(idx)
-            val match = Regex("\"token\"\\s*:\\s*(-?\\d+)").find(tail) ?: return null
+            // Bench attempt 5: the real response ships the token as a QUOTED
+            // numeric string ("token":"1043255814") per the reference spec
+            // (Duwaynef mlm2pro.md) — accept quoted and unquoted integers.
+            val match = Regex("\"token\"\\s*:\\s*\"?(-?\\d+)\"?").find(tail) ?: return null
             return match.groupValues[1].toIntOrNull()
         }
     }
