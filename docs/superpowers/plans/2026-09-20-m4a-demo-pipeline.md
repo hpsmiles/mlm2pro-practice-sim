@@ -1341,16 +1341,34 @@ private val SKY_BOTTOM = GolfColors.Base
 private val GROUND_TOP = Color(0xFF131A20)
 private val GROUND_BOTTOM = GolfColors.Base
 
+// Previous-shot tracer lines: faded teal per the M3 design language
+// (history = teal, live moment = amber).
+private val HISTORY_LINE = GolfColors.Teal.copy(alpha = 0.35f)
+
 /**
  * Player-perspective range view. Static scene (bands, targets) plus the
  * current shot's tracer and landing pulse, driven by [playFraction] in 0..1
- * (1 = flight complete). All world-to-screen math goes through PovProjector.
- * The tracer arc is a stylized quadratic anchored to the real solve
- * endpoints (documented plan deviation: ShotResult carries no trajectory
- * samples; physical arcs are a Phase C design decision).
+ * (1 = flight complete), and faded tracer lines for [previousShots].
+ *
+ * All world-to-screen math goes through PovProjector. The tracer arc is a
+ * stylized quadratic anchored to the real solve endpoints (documented plan
+ * deviation: ShotResult carries no trajectory samples; physical arcs are a
+ * Phase C design decision).
+ *
+ * Visual clamps (user demo-gate feedback): the stylized arc is scaled so its
+ * apex stays inside the top 8% of the frame, and near-field points that
+ * would project below the bottom edge are clamped to the launch anchor so
+ * the ball is visible leaving the club.
  */
 @Composable
-fun PovRangeCanvas(currentShot: ShotResult?, playFraction: Float, modifier: Modifier = Modifier) {
+fun PovRangeCanvas(
+    currentShot: ShotResult?,
+    previousShots: List<ShotResult>,
+    playFraction: Float,
+    showTracer: Boolean,
+    showHistory: Boolean,
+    modifier: Modifier = Modifier,
+) {
     Canvas(modifier = modifier.fillMaxSize()) {
         val w = size.width
         val h = size.height
@@ -1425,48 +1443,91 @@ fun PovRangeCanvas(currentShot: ShotResult?, playFraction: Float, modifier: Modi
             )
         }
 
+        // The launch anchor: the tracer attaches here while the ball is too
+        // close to project inside the frame, so the ball is visible leaving.
+        val launchAnchor = Offset(centerX, h - 24f)
+        // Most-negative projected v allowed (apex must stay below the top 8%).
+        val vMin = (h * 0.08f - horizonPx) / focalPx
+
+        fun tracerPath(s: ShotResult, fraction: Float): androidx.compose.ui.graphics.Path? {
+            // Arc scaling so the apex stays inside the frame: at t = 0.5 the
+            // quadratic peaks at apexM over carryM/2; if that projects above
+            // the top margin, scale the arc's height down.
+            val yApex = s.carryM / 2.0
+            val vApex = (PovProjector.CAM_HEIGHT_M - s.apexM) / yApex
+            val apexScale = if (vApex < vMin) {
+                ((PovProjector.CAM_HEIGHT_M - vMin * yApex) / s.apexM).coerceIn(0.1, 1.0)
+            } else {
+                1.0
+            }
+            val points = 40
+            val drawn = (points * fraction.coerceIn(0f, 1f)).toInt()
+            if (drawn <= 0) return null
+            val path = androidx.compose.ui.graphics.Path()
+            var first = true
+            for (i in 0..drawn) {
+                val t = i.toFloat() / points
+                val x = s.sideM * t
+                val y = s.carryM * t
+                val z = apexScale * 4.0 * s.apexM * t * (1.0 - t)
+                var point = worldToScreen(centerX, focalPx, horizonPx, x, y, z)
+                // Near-field clamp: below the bottom edge, hold the launch anchor.
+                if (point == null || point.y > h - 8f) point = launchAnchor
+                if (first) { path.moveTo(point.x, point.y); first = false } else path.lineTo(point.x, point.y)
+            }
+            return if (first) null else path
+        }
+
+        // Previous shots first (under the current tracer).
+        if (showHistory) {
+            for (prev in previousShots.asReversed()) {
+                val path = tracerPath(prev, 1f) ?: continue
+                drawPath(path, HISTORY_LINE, style = Stroke(width = 2f))
+            }
+        }
+
         if (currentShot != null) {
             val s = currentShot
-            fun worldToScreen(x: Double, y: Double, z: Double): Offset? {
-                val p = PovProjector.project(x, y, z) ?: return null
-                return Offset((centerX + p.u * focalPx).toFloat(), (horizonPx + p.v * focalPx).toFloat())
-            }
 
-            // Tracer: stylized quadratic through real solve endpoints.
-            val points = 40
-            val drawn = (points * playFraction.coerceIn(0f, 1f)).toInt()
-            if (drawn > 0) {
-                val path = androidx.compose.ui.graphics.Path()
-                var first = true
-                for (i in 0..drawn) {
-                    val t = i.toFloat() / points
-                    val x = s.sideM * t
-                    val y = s.carryM * t
-                    val z = 4.0 * s.apexM * t * (1.0 - t)
-                    val point = worldToScreen(x, y, z) ?: break
-                    if (first) { path.moveTo(point.x, point.y); first = false }
-                    else path.lineTo(point.x, point.y)
-                }
-                if (!first) {
+            // Current tracer: full line persists after landing (fraction = 1).
+            if (showTracer) {
+                val path = tracerPath(s, playFraction)
+                if (path != null) {
                     drawPath(path, GolfColors.Amber, style = Stroke(width = 2.5f))
                 }
-                // Ball dot at the current tracer head.
-                val t = drawn.toFloat() / points
-                val head = worldToScreen(s.sideM * t, s.carryM * t, 4.0 * s.apexM * t * (1.0 - t))
-                if (head != null) {
-                    drawCircle(GolfColors.AmberGlow, radius = 9.sp.toPx(), center = head)
-                    drawCircle(GolfColors.Amber, radius = 5.sp.toPx(), center = head)
+            }
+
+            // Ball at the tracer head, clamped to the anchor until it clears
+            // the bottom edge — visible leaving the club.
+            if (showTracer) {
+                val points = 40
+                val drawn = (points * playFraction.coerceIn(0f, 1f)).toInt()
+                if (drawn > 0) {
+                    val t = drawn.toFloat() / points
+                    val yApex = s.carryM / 2.0
+                    val vApex = (PovProjector.CAM_HEIGHT_M - s.apexM) / yApex
+                    val apexScale = if (vApex < vMin) {
+                        ((PovProjector.CAM_HEIGHT_M - vMin * yApex) / s.apexM).coerceIn(0.1, 1.0)
+                    } else {
+                        1.0
+                    }
+                    var head = worldToScreen(
+                        centerX, focalPx, horizonPx,
+                        s.sideM * t, s.carryM * t, apexScale * 4.0 * s.apexM * t * (1.0 - t),
+                    )
+                    if (head == null || head.y > h - 8f) head = launchAnchor
+                    drawCircle(GolfColors.AmberGlow, radius = 12.sp.toPx(), center = head)
+                    drawCircle(GolfColors.Amber, radius = 6.sp.toPx(), center = head)
                 }
             }
 
-            // Landing pulse once the flight has completed.
+            // Landing dot plus ring once the flight has completed.
             if (playFraction >= 1f) {
-                val landing = worldToScreen(s.sideM, s.carryM + s.rolloutM * 0.0, 0.0)
+                val landing = worldToScreen(centerX, focalPx, horizonPx, s.sideM, s.carryM, 0.0)
                 if (landing != null) {
-                    val pulse = ((playFraction - 1f) * 2f) % 1f
                     drawCircle(
                         GolfColors.AmberHalo,
-                        radius = (6f + 18f * pulse).sp.toPx() * 0.8f,
+                        radius = (6f * 0.8f).sp.toPx(),
                         center = landing,
                         style = Stroke(width = 2f),
                     )
@@ -1475,6 +1536,19 @@ fun PovRangeCanvas(currentShot: ShotResult?, playFraction: Float, modifier: Modi
             }
         }
     }
+}
+
+/** Screen-space projection helper shared by the tracer routines. */
+private fun worldToScreen(
+    centerX: Float,
+    focalPx: Float,
+    horizonPx: Float,
+    x: Double,
+    y: Double,
+    z: Double,
+): Offset? {
+    val p = PovProjector.project(x, y, z) ?: return null
+    return Offset((centerX + p.u * focalPx).toFloat(), (horizonPx + p.v * focalPx).toFloat())
 }
 ```
 
@@ -1584,6 +1658,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -1617,8 +1693,8 @@ import kotlin.math.sqrt
 /** Metres/second to mph for display. */
 private const val MPH_PER_MS = 2.23694
 
-private enum class SpeedMult(val label: String, val divisor: Int) {
-    X1("1x", 1), X2("2x", 2), X4("4x", 4);
+private enum class SpeedMult(val label: String, val divisor: Float) {
+    X1("1x", 1f), X15("1.5x", 1.5f), X2("2x", 2f), X4("4x", 4f);
 }
 
 private enum class ViewMode(val label: String) { POV("POV"), TOP_DOWN("TOP-DOWN") }
@@ -1629,14 +1705,21 @@ private enum class ViewMode(val label: String) { POV("POV"), TOP_DOWN("TOP-DOWN"
  * plays alongside at real duration divided by the speed multiplier. In
  * Phase B/C the DemoShotSource is swapped for the BLE source — the UI
  * does not know where shots come from.
+ *
+ * Tracer controls (user demo-gate feedback): a toggle for the current
+ * shot's tracer, a sub-toggle for faded previous-shot lines, and a slider
+ * for how many previous lines are shown.
  */
 @Composable
 fun RangeScreen(modifier: Modifier = Modifier) {
     val shots = remember { mutableStateListOf<DisplayShot>() }
     val demoSource = remember { DemoShotSource() }
     var playFraction by remember { mutableFloatStateOf(1f) }
-    var speedMult by remember { mutableStateOf(SpeedMult.X1) }
+    var speedMult by remember { mutableStateOf(SpeedMult.X15) }
     var viewMode by remember { mutableStateOf(ViewMode.POV) }
+    var showTracer by remember { mutableStateOf(true) }
+    var showHistory by remember { mutableStateOf(true) }
+    var historyLimit by remember { mutableFloatStateOf(8f) }
     val currentShot = shots.lastOrNull()
 
     // Tracer playback: animate playFraction over the shot's real duration.
@@ -1670,22 +1753,91 @@ fun RangeScreen(modifier: Modifier = Modifier) {
         // Metrics render immediately from `shots`; the tracer animates on top.
     }
 
+    // Previous-shot lines: faded, most recent first, limited by the slider.
+    val previousShots = if (showHistory) {
+        shots.dropLast(1).map { it.shotResult }.takeLast(historyLimit.toInt())
+    } else {
+        emptyList()
+    }
+
     Row(modifier = modifier.fillMaxSize().background(GolfColors.Base)) {
         // Range canvas with overlays.
         Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
             if (viewMode == ViewMode.POV) {
-                PovRangeCanvas(currentShot?.shotResult, playFraction, Modifier.fillMaxSize())
+                PovRangeCanvas(
+                    currentShot?.shotResult, previousShots, playFraction, showTracer, showHistory,
+                    Modifier.fillMaxSize(),
+                )
             } else {
                 TopDownCanvas(shots, Modifier.fillMaxSize())
             }
-            // DEMO badge, view toggle, speed toggle.
-            Text(
-                "DEMO",
-                color = GolfColors.Amber,
-                style = GolfTypography.Status,
-                modifier = Modifier.align(Alignment.TopStart).padding(GolfSpacing.Sm)
-                    .border(1.dp, GolfColors.Amber, RoundedCornerShape(50)).padding(horizontal = GolfSpacing.Sm, vertical = 2.dp),
-            )
+            // DEMO badge + tracer controls (toggle, sub-toggle, slider).
+            Column(
+                modifier = Modifier.align(Alignment.TopStart).padding(GolfSpacing.Sm),
+                verticalArrangement = Arrangement.spacedBy(GolfSpacing.Xs),
+            ) {
+                Text(
+                    "DEMO",
+                    color = GolfColors.Amber,
+                    style = GolfTypography.Status,
+                    modifier = Modifier
+                        .border(1.dp, GolfColors.Amber, RoundedCornerShape(50))
+                        .padding(horizontal = GolfSpacing.Sm, vertical = 2.dp),
+                )
+                Text(
+                    "TRACER: ${if (showTracer) "ON" else "OFF"}",
+                    color = if (showTracer) GolfColors.Teal else GolfColors.TextMuted,
+                    style = GolfTypography.Status,
+                    modifier = Modifier
+                        .clickable { showTracer = !showTracer }
+                        .border(1.dp, if (showTracer) GolfColors.Teal else GolfColors.Line, RoundedCornerShape(50))
+                        .padding(horizontal = GolfSpacing.Sm, vertical = 2.dp),
+                )
+                if (showTracer) {
+                    // Sub-toggle under the main one, indented.
+                    Row(
+                        modifier = Modifier.padding(start = GolfSpacing.Xl),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            "PREV: ${if (showHistory) "ON" else "OFF"}",
+                            color = if (showHistory) GolfColors.Teal else GolfColors.TextMuted,
+                            style = GolfTypography.Status,
+                            modifier = Modifier
+                                .clickable { showHistory = !showHistory }
+                                .border(
+                                    1.dp,
+                                    if (showHistory) GolfColors.Teal else GolfColors.Line,
+                                    RoundedCornerShape(50),
+                                )
+                                .padding(horizontal = GolfSpacing.Sm, vertical = 2.dp),
+                        )
+                        // Slider for how many previous lines are shown.
+                        if (showHistory) {
+                            Slider(
+                                value = historyLimit,
+                                onValueChange = { historyLimit = it },
+                                valueRange = 0f..20f,
+                                steps = 19,
+                                modifier = Modifier.width(110.dp).padding(start = GolfSpacing.Xs),
+                                colors = SliderDefaults.colors(
+                                    thumbColor = GolfColors.Teal,
+                                    activeTrackColor = GolfColors.Teal,
+                                    inactiveTrackColor = GolfColors.Line,
+                                ),
+                            )
+                        }
+                    }
+                    if (showHistory) {
+                        Text(
+                            "LAST ${historyLimit.toInt()} LINES",
+                            color = GolfColors.TextMuted,
+                            style = GolfTypography.Status,
+                            modifier = Modifier.padding(start = GolfSpacing.Xxl),
+                        )
+                    }
+                }
+            }
             Text(
                 "VIEW: ${viewMode.label}",
                 color = GolfColors.TextSecondary,
