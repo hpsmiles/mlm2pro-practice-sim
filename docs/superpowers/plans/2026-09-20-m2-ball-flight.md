@@ -397,6 +397,14 @@ class AerodynamicModelTest {
     fun spinDecayIsExponentialWithTwelveSecondTau() {
         assertEquals(100.0 * exp(-1.0 / 12.0), AerodynamicModel.spinDecay(100.0, 1.0), 1e-12)
     }
+
+    @Test
+    fun uhsAttenuationWindowIsPinned() {
+        // Guards the attLowRe UHS-window transcription bug class found by the
+        // T7 tour gate: a2 must ramp over UHS_ATT_S/E (0.58-0.85), not HS. Pin
+        // from CalOf.java at the locked config (Re 72000 = 70k->75k segment).
+        assertEquals(0.2851178052, AerodynamicModel.clOf(72000.0, 0.65), 1e-9)
+    }
 }
 ```
 
@@ -628,7 +636,7 @@ object AerodynamicModel {
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Same command as Step 2. Expected: `BUILD SUCCESSFUL`; `TEST-…AerodynamicModelTest.xml` shows `tests="16" failures="0" errors="0"`.
+Same command as Step 2. Expected: `BUILD SUCCESSFUL`; `TEST-…AerodynamicModelTest.xml` shows `tests="17" failures="0" errors="0"`.
 
 - [ ] **Step 5: Commit**
 
@@ -1357,21 +1365,25 @@ class BallFlightEngineTest {
         assertEquals(draw.totalM, fade.totalM, 1e-9)
     }
 
+    /**
+     * Strict firmness ordering is pinned on a roll-dominated iron-class shot
+     * (PGA 7i profile, measured margins firm-norm +3.43 m / norm-soft +1.24 m).
+     * Driver-class soft-vs-normal can invert by <1 m because its rollout is
+     * bounce-loop-dominated: soft's lower COR ends the vz<0.05 loop early,
+     * sparing tangential-retention losses — documented limitation, verify
+     * against live captures in M4.
+     */
     @Test
     fun firmnessOrderingHoldsOnRollDominatedShot() {
-        // Strict firm > normal > soft is pinned on an iron-class shot, whose ground
-        // phase is roll-dominated. On driver-class shots (bounce-loop-dominated
-        // rollout) soft-vs-normal can invert by < 1 m: soft's lower COR ends the
-        // bounce loop a bounce early, sparing a tangential-retention loss that
-        // outweighs the 1.4x roll decel. Documented limitation — verify against
-        // live captures in M4 (spec §10).
-        val launch = LaunchConditions(123.0 * 0.44704, 16.3, 7124)
-        val normal = BallFlightEngine.simulate(launch)
+        // PGA 7i-class: 55.0 m/s, 16.3 deg, 7124 rpm; tour-fixture defaults
+        // (no wind, launchDirection 0, spinAxis 0).
+        val sevenIron = LaunchConditions(55.0, 16.3, 7124)
+        val normal = BallFlightEngine.simulate(sevenIron)
         val firm = BallFlightEngine.simulate(
-            launch, surfaces = UniformSurface(Surface.FAIRWAY_NORMAL.withFirmness(Firmness.FIRM)),
+            sevenIron, surfaces = UniformSurface(Surface.FAIRWAY_NORMAL.withFirmness(Firmness.FIRM)),
         )
         val soft = BallFlightEngine.simulate(
-            launch, surfaces = UniformSurface(Surface.FAIRWAY_NORMAL.withFirmness(Firmness.SOFT)),
+            sevenIron, surfaces = UniformSurface(Surface.FAIRWAY_NORMAL.withFirmness(Firmness.SOFT)),
         )
         assertTrue(firm.totalM > normal.totalM)
         assertTrue(normal.totalM > soft.totalM)
@@ -1874,7 +1886,7 @@ Then:
 $env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"; .\gradlew.bat build
 ```
 
-Expected: `BUILD SUCCESSFUL` (all 3 modules; `:core:physics:test` executes with **63 tests, 0 failures, 0 errors** across 9 suites: AerodynamicModel 16, LaunchConditions 7, Environment 4, Surface 7, FlightSolver 5, BounceRollModel 5, BallFlightEngine 7, TourAverages 8, TourOrdering 4 — and NO ScaffoldSmokeTest XML remains). Lint green.
+Expected: `BUILD SUCCESSFUL` (all 3 modules; `:core:physics:test` executes with **64 tests, 0 failures, 0 errors** across 9 suites: AerodynamicModel 17, LaunchConditions 7, Environment 4, Surface 7, FlightSolver 5, BounceRollModel 5, BallFlightEngine 7, TourAverages 8, TourOrdering 4 — and NO ScaffoldSmokeTest XML remains). Lint green.
 
 - [ ] **Step 3: Commit**
 
