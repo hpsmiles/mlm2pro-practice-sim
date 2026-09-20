@@ -16,6 +16,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -38,7 +40,6 @@ import com.hpsmiles.golfsim.core.designsystem.GolfTypography
 import com.hpsmiles.golfsim.core.designsystem.MetricChip
 import com.hpsmiles.golfsim.core.designsystem.MetricRow
 import com.hpsmiles.golfsim.core.designsystem.SectionCard
-import com.hpsmiles.golfsim.core.designsystem.StatusStrip
 import com.hpsmiles.golfsim.core.physics.BallFlightEngine
 import com.hpsmiles.golfsim.core.physics.Environment
 import com.hpsmiles.golfsim.core.physics.LaunchConditions
@@ -49,8 +50,8 @@ import kotlin.math.sqrt
 /** Metres/second to mph for display. */
 private const val MPH_PER_MS = 2.23694
 
-private enum class SpeedMult(val label: String, val divisor: Int) {
-    X1("1x", 1), X2("2x", 2), X4("4x", 4);
+private enum class SpeedMult(val label: String, val divisor: Float) {
+    X1("1x", 1f), X15("1.5x", 1.5f), X2("2x", 2f), X4("4x", 4f);
 }
 
 private enum class ViewMode(val label: String) { POV("POV"), TOP_DOWN("TOP-DOWN") }
@@ -61,14 +62,21 @@ private enum class ViewMode(val label: String) { POV("POV"), TOP_DOWN("TOP-DOWN"
  * plays alongside at real duration divided by the speed multiplier. In
  * Phase B/C the DemoShotSource is swapped for the BLE source — the UI
  * does not know where shots come from.
+ *
+ * Tracer controls (user demo-gate feedback): a toggle for the current
+ * shot's tracer, a sub-toggle for faded previous-shot lines, and a slider
+ * for how many previous lines are shown.
  */
 @Composable
 fun RangeScreen(modifier: Modifier = Modifier) {
     val shots = remember { mutableStateListOf<DisplayShot>() }
     val demoSource = remember { DemoShotSource() }
     var playFraction by remember { mutableFloatStateOf(1f) }
-    var speedMult by remember { mutableStateOf(SpeedMult.X1) }
+    var speedMult by remember { mutableStateOf(SpeedMult.X15) }
     var viewMode by remember { mutableStateOf(ViewMode.POV) }
+    var showTracer by remember { mutableStateOf(true) }
+    var showHistory by remember { mutableStateOf(true) }
+    var historyLimit by remember { mutableFloatStateOf(8f) }
     val currentShot = shots.lastOrNull()
 
     // Tracer playback: animate playFraction over the shot's real duration.
@@ -102,22 +110,91 @@ fun RangeScreen(modifier: Modifier = Modifier) {
         // Metrics render immediately from `shots`; the tracer animates on top.
     }
 
+    // Previous-shot lines: faded, most recent first, limited by the slider.
+    val previousShots = if (showHistory) {
+        shots.dropLast(1).map { it.shotResult }.takeLast(historyLimit.toInt())
+    } else {
+        emptyList()
+    }
+
     Row(modifier = modifier.fillMaxSize().background(GolfColors.Base)) {
         // Range canvas with overlays.
         Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
             if (viewMode == ViewMode.POV) {
-                PovRangeCanvas(currentShot?.shotResult, playFraction, Modifier.fillMaxSize())
+                PovRangeCanvas(
+                    currentShot?.shotResult, previousShots, playFraction, showTracer, showHistory,
+                    Modifier.fillMaxSize(),
+                )
             } else {
                 TopDownCanvas(shots, Modifier.fillMaxSize())
             }
-            // DEMO badge, view toggle, speed toggle.
-            Text(
-                "DEMO",
-                color = GolfColors.Amber,
-                style = GolfTypography.Status,
-                modifier = Modifier.align(Alignment.TopStart).padding(GolfSpacing.Sm)
-                    .border(1.dp, GolfColors.Amber, RoundedCornerShape(50)).padding(horizontal = GolfSpacing.Sm, vertical = 2.dp),
-            )
+            // DEMO badge + tracer controls (toggle, sub-toggle, slider).
+            Column(
+                modifier = Modifier.align(Alignment.TopStart).padding(GolfSpacing.Sm),
+                verticalArrangement = Arrangement.spacedBy(GolfSpacing.Xs),
+            ) {
+                Text(
+                    "DEMO",
+                    color = GolfColors.Amber,
+                    style = GolfTypography.Status,
+                    modifier = Modifier
+                        .border(1.dp, GolfColors.Amber, RoundedCornerShape(50))
+                        .padding(horizontal = GolfSpacing.Sm, vertical = 2.dp),
+                )
+                Text(
+                    "TRACER: ${if (showTracer) "ON" else "OFF"}",
+                    color = if (showTracer) GolfColors.Teal else GolfColors.TextMuted,
+                    style = GolfTypography.Status,
+                    modifier = Modifier
+                        .clickable { showTracer = !showTracer }
+                        .border(1.dp, if (showTracer) GolfColors.Teal else GolfColors.Line, RoundedCornerShape(50))
+                        .padding(horizontal = GolfSpacing.Sm, vertical = 2.dp),
+                )
+                if (showTracer) {
+                    // Sub-toggle under the main one, indented.
+                    Row(
+                        modifier = Modifier.padding(start = GolfSpacing.Xl),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            "PREV: ${if (showHistory) "ON" else "OFF"}",
+                            color = if (showHistory) GolfColors.Teal else GolfColors.TextMuted,
+                            style = GolfTypography.Status,
+                            modifier = Modifier
+                                .clickable { showHistory = !showHistory }
+                                .border(
+                                    1.dp,
+                                    if (showHistory) GolfColors.Teal else GolfColors.Line,
+                                    RoundedCornerShape(50),
+                                )
+                                .padding(horizontal = GolfSpacing.Sm, vertical = 2.dp),
+                        )
+                        // Slider for how many previous lines are shown.
+                        if (showHistory) {
+                            Slider(
+                                value = historyLimit,
+                                onValueChange = { historyLimit = it },
+                                valueRange = 0f..20f,
+                                steps = 19,
+                                modifier = Modifier.width(110.dp).padding(start = GolfSpacing.Xs),
+                                colors = SliderDefaults.colors(
+                                    thumbColor = GolfColors.Teal,
+                                    activeTrackColor = GolfColors.Teal,
+                                    inactiveTrackColor = GolfColors.Line,
+                                ),
+                            )
+                        }
+                    }
+                    if (showHistory) {
+                        Text(
+                            "LAST ${historyLimit.toInt()} LINES",
+                            color = GolfColors.TextMuted,
+                            style = GolfTypography.Status,
+                            modifier = Modifier.padding(start = GolfSpacing.Xxl),
+                        )
+                    }
+                }
+            }
             Text(
                 "VIEW: ${viewMode.label}",
                 color = GolfColors.TextSecondary,
