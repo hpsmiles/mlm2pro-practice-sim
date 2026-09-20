@@ -44,6 +44,10 @@ class HttpRapsodoTokenProvider : RapsodoTokenProvider {
                 val token = parseToken(body)
                     ?: return@withContext TokenResult.Failure("token missing in response")
                 TokenResult.Success(token)
+            } catch (e: SecurityException) {
+                // Bench attempt 4: a missing INTERNET manifest permission used
+                // to escape this fetch and crash the whole app — surface it.
+                TokenResult.Failure(e.message ?: "no network permission")
             } catch (e: IOException) {
                 TokenResult.Failure(e.message ?: "network error")
             } finally {
