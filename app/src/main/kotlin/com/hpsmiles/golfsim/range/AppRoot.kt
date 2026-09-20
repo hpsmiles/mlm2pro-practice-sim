@@ -1,6 +1,8 @@
 // app/src/main/kotlin/com/hpsmiles/golfsim/range/AppRoot.kt
 package com.hpsmiles.golfsim.range
 
+import android.bluetooth.BluetoothManager
+import android.content.Context
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -10,22 +12,64 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import com.hpsmiles.golfsim.core.connect.ConnectionState
+import com.hpsmiles.golfsim.core.connect.EnvironmentConfig
+import com.hpsmiles.golfsim.core.connect.HandshakeSequencer
+import com.hpsmiles.golfsim.core.connect.Mlm2proGattClient
+import com.hpsmiles.golfsim.core.connect.Mlm2proScanner
 import com.hpsmiles.golfsim.core.designsystem.GolfColors
 import com.hpsmiles.golfsim.core.designsystem.GolfTheme
 import com.hpsmiles.golfsim.core.designsystem.NavRail
 import com.hpsmiles.golfsim.core.designsystem.NavRailButton
 import com.hpsmiles.golfsim.core.designsystem.StatusStrip
 import com.hpsmiles.golfsim.settings.SettingsScreen
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 
 private enum class RangeTab { RANGE, SETTINGS }
 
+/** The bench device session key convention (same bytes the auth write carries raw). */
+private fun benchSessionKey(): ByteArray = ByteArray(32) { it.toByte() }
+
 @Composable
 fun AppRoot() {
+    val context = LocalContext.current
+    val gattClient = remember {
+        Mlm2proGattClient(context, HandshakeSequencer(benchSessionKey(), EnvironmentConfig()))
+            .apply { setSessionKey(benchSessionKey()) }
+    }
+    val connectionState by gattClient.state.collectAsState()
+    val scope = rememberCoroutineScope()
+    var scanning by remember { mutableStateOf(false) }
+    // MODE toggle state lives here so the StatusStrip demo fallback mirrors it.
+    var demo by remember { mutableStateOf(true) }
+
+    // M4b bench connect flow: scan for the first MLM2- device, then GATT-connect.
+    // Mlm2proScanner stops scanning when the collecting coroutine is cancelled.
+    fun onConnectRequested() {
+        if (scanning) return
+        scanning = true
+        scope.launch {
+            try {
+                val device = Mlm2proScanner(context).scan().first()
+                val manager = context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
+                gattClient.connect(manager.adapter.getRemoteDevice(device.address))
+            } catch (ignored: Exception) {
+                // scan cancelled or no adapter — status text falls back to describe().
+            } finally {
+                scanning = false
+            }
+        }
+    }
+
     var tab by remember { mutableStateOf(RangeTab.RANGE) }
     GolfTheme {
         Column(
@@ -36,20 +80,36 @@ fun AppRoot() {
         ) {
             Row(modifier = Modifier.weight(1f)) {
                 NavRail {
-                    // Mechanical: NavRailButton(label, selected, onClick, modifier) —
-                    // a trailing lambda would bind to `modifier`, so name onClick.
                     NavRailButton("RANGE", tab == RangeTab.RANGE, onClick = { tab = RangeTab.RANGE })
                     NavRailButton("SETTINGS", tab == RangeTab.SETTINGS, onClick = { tab = RangeTab.SETTINGS })
                 }
                 when (tab) {
-                    RangeTab.RANGE -> RangeScreen()
+                    RangeTab.RANGE -> RangeScreen(
+                        Modifier.weight(1f),
+                        demo = demo,
+                        onDemoChanged = { demo = it },
+                        onConnectRequested = { onConnectRequested() },
+                    )
                     RangeTab.SETTINGS -> SettingsScreen()
                 }
             }
             StatusStrip(
-                armed = true,
-                info = if (tab == RangeTab.RANGE) "DEMO MODE - FIRE TO SHOOT" else "SETTINGS",
+                armed = demo || connectionState is ConnectionState.Armed,
+                info = describe(connectionState, demo = demo, scanning = scanning),
             )
         }
+    }
+}
+
+/** StatusStrip text mapping per the M4b plan (demo fallback first). */
+private fun describe(state: ConnectionState, demo: Boolean, scanning: Boolean): String = when {
+    demo -> "DEMO MODE - FIRE TO SHOOT"
+    scanning -> "SCANNING\u2026"
+    else -> when (state) {
+        ConnectionState.Disconnected -> "BLE DISCONNECTED"
+        ConnectionState.Connecting -> "CONNECTING\u2026"
+        ConnectionState.Handshaking -> "HANDSHAKING\u2026"
+        ConnectionState.Armed -> "ARMED"
+        is ConnectionState.Faulted -> "BLE FAULTED - SEE CAPTURE"
     }
 }
