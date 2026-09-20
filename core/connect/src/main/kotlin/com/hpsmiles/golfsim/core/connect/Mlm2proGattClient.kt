@@ -271,6 +271,11 @@ class Mlm2proGattClient(
         // routed by UUID string here; everything else goes through the enum.
         if (uuid.equals(WRITE_RESPONSE_UUID, ignoreCase = true)) {
             captureLog.record(uuid = uuid.take(8).uppercase(), encrypted = value, decrypted = null)
+            // Bench diagnostics: the device answers CONFIGURE with a second
+            // WRITE_RESPONSE — first byte 0x00 = "Configuration Accepted"
+            // (reference BluetoothBase.Characteristic_ValueChanged). Log every
+            // one raw so acceptance/rejection is visible in logcat.
+            Log.i(TAG, "write-response raw=" + value.joinToString(" ") { String.format("%02X", it) })
             sequencer.onWriteResponse(maybeDecrypt(value, sessionKeyBytes), clockMs())
             // FIX 1 (spec §3e): on WRITE_RESPONSE accept the sequencer parks in
             // TOKEN_WAIT with the authed userId parsed — fetch the token async.

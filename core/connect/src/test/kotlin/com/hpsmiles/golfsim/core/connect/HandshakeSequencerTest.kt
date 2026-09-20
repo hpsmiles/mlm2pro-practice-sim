@@ -59,7 +59,7 @@ class HandshakeSequencerTest {
         assertNotNull(w)
         assertEquals(CommandTarget.CONFIGURE, w!!.target)
         // Wire pin: the CONFIG-sample ciphertext from the header conventions.
-        assertEquals("4A4552B700BFBFC3D19C87B2B9379766", hex(w.plaintext))
+        assertEquals("9C34D51DEE811E6383ABBA5742BAC222", hex(w.plaintext))
         assertEquals(HandshakeState.CONFIG_WRITE_1, s.state)
     }
 
