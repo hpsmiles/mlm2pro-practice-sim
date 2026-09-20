@@ -31,3 +31,5 @@ include(":core:physics")
 include(":app")
 
 include(":core:designsystem")
+
+include(":core:connect")
