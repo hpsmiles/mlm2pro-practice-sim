@@ -1,3 +1,4 @@
+// app/src/main/kotlin/com/hpsmiles/golfsim/range/AppRoot.kt
 package com.hpsmiles.golfsim.range
 
 import androidx.compose.foundation.background
@@ -5,6 +6,9 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -16,20 +20,36 @@ import com.hpsmiles.golfsim.core.designsystem.GolfTheme
 import com.hpsmiles.golfsim.core.designsystem.NavRail
 import com.hpsmiles.golfsim.core.designsystem.NavRailButton
 import com.hpsmiles.golfsim.core.designsystem.StatusStrip
+import com.hpsmiles.golfsim.settings.SettingsScreen
 
-/** Top-level app frame: nav rail + tab content + status strip. */
+private enum class RangeTab { RANGE, SETTINGS }
+
 @Composable
 fun AppRoot() {
+    var tab by remember { mutableStateOf(RangeTab.RANGE) }
     GolfTheme {
-        Column(Modifier.fillMaxSize().background(GolfColors.Base)) {
-            Row(Modifier.weight(1f)) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(GolfColors.Base)
+                .windowInsetsPadding(WindowInsets.safeDrawing),
+        ) {
+            Row(modifier = Modifier.weight(1f)) {
                 NavRail {
-                    NavRailButton("RANGE", selected = true, onClick = { })
+                    // Mechanical: NavRailButton(label, selected, onClick, modifier) —
+                    // a trailing lambda would bind to `modifier`, so name onClick.
+                    NavRailButton("RANGE", tab == RangeTab.RANGE, onClick = { tab = RangeTab.RANGE })
+                    NavRailButton("SETTINGS", tab == RangeTab.SETTINGS, onClick = { tab = RangeTab.SETTINGS })
                 }
-                RangeScreen(Modifier.weight(1f))
+                when (tab) {
+                    RangeTab.RANGE -> RangeScreen()
+                    RangeTab.SETTINGS -> SettingsScreen()
+                }
             }
-            // Phase A status: demo mode. Phase B/C swaps in BLE connection state.
-            StatusStrip(armed = true, info = "DEMO MODE - FIRE TO SHOOT")
+            StatusStrip(
+                armed = true,
+                info = if (tab == RangeTab.RANGE) "DEMO MODE - FIRE TO SHOOT" else "SETTINGS",
+            )
         }
     }
 }
