@@ -82,10 +82,28 @@ class HandshakeSequencerTest {
     }
 
     @Test
+    fun autoArmsFromReadyAfterSettleDelay() {
+        val s = authedSequencer()
+        s.onToken(1, nowMs = 200)
+        s.poll(nowMs = 400) // config #2 -> READY at t=400
+        // No arm before the settle delay elapses (reference: Task.Delay(500)
+        // after the second config write); heartbeat window not yet open either.
+        assertTrue(s.poll(nowMs = 899).isEmpty())
+        val at900 = s.poll(nowMs = 900) // READY + 500 ms -> auto-ARM
+        assertEquals(1, at900.size)
+        assertEquals(CommandTarget.COMMAND, at900[0].target)
+        assertEquals("4D40E953E85F1672CAC463A695E8C9D8", hex(at900[0].plaintext))
+        assertEquals(HandshakeState.ARMED, s.state)
+        // Fires once; subsequent polls emit only heartbeats.
+        assertTrue(s.poll(nowMs = 901).isEmpty())
+    }
+
+    @Test
     fun heartbeatsEvery2sOnceReady() {
         val s = authedSequencer()
         s.onToken(1, nowMs = 200)
         s.poll(nowMs = 400) // config #2 -> READY (heartbeat clock starts here)
+        s.poll(nowMs = 900)  // auto-ARM at the settle delay
         assertTrue(s.poll(nowMs = 2399).isEmpty())
         val beat = s.poll(nowMs = 2400)
         assertEquals(1, beat.size)

@@ -224,6 +224,13 @@ class Mlm2proGattClient(
                 delay(500)
                 val g = gatt ?: break
                 sequencer.poll(clockMs()).forEach { performWrite(it) }
+                // Auto-ARM (sequencer fires it 500 ms after READY): reflect
+                // the transition in the UI state flow.
+                if (sequencer.state == HandshakeState.ARMED &&
+                    _state.value != ConnectionState.Armed
+                ) {
+                    _state.value = ConnectionState.Armed
+                }
                 if (sequencer.isResubscribeDue(clockMs())) {
                     val events = g.getService(java.util.UUID.fromString(SERVICE_UUID))
                         ?.getCharacteristic(java.util.UUID.fromString(EVENTS_UUID))
