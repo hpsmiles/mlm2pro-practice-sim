@@ -368,7 +368,11 @@ class AerodynamicModelTest {
     fun liftBinIsContinuousAtFiftyK() {
         val below = AerodynamicModel.clOf(49999.9, 0.15)
         val above = AerodynamicModel.clOf(50000.1, 0.15)
-        assertEquals(below, above, 1e-9)
+        // Tolerance 2e-6 (not 1e-9): clRe60k(0.15) is negative and clamps to 0,
+        // so the 50k->60k lerp segment has slope ~ -1.0e-5/Re just above 50k;
+        // probes 0.2 Re apart differ by ~1.0e-6. Continuity holds at the anchor
+        // itself; this probes the curve, not the anchor equality.
+        assertEquals(below, above, 2e-6)
     }
 
     @Test
