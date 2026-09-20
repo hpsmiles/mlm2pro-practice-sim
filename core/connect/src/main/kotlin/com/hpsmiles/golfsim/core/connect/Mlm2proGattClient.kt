@@ -207,15 +207,16 @@ class Mlm2proGattClient(
 
     /** Route one decrypted/raw notification through the M1 decoder. */
     internal fun handleNotification(uuid: String, value: ByteArray) {
-        // M4b capture: record the raw payload (decrypted variant recorded after
-        // a successful decode below).
-        captureLog.record(uuid = uuid.take(8).uppercase(), encrypted = value, decrypted = null)
+        // FIX 4: single record per notification — the entry-point record is
+        // gone; each path records exactly once (WRITE_RESPONSE pre-decrypt raw,
+        // decoded characteristic paths with their plaintext).
         sequencer.onNotification(clockMs())
         // Plan deviation (mechanical): the M1 Characteristic enum deliberately
         // excludes WRITE_RESPONSE (M4 scope there), and adding an enum constant
         // would alter the frozen M1 decoder surface — so WRITE_RESPONSE is
         // routed by UUID string here; everything else goes through the enum.
         if (uuid.equals(WRITE_RESPONSE_UUID, ignoreCase = true)) {
+            captureLog.record(uuid = uuid.take(8).uppercase(), encrypted = value, decrypted = null)
             sequencer.onWriteResponse(maybeDecrypt(value, sessionKeyBytes), clockMs())
             // FIX 1 (spec §3e): on WRITE_RESPONSE accept the sequencer parks in
             // TOKEN_WAIT with the authed userId parsed — fetch the token async.
