@@ -240,6 +240,12 @@ android {
 
 dependencies {
     implementation(project(":core:ble"))
+    // Env fix (disclosed deviation): the golf-android-library convention
+    // applies the Compose compiler plugin to every consumer; :core:connect is
+    // non-Compose, so the runtime must still reach the compiler. This mirrors
+    // :core:designsystem's proven implementation-scoped BOM+ui pattern.
+    implementation(platform(libs.compose.bom))
+    implementation(libs.compose.ui)
     testImplementation(libs.junit)
 }
 ```
@@ -304,7 +310,10 @@ class CommandEncoderTest {
             pressureRaw = 0x7DC8,
             tempCentiC = 1500,
         )
-        val cmd = CommandEncoder.config(cfg, token = 0xA63C5A44, key = key)
+        // Deviation (mechanical): 0xA63C5A44 > Int.MAX_VALUE, so the hex
+        // literal is a Long — same .toInt() narrowing the plan itself uses
+        // for onToken; bit pattern and pinned ciphertext unchanged.
+        val cmd = CommandEncoder.config(cfg, token = 0xA63C5A44.toInt(), key = key)
         assertEquals(CommandTarget.CONFIGURE, cmd.target)
         assertEquals("4A4552B700BFBFC3D19C87B2B9379766", hex(cmd.plaintext))
         // Decrypt back and verify the 14-byte layout field by field.
@@ -314,11 +323,14 @@ class CommandEncoderTest {
         assertEquals(0x02, p[1].toInt() and 0xFF)
         assertEquals(0x00, p[2].toInt() and 0xFF)
         assertEquals(0x00, p[3].toInt() and 0xFF)
-        assertEquals(0x7DC8, (p[4].toInt() and 0xFF) or ((p[5].toInt() and 0xFF) shl 8))
+        // Deviation (matches the pin-verified big-endian layout; the plan's
+        // LE reads contradicted its own verified ciphertext pin):
+        assertEquals(0x7DC8, ((p[4].toInt() and 0xFF) shl 8) or (p[5].toInt() and 0xFF))
+        // temp is LE16 in the pin-verified layout (plan's LE read was right here):
         assertEquals(1500, (p[6].toInt() and 0xFF) or ((p[7].toInt() and 0xFF) shl 8))
-        assertEquals(0xA63C5A44.toInt(), (p[8].toInt() and 0xFF) or
-            ((p[9].toInt() and 0xFF) shl 8) or ((p[10].toInt() and 0xFF) shl 16) or
-            ((p[11].toInt() and 0xFF) shl 24))
+        assertEquals(0xA63C5A44.toInt(), ((p[8].toInt() and 0xFF) shl 24) or
+            ((p[9].toInt() and 0xFF) shl 16) or ((p[10].toInt() and 0xFF) shl 8) or
+            (p[11].toInt() and 0xFF))
         assertEquals(0, p[12].toInt())
         assertEquals(0, p[13].toInt())
     }
@@ -359,7 +371,11 @@ class HandshakeSequencerTest {
     private fun authedSequencer(): HandshakeSequencer {
         val s = HandshakeSequencer(key, cfg)
         s.onSubscriptionsComplete(nowMs = 0)
-        val resp = byteArrayOf(0x02, 0x44, 0x5A, 0x3C, 0xA6, 0x00)
+        // Deviation (mechanical, test-fixture only): the plan's resp array had
+        // bytes [1] and [2] transposed — as written it parses to 0x00A63C5A,
+        // contradicting the plan's own pinned assert 0x00A63C44. Corrected to
+        // (02, 5A, 44, 3C, A6, 00) so bytes [2..5] LE = 0x00A63C44.
+        val resp = byteArrayOf(0x02, 0x5A, 0x44, 0x3C, 0xA6.toByte(), 0x00)
         s.onWriteResponse(resp, nowMs = 100)
         return s
     }
@@ -433,10 +449,10 @@ class HandshakeSequencerTest {
         val s = authedSequencer()
         s.onToken(1, nowMs = 200)
         s.poll(nowMs = 400) // READY
-        val arm = s.arm(nowMs = 1000) !!
+        val arm = s.arm(nowMs = 1000)!!
         assertEquals(HandshakeState.ARMED, s.state)
         assertEquals("4D40E953E85F1672CAC463A695E8C9D8", hex(arm.plaintext))
-        val disarm = s.disarm(nowMs = 1200) !!
+        val disarm = s.disarm(nowMs = 1200)!!
         assertEquals(HandshakeState.DISARMED, s.state)
         assertEquals("D5BC053B9452BA6D4406F8659EDFC066", hex(disarm.plaintext))
         // Arm again from DISARMED is legal.
@@ -532,9 +548,18 @@ object CommandEncoder {
         p[1] = cfg.ballType.toByte()
         p[2] = if (cfg.indoor) 1 else 0
         p[3] = 0x00
-        write16(p, 4, cfg.pressureRaw)
-        write16(p, 6, cfg.tempCentiC)
-        write32(p, 8, token)
+        // Plan deviation (mechanical, pin-verified): the verified CONFIG
+        // ciphertext decrypts to 01 02 00 00 7DC8 DC05 A63C5A44 0000 — i.e.
+        // pressure BE16, temperature LE16, token BE32 (the plan's LE helpers
+        // produced a different ciphertext and self-contradicted the pin).
+        p[4] = ((cfg.pressureRaw shr 8) and 0xFF).toByte()
+        p[5] = (cfg.pressureRaw and 0xFF).toByte()
+        p[6] = (cfg.tempCentiC and 0xFF).toByte()
+        p[7] = ((cfg.tempCentiC shr 8) and 0xFF).toByte()
+        p[8] = ((token shr 24) and 0xFF).toByte()
+        p[9] = ((token shr 16) and 0xFF).toByte()
+        p[10] = ((token shr 8) and 0xFF).toByte()
+        p[11] = (token and 0xFF).toByte()
         p[12] = 0x00
         p[13] = 0x00
         return WriteCommand(CommandTarget.CONFIGURE, Mlm2proCrypto.encrypt(p, key))
@@ -542,18 +567,6 @@ object CommandEncoder {
 
     private val ARM_PLAINTEXT = byteArrayOf(0x01, 0x0D, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00)
     private val DISARM_PLAINTEXT = byteArrayOf(0x01, 0x0D, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00)
-
-    private fun write16(p: ByteArray, offset: Int, value: Int) {
-        p[offset] = (value and 0xFF).toByte()
-        p[offset + 1] = ((value shr 8) and 0xFF).toByte()
-    }
-
-    private fun write32(p: ByteArray, offset: Int, value: Int) {
-        p[offset] = (value and 0xFF).toByte()
-        p[offset + 1] = ((value shr 8) and 0xFF).toByte()
-        p[offset + 2] = ((value shr 16) and 0xFF).toByte()
-        p[offset + 3] = ((value shr 24) and 0xFF).toByte()
-    }
 }
 ```
 
