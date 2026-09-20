@@ -22,8 +22,12 @@ dependencyResolutionManagement {
 
 rootProject.name = "mlm2pro-practice-sim"
 
+includeBuild("build-logic")
+
 include(":core:ble")
 
 include(":core:physics")
 
 include(":app")
+
+include(":core:designsystem")

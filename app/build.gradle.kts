@@ -40,6 +40,7 @@ kotlin {
 }
 
 dependencies {
+    implementation(project(":core:designsystem"))
     implementation(platform(libs.compose.bom))
     implementation(libs.androidx.activity.compose)
     implementation(libs.compose.ui)
