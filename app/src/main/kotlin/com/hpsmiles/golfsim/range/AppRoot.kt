@@ -4,13 +4,19 @@ package com.hpsmiles.golfsim.range
 import android.bluetooth.BluetoothManager
 import android.content.Context
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -20,6 +26,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
 import com.hpsmiles.golfsim.core.connect.ConnectionState
 import com.hpsmiles.golfsim.core.connect.EnvironmentConfig
 import com.hpsmiles.golfsim.core.connect.HandshakeSequencer
@@ -27,6 +34,7 @@ import com.hpsmiles.golfsim.core.connect.Mlm2proGattClient
 import com.hpsmiles.golfsim.core.connect.Mlm2proScanner
 import com.hpsmiles.golfsim.core.designsystem.GolfColors
 import com.hpsmiles.golfsim.core.designsystem.GolfTheme
+import com.hpsmiles.golfsim.core.designsystem.GolfTypography
 import com.hpsmiles.golfsim.core.designsystem.NavRail
 import com.hpsmiles.golfsim.core.designsystem.NavRailButton
 import com.hpsmiles.golfsim.core.designsystem.StatusStrip
@@ -93,6 +101,29 @@ fun AppRoot() {
                     RangeTab.SETTINGS -> SettingsScreen()
                 }
             }
+            // M4b FIX 2: ARM/STANDBY control — visible once the handshake has
+            // subscriptions+auth complete (Handshaking) and through Armed/Disarmed.
+            val armed = connectionState is ConnectionState.Armed
+            if (connectionState is ConnectionState.Handshaking ||
+                armed || connectionState is ConnectionState.Disarmed
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = GolfSpacing.Md, vertical = GolfSpacing.Xs),
+                    horizontalArrangement = Arrangement.End,
+                ) {
+                    Text(
+                        text = if (armed) "STANDBY" else "ARM",
+                        color = if (armed) GolfColors.TextSecondary else GolfColors.TextPrimary,
+                        style = GolfTypography.MetricLabel,
+                        modifier = Modifier
+                            .border(1.dp, GolfColors.Teal, RoundedCornerShape(50))
+                            .clickable {
+                                if (armed) gattClient.disarm() else gattClient.arm()
+                            }
+                            .padding(horizontal = GolfSpacing.Lg, vertical = GolfSpacing.Sm),
+                    )
+                }
+            }
             StatusStrip(
                 armed = demo || connectionState is ConnectionState.Armed,
                 info = describe(connectionState, demo = demo, scanning = scanning),
@@ -110,6 +141,7 @@ private fun describe(state: ConnectionState, demo: Boolean, scanning: Boolean): 
         ConnectionState.Connecting -> "CONNECTING\u2026"
         ConnectionState.Handshaking -> "HANDSHAKING\u2026"
         ConnectionState.Armed -> "ARMED"
+        ConnectionState.Disarmed -> "DISARMED - STANDBY"
         is ConnectionState.Faulted -> "BLE FAULTED - SEE CAPTURE"
     }
 }

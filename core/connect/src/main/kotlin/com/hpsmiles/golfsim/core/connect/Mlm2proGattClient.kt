@@ -24,15 +24,17 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 
-/** Lifecycle state surfaced to the UI (rendered in the range status strip). */
-sealed interface ConnectionState {
-    data object Disconnected : ConnectionState
-    data object Connecting : ConnectionState
-    /** Handshake in progress (auth -> token -> config). */
-    data object Handshaking : ConnectionState
-    data object Armed : ConnectionState
-    data class Faulted(val reason: String) : ConnectionState
-}
+    /** Lifecycle state surfaced to the UI (rendered in the range status strip). */
+    sealed interface ConnectionState {
+        data object Disconnected : ConnectionState
+        data object Connecting : ConnectionState
+        /** Handshake in progress (auth -> token -> config). */
+        data object Handshaking : ConnectionState
+        data object Armed : ConnectionState
+        /** M4b FIX 2: sequencer reached DISARMED after a disarm write. */
+        data object Disarmed : ConnectionState
+        data class Faulted(val reason: String) : ConnectionState
+    }
 
 /**
  * Owns the GATT connection to a bonded MLM2PRO and drives
@@ -143,6 +145,28 @@ class Mlm2proGattClient(
         gatt?.close()
         gatt = null
         _state.value = ConnectionState.Disconnected
+    }
+
+    /**
+     * FIX 2 (spec §3c): queue the ARM command. Valid only when the sequencer
+     * is READY/DISARMED (guarded by [HandshakeSequencer.arm]); the LED state
+     * flips to [ConnectionState.Armed] on the transition.
+     */
+    fun arm() {
+        val write = sequencer.arm(clockMs()) ?: return
+        performWrite(write)
+        if (sequencer.state == HandshakeState.ARMED) {
+            _state.value = ConnectionState.Armed
+        }
+    }
+
+    /** FIX 2: queue the DISARM command (valid only from ARMED). */
+    fun disarm() {
+        val write = sequencer.disarm(clockMs()) ?: return
+        performWrite(write)
+        if (sequencer.state == HandshakeState.DISARMED) {
+            _state.value = ConnectionState.Disarmed
+        }
     }
 
     /** Route one decrypted/raw notification through the M1 decoder. */
