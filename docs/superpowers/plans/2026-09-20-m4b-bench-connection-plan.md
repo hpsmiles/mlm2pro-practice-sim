@@ -733,6 +733,10 @@ Expected: FAIL (`Unresolved reference 'CaptureLog'`).
 ```kotlin
 package com.hpsmiles.golfsim.core.connect
 
+// Correction applied (40dd317, T6 deviation 1): the draft omitted the
+// Mlm2proCrypto import used by the wrongKey decrypt vector.
+import com.hpsmiles.golfsim.core.ble.Mlm2proCrypto
+
 /**
  * M4b: in-app notification capture. When [enabled] is set the GATT client feeds
  * every notification (encrypted bytes and, when successfully decrypted, the
@@ -804,12 +808,24 @@ Expected: PASS (4/4).
 In `handleNotification` (both callback variants forward there already after Task 2), add two lines at the top:
 
 ```kotlin
-            // M4b capture: record the raw + decrypted payload (decrypted later in
-            // this method when decode succeeds — record again post-decode).
-            captureLog.record(uuid = characteristic.uuid?.substring(0, 8)?.uppercase() ?: "?", encrypted = value, decrypted = null)
+            // Correction applied (40dd317, T6 deviation 2): the shipped
+            // handleNotification takes `uuid: String`, so the analogue of the
+            // draft's `characteristic.uuid?.substring(0, 8)?.uppercase()` is
+            // `uuid.take(8).uppercase()`; the raw record sits at the top of the
+            // method (before the WRITE_RESPONSE early return).
+            captureLog.record(uuid = uuid.take(8).uppercase(), encrypted = value, decrypted = null)
 ```
 
-and after the successful `Mlm2proDecoder.decode` line, a second `captureLog.record(...)` call with the decrypted bytes. The `captureLog` is a constructor-injected `CaptureLog` field (default `CaptureLog()`), exposed so the UI can set `enabled` and read `exportProperties`. Structural change — M4a-file-wins rule applies.
+and after the successful `Mlm2proDecoder.decode` line — which never throws (it converts crypto failures to a Malformed message) — a second `captureLog.record(...)` call with the decrypted bytes, placed between the decode call and the `when` block (placement inside `when` before the first branch would be invalid Kotlin):
+
+```kotlin
+        val msg = Mlm2proDecoder.decode(fromUuid, value, sessionKeyBytes)
+        // M4b capture: decode succeeded — record with the decrypted bytes.
+        captureLog.record(uuid = uuid.take(8).uppercase(), encrypted = value, decrypted = plain)
+        when (msg) { /* existing branches unchanged */ }
+```
+
+The `captureLog` is a defaulted third constructor parameter on `Mlm2proGattClient` (`val captureLog: CaptureLog = CaptureLog()` — the existing 2-arg callers are unaffected; constructor-injectable for fakes), exposed so the UI can set `enabled` and read `exportProperties`. Structural change — M4a-file-wins rule applies. (Correction applied per the 40dd317 deviation disclosure, a1af7cc-style.)
 
 - [ ] **Step 6: Commit**
 
