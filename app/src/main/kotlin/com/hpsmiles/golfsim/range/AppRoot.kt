@@ -66,6 +66,9 @@ fun AppRoot() {
 
     // M4b bench connect flow: scan for the first MLM2- device, then GATT-connect.
     // Mlm2proScanner stops scanning when the collecting coroutine is cancelled.
+    // Lint contract: RangeScreen's CONNECT button checks/request both runtime
+    // permissions before this fires; the :app manifest declares SCAN+CONNECT.
+    @Suppress("MissingPermission")
     fun onConnectRequested() {
         if (scanning) return
         scanning = true
