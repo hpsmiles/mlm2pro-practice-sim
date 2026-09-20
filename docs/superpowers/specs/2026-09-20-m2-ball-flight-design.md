@@ -1,7 +1,8 @@
 # M2 — Ball-Flight Engine Design Spec
 
 **Date:** 2026-09-20
-**Status:** Approved design (user-signed sections 1–4)
+**Status:** Approved design; amended 2026-09-20 after calibration sweep
+(tiered gate, OF correction layers ported, tuned constants, shallow-bounce law)
 **Branch:** `m2-ball-flight` (off `master@62bd017`)
 
 ## 1. Goal & Exit Criteria
@@ -12,12 +13,17 @@ and ground contact, and produce a `ShotResult` — carry, rollout, total distanc
 drift, apex height, flight time. Realism target: reproduce published Tour average
 carry/total distances within a regression gate.
 
-**Exit criteria:**
-- The engine reproduces all 8 Tour-average shots (PGA/LPGA driver, 3W, 5i, 7i, PW)
-  within **±3 yd carry / ±5 yd total** on default surfaces.
-- Fully deterministic: identical inputs → bit-identical outputs, no hardware or
+**Exit criteria (amended 2026-09-20, tiered gate — see §8):**
+- Deterministic: identical inputs → bit-identical outputs, no hardware or
   platform dependencies, all paths unit-tested (including spin-back, firm/soft,
   wind).
+- Model outputs rank the Tour club ladder correctly (carry strictly ordered;
+  rollout ordered at family level), surface firmness orderings hold, and
+  draw/fade mirror.
+- The exact pinned regression numbers of §8 (verified prototype run) reproduce
+  bit-identically.
+- Absolute vs-Tour accuracy is a **documented bias** (calibration deferred to M4
+  live captures) — no strict ±3 yd/±5 yd gate in M2.
 - Consumes M1's `BallData` mapping without changes to `:core:ble`.
 
 ## 2. Background & Sources
@@ -111,7 +117,7 @@ F_magnus =  ½ · ρ · A · Cl · |v_rel|² · (ω̂ × v̂_rel)
   - Re ≤ 30,000 → Cd = 0.38; smoothstep-blended from 0.38 to 0.4632 across
     Re 30,000–50,000 (joining the cubic at its 50k value)
   - Cd minimum floor: 0.223
-  - Spin multiplier: `Cd *= min(1 + 4·S², 1.20)` where S = r·ω/|v_rel|
+  - Spin multiplier (openfairway structure, tuned coefficients): `Cd *= min(1 + sdCoeff·S², cap)` with **sdCoeff = 8.0** and **cap = 1.55** (tuned vs Tour gate; OF Default reference: 4.0 / 1.20) where S = r·ω/|v_rel|
 - **Lift coefficient** (Bearman-binned in S at four Re points, verbatim from
   openfairway/libgolf, both ultimately Bearman & Harvey data):
   - `Cl_50k(S) = 0.0472121 + 2.84795·S − 23.4342·S² + 45.4849·S³`
@@ -119,19 +125,32 @@ F_magnus =  ½ · ρ · A · Cl · |v_rel|² · (ω̂ × v̂_rel)
   - `Cl_65k(S) = 0.266667 − 4.0·S + 13.3333·S²`
   - `Cl_70k(S) = 0.0496189 + 0.00211396·S + 2.34201·S²`
   - Below Re 50k: ramp (smoothstep) from zero lift toward the 50k bin
-  - Above Re 70k: Hill saturation, `Cl = ClMax(S)·S·g/(1 + S·g)`, g = 16
+  - Above Re 75k: Hill saturation, `Cl = ClMax(S)·S·g/(1 + S·g)`, g = 16
   - `ClMax(S)`: 0.268 → 0.320 linear across S ∈ [0.35, 0.50]
-  - Linear interpolation between adjacent Re bins; 50k/60k/65k/70k anchors
-- **Spin decay in flight**: exponential, `ω *= exp(−dt/τ)`, default **τ = 5 s**
-  (Flightscope-calibrated openfairway value). Named parameter — tunable via the
-  regression gate; flagged for live-capture verification (sources spread 5–35 s).
+  - Linear interpolation between adjacent Re anchors; **five anchors:
+    50k/60k/65k/70k/75k** (the 75k anchor is the Hill value — ensures continuity
+    through the transition; OF structure)
+- **Spin decay in flight**: exponential, `ω *= exp(−dt/τ)`, default **τ = 12 s**
+  (tuned vs Tour gate; physically realistic — real balls retain 65–85% spin over
+  flight). Named parameter; flagged for live-capture verification.
 - **Integration**: fixed-step **symplectic Euler**, **dt = 10 ms**. Deterministic
   by construction; accuracy within inches of reference solutions at this step size.
 - **Air density**: ideal-gas law from temperature and pressure,
   ρ = P/(287.05 J·kg⁻¹K⁻¹ · T). Defaults: 15 °C, 1013.25 hPa → 1.225 kg/m³.
 
-**No correction-layer stacking**: none of openfairway's tuned lift/drag boost
-layers. If the regression gate fails, named physical parameters change.
+**Correction layers (amended 2026-09-20 after calibration):** a full-fidelity
+prototype sweep (洁净 Java port, 400+ configs across three model families)
+proved NO clean-knob variant of the base model reaches the Tour gate — the gate
+requires openfairway's regime-keyed corrections. Per user decision, M2 ports the
+**openfairway FlightProfile correction structure with Default constants** (MIT,
+attributed): high-spin / ultra-high-spin spin-drag cap relief, progressive
+spin-drag cap boost, high-spin / ultra-high-spin Cl attenuation (incl. low-Re
+variants), low-launch lift recovery, high-launch drag boost — all as named,
+documented, individually testable layers. One exception: **MidSpinClBoost is
+disabled** (`msBoostMax = 0`; OF Default 0.45) — the sweep showed it is strictly
+harmful against Tour data. Tuned named parameters (documented, not invisible):
+τ = 12 s, sdCoeff = 8.0, sdCap = 1.55, msBoostMax = 0. Absolute-accuracy
+calibration is deferred to M4 live captures (see §8 tiered gate).
 
 ## 6. Ground Model
 
@@ -146,17 +165,21 @@ energy):
   - Spin reduction: COR reduced 0% → 30% across 0–1500 rpm, up to 70% ≥ 3000 rpm
     (backspin digs in; wedges don't ricochet)
 - Tangential:
-  - Steep+fast (impact angle ≥ θ_crit AND |v| ≥ 20 m/s) — Penner branch:
+  - Steep+fast — Penner branch: threshold is 20 m/s, ramping 20 → 12 m/s as
+    rpm goes 4000 → 8000 (high spin checks up at lower speed; OF structure):
     `v_t' = retention · |v| · sin(θ − θ_crit) − 2R·ω_t·spinbackScale/7`,
     with first-bounce retention `0.55 · clamp(1 − rpm/8000, 0.40, 1)`. The
     `2Rω_t/7` rigid-body impulse can reverse the ball (wedge, soft green).
-  - Shallow/low-energy: `v_t' = (1 − μ_k · (1 − firmness)) · v_t`
+  - Shallow/low-energy (amended): `v_t' = retention · v_t` — same spin-penalized
+    retention factor as the Penner branch (openfairway's actual law; replaces the
+    earlier draft `μ_k·(1−firmness)` formula)
 - Spin retention after bounce: parameterized (fairway 0.75, green 0.85).
 
 **Roll phase**: constant deceleration in the 2D ground plane to rest:
 - Green: **stimp-anchored** — decel = 5.49/stimp m/s² (Stimpmeter: 1.83 m/s
   release; USGA bands). Default green = stimp 11.
-- Fairway/rough: rolling-μ parameters (0.050 / 0.095 default)
+- Fairway/rough: rolling-μ parameters (**fairway 0.030 tuned** vs the Tour
+  rollout ladder; OF reference 0.050 — 0.095 rough)
 - Lateral velocity decays at the same deceleration; rest when speed < 0.1 m/s.
 
 **Surface parameter defaults** (openfairway MIT catalogue, cross-checked libgolf):
@@ -164,13 +187,19 @@ energy):
 | Surface | COR base | μ_kinetic | roll μ | θ_crit (rad) | spin scale |
 |---|---|---|---|---|---|
 | Green | 0.45 | 0.58 | stimp-based | 0.36 | 1.12 |
-| Fairway | 0.40 | 0.50 | 0.050 | 0.29 | 0.78 |
+| Fairway | 0.40 | 0.50 | 0.030* | 0.29 | 0.35* |
 | Rough | 0.35 | 0.62 | 0.095 | 0.35 | 0.70 |
 | Firm modifier | higher COR | 0.30 | 0.030 | 0.25 | 0.60 |
 | Soft modifier | lower COR | 0.56 | 0.070 | 0.32 | 0.92 |
 
-Firmness is a **modifier** applied to the 3 base turfs (soft/normal/firm), built
-from the openfairway Firm/FairwaySoft column pairs — not 9 separate presets.
+\* Tuned fairway values (roll μ 0.050→0.030, spin scale 0.78→0.35) — best-fit
+vs the Tour rollout ladder in the calibration sweep (OF reference values in
+origin columns). All other rows are openfairway catalogue values.
+
+Firmness is a **multiplicative modifier** applied to the 3 base turfs
+(soft/normal/firm) — each row scales μ_kinetic, roll μ, θ_crit, and spin scale by
+the base→modifier column ratios, plus a small COR delta — built from the
+openfairway Firm/FairwaySoft column pairs, not 9 separate presets.
 
 **Ball physical constants**: mass 45.93 g, radius 21.335 mm (R&A/USGA maximums).
 
@@ -202,9 +231,48 @@ pattern as M1's `golden/`:
 | LPGA 7-iron | 99.5 mph | 17.1° | 6417 | 141 | 148 | 7 |
 | LPGA PW | 82.0 mph | 24.6° | 8525 | 111 | 115 | 4 |
 
-TrackMan "Tour 2023 averages" (as bundled by libgolf's shots_reference.csv; the
-widely circulated Tour-averages table). Assert **carry ±3 yd, total ±5 yd**; the
-rollout ladder emerges from the ground model, not fitted per-club.
+**Regression gate (amended 2026-09-20 — tiered):** a full prototype calibration
+(Java port of the exact model below, 400+ config sweep) established that the
+strict gate (carry ±3 yd / total ±5 yd on all 8 shots) is unattainable with any
+clean-knob variant and even with openfairway's own correction layers — the Tour
+average table is not a pure launch→distance map (openfairway itself calibrates
+against Flightscope Optimizer targets, not this table). Per user decision the
+gate is tiered:
+
+1. **Determinism** — identical inputs produce bit-identical outputs (repeat-run
+   assertion in tests).
+2. **Carry ladder ordering** — model outputs rank strictly like the Tour table:
+   275.9 > 255.8 > 190.7 > 174.1 > 134.4 (PGA) and 219.4 > 129.7 > 98.7 (LPGA).
+3. **Rollout family ordering** — driver/3W family (13–16 yd) > 5i (9.0) > 7i
+   (2.8) > PW (2.3); all rollouts ≥ 0. The strict per-club rollout ladder is
+   deliberately NOT asserted (driver vs 3W is a near-degenerate pair in-model).
+4. **Surface orderings** — firm > normal > soft rollout on the same shot;
+   draw/fade mirror (equal-opposite side).
+5. **Documented bias vs Tour** — advisory table: 4/8 shots within ±3 yd carry;
+   worst +12.8 (PGA 3W) / −12.3 (LPGA PW). Absolute calibration is deferred to
+   M4 live captures (charter posture).
+6. **Pinned regression numbers** — the Kotlin engine must reproduce this exact
+   table (verified prototype run at the locked config: τ=12, sdCoeff=8,
+   sdCap=1.55, msBoostMax=0, fairway roll μ=0.030, spinback scale=0.35). Any
+   shift is a deliberate recalibration requiring a fixture update + spec note.
+
+| Shot | Carry (yd) | Rollout (yd) | Total (yd) | Apex (m) | Flight time (s) |
+|---|---|---|---|---|---|
+| PGA driver (275/20/295) | 275.9 | 13.1 | 289.0 | 29.9 | 6.62 |
+| PGA 3-wood (243/17/260) | 255.8 | 16.3 | 272.1 | 27.8 | 6.51 |
+| PGA 5-iron (194/11/205) | 190.7 | 9.0 | 199.7 | 26.0 | 5.87 |
+| PGA 7-iron (172/7/179) | 174.1 | 2.8 | 176.9 | 23.5 | 5.64 |
+| PGA PW (136/4/140) | 134.4 | 2.3 | 136.7 | 24.9 | 5.32 |
+| LPGA driver (218/20/238) | 219.4 | 9.1 | 228.5 | 23.3 | 5.71 |
+| LPGA 7-iron (141/7/148) | 129.7 | 0.8 | 130.5 | 14.4 | 4.37 |
+| LPGA PW (111/4/115) | 98.7 | 0.7 | 99.4 | 15.4 | 4.11 |
+
+Fixture inputs — the 8 shots (ball speed mph / VLA° / spin rpm): 171.5/10.4/2545,
+162.0/9.3/3663, 135.0/14.8/5280, 123.0/16.3/7124, 102.0/24.2/9304,
+140.0/13.2/2611, 99.5/17.1/6417, 82.0/24.6/8525 — as 8 drop-in `.properties`
+fixtures in `core/physics/src/test/resources/tour/`, same table-driven
+Parameterized harness pattern as M1's `golden/` (tolerances: carry/rollout/total
+±0.1 yd, apex ±0.05 m, flight time ±0.01 s — tight, pinning exact values).
 
 **Unit test matrix:**
 - AerodynamicModel: Cd plateau/crisis/floor values, Cl bin-boundary continuity,
