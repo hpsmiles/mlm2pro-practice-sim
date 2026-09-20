@@ -50,7 +50,9 @@ class Mlm2proGattClient(
     private val sequencer: HandshakeSequencer,
     /** M4b notification capture the UI can enable/export (default off). */
     val captureLog: CaptureLog = CaptureLog(),
-) {
+    ) {
+
+    private val gattQueue = GattOpQueue()
 
     private val _state = MutableStateFlow<ConnectionState>(ConnectionState.Disconnected)
     val state: StateFlow<ConnectionState> = _state
