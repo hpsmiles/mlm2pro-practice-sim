@@ -242,14 +242,14 @@ gate is tiered:
 1. **Determinism** — identical inputs produce bit-identical outputs (repeat-run
    assertion in tests).
 2. **Carry ladder ordering** — model outputs rank strictly like the Tour table:
-   275.9 > 255.8 > 190.7 > 174.1 > 134.4 (PGA) and 219.4 > 129.7 > 98.7 (LPGA).
-3. **Rollout family ordering** — driver/3W family (13–16 yd) > 5i (9.0) > 7i
+   275.9 > 255.6 > 190.8 > 174.2 > 134.3 (PGA) and 219.4 > 129.7 > 98.8 (LPGA).
+3. **Rollout family ordering** — driver/3W family (13–16 yd) > 5i (8.9) > 7i
    (2.8) > PW (2.3); all rollouts ≥ 0. The strict per-club rollout ladder is
    deliberately NOT asserted (driver vs 3W is a near-degenerate pair in-model).
 4. **Surface orderings** — firm > normal > soft rollout on the same shot;
    draw/fade mirror (equal-opposite side).
 5. **Documented bias vs Tour** — advisory table: 4/8 shots within ±3 yd carry;
-   worst +12.8 (PGA 3W) / −12.3 (LPGA PW). Absolute calibration is deferred to
+   worst +12.6 (PGA 3W) / −12.2 (LPGA PW). Absolute calibration is deferred to
    M4 live captures (charter posture).
 6. **Pinned regression numbers** — the Kotlin engine must reproduce this exact
    table (verified prototype run at the locked config: τ=12, sdCoeff=8,
@@ -258,14 +258,21 @@ gate is tiered:
 
 | Shot | Carry (yd) | Rollout (yd) | Total (yd) | Apex (m) | Flight time (s) |
 |---|---|---|---|---|---|
-| PGA driver (275/20/295) | 275.9 | 13.1 | 289.0 | 29.9 | 6.62 |
-| PGA 3-wood (243/17/260) | 255.8 | 16.3 | 272.1 | 27.8 | 6.51 |
-| PGA 5-iron (194/11/205) | 190.7 | 9.0 | 199.7 | 26.0 | 5.87 |
-| PGA 7-iron (172/7/179) | 174.1 | 2.8 | 176.9 | 23.5 | 5.64 |
-| PGA PW (136/4/140) | 134.4 | 2.3 | 136.7 | 24.9 | 5.32 |
-| LPGA driver (218/20/238) | 219.4 | 9.1 | 228.5 | 23.3 | 5.71 |
-| LPGA 7-iron (141/7/148) | 129.7 | 0.8 | 130.5 | 14.4 | 4.37 |
-| LPGA PW (111/4/115) | 98.7 | 0.7 | 99.4 | 15.4 | 4.11 |
+| PGA driver (275/20/295) | 275.9 | 13.1 | 289.0 | 29.9 | 6.63 |
+| PGA 3-wood (243/17/260) | 255.6 | 16.3 | 271.9 | 27.8 | 6.50 |
+| PGA 5-iron (194/11/205) | 190.8 | 8.9 | 199.7 | 26.0 | 5.88 |
+| PGA 7-iron (172/7/179) | 174.2 | 2.8 | 177.0 | 23.5 | 5.65 |
+| PGA PW (136/4/140) | 134.3 | 2.3 | 136.6 | 24.9 | 5.31 |
+| LPGA driver (218/20/238) | 219.4 | 9.1 | 228.5 | 23.3 | 5.70 |
+| LPGA 7-iron (141/7/148) | 129.7 | 0.8 | 130.5 | 14.4 | 4.38 |
+| LPGA PW (111/4/115) | 98.8 | 0.7 | 99.5 | 15.4 | 4.12 |
+
+Pinned-table note (2026-09-20): these values are from the prototype run with
+the **corrected landing interpolation** — the solver backs off the
+below-ground fraction `f = pz/(vz·dt)` of the final step (symplectic Euler:
+velocity is constant within a step), landing at exactly z = 0 with time
+`t − f·dt`. An earlier prototype version backed off the complement fraction
+(~0.4 yd carry placement error); the fix is reflected in these numbers.
 
 Fixture inputs — the 8 shots (ball speed mph / VLA° / spin rpm): 171.5/10.4/2545,
 162.0/9.3/3663, 135.0/14.8/5280, 123.0/16.3/7124, 102.0/24.2/9304,
