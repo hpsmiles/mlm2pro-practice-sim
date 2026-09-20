@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -44,6 +45,18 @@ fun SettingsScreen(captureLog: CaptureLog = CaptureLog()) {
     var captureOn by remember { mutableStateOf(captureLog.enabled) }
     var lastExportPath by remember { mutableStateOf("") }
 
+    // CaptureLog is pure Kotlin (no Compose state), so the captured count
+    // is not observable — poll while listening or the on-screen count would
+    // stay frozen at whatever it read at last recomposition (bench finding:
+    // events were captured but the UI looked dead).
+    var entryCount by remember { mutableStateOf(captureLog.entries().size) }
+    LaunchedEffect(captureOn) {
+        while (captureOn) {
+            entryCount = captureLog.entries().size
+            kotlinx.coroutines.delay(250)
+        }
+    }
+
     SectionCard("RAPSODO AUTH") {
         Text(
             text = "Before using a live session:\n" +
@@ -71,7 +84,7 @@ fun SettingsScreen(captureLog: CaptureLog = CaptureLog()) {
             )
         }
         Text(
-            text = if (captureOn) "LISTENING - ${captureLog.entries().size} notification(s) captured" else "Toggle ON during a live session to record raw/decrypted notifications",
+            text = if (captureOn) "LISTENING - $entryCount notification(s) captured" else "Toggle ON during a live session to record raw/decrypted notifications",
             style = GolfTypography.Status,
             color = GolfColors.TextMuted,
             modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
