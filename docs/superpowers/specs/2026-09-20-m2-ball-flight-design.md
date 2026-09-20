@@ -246,8 +246,12 @@ gate is tiered:
 3. **Rollout family ordering** — driver/3W family (13–16 yd) > 5i (8.9) > 7i
    (2.8) > PW (2.3); all rollouts ≥ 0. The strict per-club rollout ladder is
    deliberately NOT asserted (driver vs 3W is a near-degenerate pair in-model).
-4. **Surface orderings** — firm > normal > soft rollout on the same shot;
-   draw/fade mirror (equal-opposite side).
+4. **Surface orderings** — firm > normal > soft total distance on the same
+   roll-dominated (iron-class) shot; draw/fade mirror (equal-opposite side).
+   Known limitation: driver-class shots have bounce-loop-dominated rollout where
+   soft-vs-normal can invert by < 1 m (soft's lower COR ends the bounce loop a
+   bounce early, sparing a tangential-retention loss that outweighs the 1.4x
+   roll decel) — accepted, see §10.
 5. **Documented bias vs Tour** — advisory table: 4/8 shots within ±3 yd carry;
    worst +12.6 (PGA 3W) / −12.2 (LPGA PW). Absolute calibration is deferred to
    M4 live captures (charter posture).
@@ -318,5 +322,10 @@ When the M4 GATT client produces real shed captures, verify:
 3. **HLA / spin-axis sign interpretation** — side-curve direction depends on
    which sign is draw vs fade (M1 unknown, preserved raw through the decoder).
 4. **COR-vs-speed parabola shape** vs Biber et al. 2023 measured green bounces.
+5. **Driver-class soft-fairway rollout** — the model's soft-vs-normal inversion
+   on driver-class shots (< 1 m, bounce-loop dominance) contradicts course
+   intuition that soft fairways rob driver rollout substantially; measure real
+   driver landings on soft vs normal turf and tune the named firmness constants
+   if needed.
 Golden-fixture workflow from M1 extends: every capture becomes a new regression
 fixture with the measured landing truth (observed carry/roll where capture allows).
