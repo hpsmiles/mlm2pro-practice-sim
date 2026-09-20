@@ -81,6 +81,42 @@ class BallFlightEngineTest {
         assertEquals(0.0, result.sideM, 1e-12)
     }
 
+    /**
+     * Lateral-path regression (oracle M2 review, Important issue 1): the
+     * azimuth pipeline (launchDirDeg != 0 — rotated launch velocity, tilted
+     * spin axis, lateral surface lookup, sideM) executes here in
+     * non-degenerate form for the first time. The mirror shot (launchDir,
+     * spin axis, and crosswind all negated) must reproduce exact
+     * anti-symmetry; the sideM/carryM pins lock today's hand-verified
+     * behavior against silent refactors before M4 feeds real HLA values.
+     */
+    @Test
+    fun azimuthPathWithCrosswindIsFiniteAndAntiMirrorSymmetric() {
+        val pushDraw = LaunchConditions(
+            ballSpeedMps = 70.0,
+            launchAngleDeg = 12.0,
+            spinRpm = 3000,
+            spinAxisDeg = 5.0,
+            launchDirDeg = -3.0,
+        )
+        val shot = BallFlightEngine.simulate(pushDraw, environment = Environment(windXmps = 5.0))
+
+        assertTrue(shot.sideM.isFinite() && shot.sideM != 0.0)
+        assertTrue(shot.carryM.isFinite() && shot.carryM > 0.0)
+        // Measured pins (negative-control derived): crosswind+draw pushes the
+        // -3 deg-aimed shot +13.77 m right of the centerline; carry 231.42 m.
+        assertEquals(13.7661, shot.sideM, 0.05)
+        assertEquals(231.42, shot.carryM, 0.05)
+
+        val mirror = BallFlightEngine.simulate(
+            LaunchConditions(70.0, 12.0, 3000, spinAxisDeg = -5.0, launchDirDeg = 3.0),
+            environment = Environment(windXmps = -5.0),
+        )
+        assertEquals(-shot.sideM, mirror.sideM, 1e-9)
+        assertEquals(shot.carryM, mirror.carryM, 1e-9)
+        assertEquals(shot.totalM, mirror.totalM, 1e-9)
+    }
+
     @Test
     fun extremeSpinsAndAxesYieldSaneResults() {
         // Spec §7 runtime guards: never throws, finite output at 12000 rpm
