@@ -72,6 +72,12 @@ fun AppRoot() {
     @Suppress("MissingPermission")
     fun onConnectRequested() {
         if (scanning) return
+        // Bench finding (double-tap during handshake): the `scanning` flag
+        // resets as soon as connect() returns, so a second tap mid-handshake
+        // used to start a second scan + GATT link. Refuse unless the client
+        // is actually down (Disconnected) or recoverable (Faulted).
+        val s = connectionState
+        if (s != ConnectionState.Disconnected && s !is ConnectionState.Faulted) return
         scanning = true
         scope.launch {
             try {

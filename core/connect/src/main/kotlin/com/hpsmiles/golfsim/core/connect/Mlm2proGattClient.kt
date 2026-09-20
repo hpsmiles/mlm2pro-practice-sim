@@ -88,6 +88,24 @@ class Mlm2proGattClient(
     @Suppress("MissingPermission")
     @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
     fun connect(device: BluetoothDevice) {
+        // Bench finding (2026-09-20, live double-tap): a second connect()
+        // while a link is still live silently forked a SECOND GATT
+        // connection — both links ran the full handshake in parallel and
+        // every notification was delivered twice (duplicated capture
+        // entries with identical millisecond timestamps). connect() is
+        // only meaningful from Disconnected/Faulted.
+        val current = _state.value
+        if (current != ConnectionState.Disconnected && current !is ConnectionState.Faulted) {
+            Log.w(TAG, "connect() ignored while $current — refusing to fork a second link")
+            return
+        }
+        // Faults raised on the app side (e.g. token-fetch failure) can
+        // leave a live link behind — tear down any stale handle first so
+        // a retry starts from exactly one connection.
+        if (gatt != null) {
+            Log.i(TAG, "connect(): tearing down stale gatt before retry")
+            cleanupConnection(BluetoothGatt.GATT_SUCCESS)
+        }
         Log.i(TAG, "connect() device=${device.address}")
         _state.value = ConnectionState.Connecting
         gatt = device.connectGatt(
