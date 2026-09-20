@@ -219,14 +219,18 @@ class GolfColorsTest {
 
     @Test fun structuralTealHasAlphaVariants() {
         assertEquals(Color(0xFF3FA7A0), GolfColors.Teal)
-        assertEquals(0.55, GolfColors.Teal55.alpha, 1e-6)
-        assertEquals(0.40, GolfColors.Teal40.alpha, 1e-6)
+        // Color.alpha is Float in Compose, so expected/delta need Float literals.
+        // Teal55's alpha byte is 0x8C = 140 -> 140/255 = 0.54902 (prints as
+        // "0.55"); pin the byte-exact value so the 1e-6 tolerance holds.
+        assertEquals(140f / 255f, GolfColors.Teal55.alpha, 1e-6f)
+        assertEquals(0.40f, GolfColors.Teal40.alpha, 1e-6f)
     }
 
     @Test fun liveAmberHasHaloAndGlow() {
         assertEquals(Color(0xFFF2A93B), GolfColors.Amber)
-        assertEquals(0.20, GolfColors.AmberHalo.alpha, 1e-6)
-        assertEquals(0.60, GolfColors.AmberGlow.alpha, 1e-6)
+        // Same Float-literal fix; 0x33 = 51/255 = 0.2, 0x99 = 153/255 = 0.6.
+        assertEquals(0.20f, GolfColors.AmberHalo.alpha, 1e-6f)
+        assertEquals(0.60f, GolfColors.AmberGlow.alpha, 1e-6f)
     }
 
     @Test fun comparisonHuesAreWideSpread() {
