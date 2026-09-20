@@ -6,8 +6,10 @@ import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothGatt
 import android.bluetooth.BluetoothGattCallback
 import android.bluetooth.BluetoothGattCharacteristic
+import android.bluetooth.BluetoothGattDescriptor
 import android.bluetooth.BluetoothManager
 import android.content.Context
+import android.os.Build
 import com.hpsmiles.golfsim.core.ble.BallData
 import com.hpsmiles.golfsim.core.ble.Characteristic
 import com.hpsmiles.golfsim.core.ble.Mlm2proDecoder
@@ -48,6 +50,8 @@ class Mlm2proGattClient(
     private val sequencer: HandshakeSequencer,
 ) {
 
+    private val gattQueue = GattOpQueue()
+
     private val _state = MutableStateFlow<ConnectionState>(ConnectionState.Disconnected)
     val state: StateFlow<ConnectionState> = _state
 
@@ -79,6 +83,35 @@ class Mlm2proGattClient(
                     subscribe(g, WRITE_RESPONSE_UUID)
                     _state.value = ConnectionState.Handshaking
                     performWrite(sequencer.onSubscriptionsComplete(clockMs()))
+                }
+
+                override fun onDescriptorWrite(
+                    g: BluetoothGatt,
+                    descriptor: BluetoothGattDescriptor,
+                    status: Int,
+                ) {
+                    gattQueue.onOperationComplete()
+                }
+
+                override fun onCharacteristicWrite(
+                    g: BluetoothGatt,
+                    characteristic: BluetoothGattCharacteristic,
+                    status: Int,
+                ) {
+                    // Single surface at compileSdk 37: both the legacy 3-arg
+                    // writeCharacteristic and the API-33 two-arg overload
+                    // report through this callback.
+                    gattQueue.onOperationComplete()
+                }
+
+                @Deprecated("Deprecated in Java")
+                @Suppress("DEPRECATION")
+                override fun onCharacteristicChanged(
+                    g: BluetoothGatt,
+                    characteristic: BluetoothGattCharacteristic,
+                ) {
+                    // API 31-32 fires this deprecated 2-arg variant only.
+                    handleNotification(characteristic.uuid.toString(), characteristic.value ?: return)
                 }
 
                 override fun onCharacteristicChanged(
@@ -136,8 +169,18 @@ class Mlm2proGattClient(
             CommandTarget.CONFIGURE -> findCharacteristic(g, CONFIGURE_UUID)
             CommandTarget.HEARTBEAT -> findCharacteristic(g, HEARTBEAT_UUID)
         } ?: return
-        characteristic.value = write.plaintext
-        g.writeCharacteristic(characteristic)
+        // Serialized: Android allows one in-flight GATT operation; the queue
+        // starts this write only after the previous operation's callback.
+        gattQueue.enqueue {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                g.writeCharacteristic(characteristic, write.plaintext, BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT)
+            } else {
+                @Suppress("DEPRECATION")
+                characteristic.value = write.plaintext
+                @Suppress("DEPRECATION")
+                g.writeCharacteristic(characteristic)
+            }
+        }
     }
 
     @Suppress("MissingPermission")
@@ -145,6 +188,21 @@ class Mlm2proGattClient(
     private fun subscribe(g: BluetoothGatt, uuid: String) {
         val characteristic = findCharacteristic(g, uuid) ?: return
         g.setCharacteristicNotification(characteristic, true)
+        // CCCD (0x2902) ENABLE_NOTIFICATION descriptor write — queued so it
+        // cannot overlap another in-flight operation.
+        val descriptor = characteristic.getDescriptor(java.util.UUID.fromString(CCCD_UUID)) ?: return
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            gattQueue.enqueue {
+                g.writeDescriptor(descriptor, BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE)
+            }
+        } else {
+            @Suppress("DEPRECATION")
+            descriptor.value = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
+            gattQueue.enqueue {
+                @Suppress("DEPRECATION")
+                g.writeDescriptor(descriptor)
+            }
+        }
     }
 
     private fun findCharacteristic(g: BluetoothGatt, uuid: String): BluetoothGattCharacteristic? =
@@ -168,6 +226,7 @@ class Mlm2proGattClient(
         const val AUTH_UUID = "b1e9ce5b-48c8-4a28-89dd-12ffd779f5e1"
         const val COMMAND_UUID = "1ea0fa51-1649-4603-9c5f-59c940323471"
         const val CONFIGURE_UUID = "df5990cf-47fb-4115-8fdd-40061d40af84"
+        const val CCCD_UUID = "00002902-0000-1000-8000-00805f9b34fb"
 
         /**
          * BLE payloads from this device are usually AES-encrypted (multiple of
