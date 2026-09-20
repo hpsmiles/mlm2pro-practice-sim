@@ -770,7 +770,7 @@ Expected: FAIL — `Unresolved reference 'Mlm2proGattClient'`.
 package com.hpsmiles.golfsim.core.connect
 
 import android.Manifest
-import android.annotation.RequiresPermission
+import androidx.annotation.RequiresPermission
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.le.ScanCallback
 import android.bluetooth.le.ScanFilter
@@ -906,7 +906,7 @@ class HttpRapsodoTokenProvider : RapsodoTokenProvider {
 package com.hpsmiles.golfsim.core.connect
 
 import android.Manifest
-import android.annotation.RequiresPermission
+import androidx.annotation.RequiresPermission
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothGatt
 import android.bluetooth.BluetoothGattCallback
@@ -946,7 +946,7 @@ sealed interface ConnectionState {
  *   routes each notification accordingly.
  */
 class Mlm2proGattClient(
-    context: Context,
+    private val context: Context,
     private val sequencer: HandshakeSequencer,
 ) {
 
@@ -1001,19 +1001,25 @@ class Mlm2proGattClient(
     /** Route one decrypted/raw notification through the M1 decoder. */
     internal fun handleNotification(uuid: String, value: ByteArray) {
         sequencer.onNotification(clockMs())
+        // Plan deviation (mechanical): the M1 Characteristic enum deliberately
+        // excludes WRITE_RESPONSE (M4 scope there), and adding an enum constant
+        // would alter the frozen M1 decoder surface — so WRITE_RESPONSE is
+        // routed by UUID string here; everything else goes through the enum.
+        if (uuid.equals(WRITE_RESPONSE_UUID, ignoreCase = true)) {
+            sequencer.onWriteResponse(maybeDecrypt(value, sessionKeyBytes), clockMs())
+            sequencer.poll(clockMs()).forEach { performWrite(it) }
+            return
+        }
         val fromUuid = Characteristic.fromUuid(uuid) ?: return
         val plain = maybeDecrypt(value, sessionKeyBytes)
-        when (fromUuid) {
-            Characteristic.WRITE_RESPONSE -> sequencer.onWriteResponse(plain, clockMs())
-            else -> when (val msg = Mlm2proDecoder.decode(fromUuid, value, sessionKeyBytes)) {
-                is Mlm2proMessage.Measurement ->
-                    (msg.result as? BallDataResult.Shot)?.let { onMeasurement?.invoke(it.data) }
-                is Mlm2proMessage.Event ->
-                    if (msg.event is Mlm2proEvent.ShotDetected ||
-                        msg.event is Mlm2proEvent.Ready
-                    ) _state.value = _state.value // state kept; sequencer owns protocol
-                else -> Unit
-            }
+        when (val msg = Mlm2proDecoder.decode(fromUuid, value, sessionKeyBytes)) {
+            is Mlm2proMessage.Measurement ->
+                (msg.result as? BallDataResult.Shot)?.let { onMeasurement?.invoke(it.data) }
+            is Mlm2proMessage.Event ->
+                if (msg.event is Mlm2proEvent.ShotDetected ||
+                    msg.event is Mlm2proEvent.Ready
+                ) _state.value = _state.value // state kept; sequencer owns protocol
+            else -> Unit
         }
         sequencer.poll(clockMs()).forEach { performWrite(it) }
     }
