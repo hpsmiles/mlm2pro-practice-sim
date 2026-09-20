@@ -682,7 +682,8 @@ class SurfaceTest {
         assertEquals(0.432, Surface.FAIRWAY_NORMAL.withFirmness(Firmness.FIRM).cor, 1e-9)   // 0.40 * 1.08
         assertEquals(0.368, Surface.FAIRWAY_NORMAL.withFirmness(Firmness.SOFT).cor, 1e-9)   // 0.40 * 0.92
         assertEquals(0.29 * (0.25 / 0.29), Surface.FAIRWAY_NORMAL.withFirmness(Firmness.FIRM).thetaCritRad, 1e-9)
-        assertEquals(0.35 * (0.92 / 0.78), Surface.ROUGH_NORMAL.withFirmness(Firmness.SOFT).spinbackScale, 1e-9)
+        // Spec §6: rough spin scale is 0.70 (0.35 is the rough θcrit) — pin corrected from plan v1 slip.
+        assertEquals(0.70 * (0.92 / 0.78), Surface.ROUGH_NORMAL.withFirmness(Firmness.SOFT).spinbackScale, 1e-9)
     }
 
     @Test
