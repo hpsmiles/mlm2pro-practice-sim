@@ -34,7 +34,7 @@ fun SettingsScreen() {
     var text by remember { mutableStateOf(store.getSecret()) }
     var saved by remember { mutableStateOf(false) }
 
-    SectionCard("RAPSHODO AUTH") {
+    SectionCard("RAPSODO AUTH") {
         OutlinedTextField(
             value = text,
             onValueChange = { text = it; saved = false },
