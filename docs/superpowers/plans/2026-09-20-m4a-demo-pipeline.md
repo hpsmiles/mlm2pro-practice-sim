@@ -1318,14 +1318,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Paint
-import androidx.compose.ui.graphics.Style
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.unit.sp
 import com.hpsmiles.golfsim.core.designsystem.GolfColors
-import com.hpsmiles.golfsim.core.designsystem.GolfTypography
 import com.hpsmiles.golfsim.core.physics.ShotResult
 
 private val SKY_TOP = GolfColors.Panel
@@ -1366,7 +1363,9 @@ fun PovRangeCanvas(currentShot: ShotResult?, playFraction: Float, modifier: Modi
         )
         drawLine(GolfColors.Line, Offset(0f, horizonPx), Offset(w, horizonPx), 1f)
 
-        val labelPaint = Paint().asFrameworkPaint().apply {
+        // Plan-verbatim correction: use android.graphics.Paint directly for
+        // native text (androidx Paint.asFrameworkPaint() was wrong in the draft).
+        val labelPaint = android.graphics.Paint().apply {
             isAntiAlias = true
             textSize = 10.sp.toPx()
             color = GolfColors.TextMuted.toArgb()
@@ -1399,8 +1398,8 @@ fun PovRangeCanvas(currentShot: ShotResult?, playFraction: Float, modifier: Modi
             val rx = (targetRadiusM / distM) * focalPx
             val nearV = PovProjector.bandV((distM - targetRadiusM).toDouble())
             val farV = PovProjector.bandV((distM + targetRadiusM).toDouble())
-            val ry = ((nearV - farV) / 2.0) * focalPx
-            androidx.compose.ui.graphics.drawscope.drawIntoCanvas(drawContext.canvas) { }
+            // Mechanical: bandV returns Double — Size() needs Float.
+            val ry = (((nearV - farV) / 2.0) * focalPx).toFloat()
             drawOval(
                 color = GolfColors.Teal,
                 topLeft = Offset((cx - rx).toFloat(), (cy - ry).toFloat()),
@@ -1466,21 +1465,11 @@ fun PovRangeCanvas(currentShot: ShotResult?, playFraction: Float, modifier: Modi
         }
     }
 }
-
-private fun Paint.asFrameworkPaint(): android.graphics.Paint = this.asFrameworkPaint()
 ```
 
-Wait — `Paint().asFrameworkPaint()` is wrong: `androidx.compose.ui.graphics.Paint` is NOT `android.graphics.Paint`. **Use `android.graphics.Paint` directly for text.** In the shipped file write:
-
-```kotlin
-val labelPaint = android.graphics.Paint().apply {
-    isAntiAlias = true
-    textSize = 10.sp.toPx()
-    color = GolfColors.TextMuted.toArgb()
-}
-```
-
-and delete both the `private fun Paint.asFrameworkPaint()` extension and the stray `androidx.compose.ui.graphics.drawscope.drawIntoCanvas(...)` no-op line — `nativeCanvas` is reachable via `drawContext.canvas.nativeCanvas` with the `androidx.compose.ui.graphics.nativeCanvas` import. The shipped file must not contain the incorrect helper.
+(Correction applied: the shipped file uses `android.graphics.Paint` directly for
+text; the draft's `Paint().asFrameworkPaint()` extension and the stray
+`drawIntoCanvas` no-op were removed before shipping.)
 
 `app/src/main/kotlin/com/hpsmiles/golfsim/range/TopDownCanvas.kt`:
 
@@ -1602,6 +1591,7 @@ import com.hpsmiles.golfsim.core.ble.DemoShotSource
 import com.hpsmiles.golfsim.core.designsystem.GolfColors
 import com.hpsmiles.golfsim.core.designsystem.GolfSpacing
 import com.hpsmiles.golfsim.core.designsystem.GolfTheme
+import com.hpsmiles.golfsim.core.designsystem.GolfTypography
 import com.hpsmiles.golfsim.core.designsystem.MetricChip
 import com.hpsmiles.golfsim.core.designsystem.MetricRow
 import com.hpsmiles.golfsim.core.designsystem.SectionCard
@@ -1787,7 +1777,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.weight
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
