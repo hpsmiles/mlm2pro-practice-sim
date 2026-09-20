@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.WindowInsets
@@ -33,6 +34,7 @@ import com.hpsmiles.golfsim.core.connect.HandshakeSequencer
 import com.hpsmiles.golfsim.core.connect.Mlm2proGattClient
 import com.hpsmiles.golfsim.core.connect.Mlm2proScanner
 import com.hpsmiles.golfsim.core.designsystem.GolfColors
+import com.hpsmiles.golfsim.core.designsystem.GolfSpacing
 import com.hpsmiles.golfsim.core.designsystem.GolfTheme
 import com.hpsmiles.golfsim.core.designsystem.GolfTypography
 import com.hpsmiles.golfsim.core.designsystem.NavRail
@@ -50,8 +52,10 @@ private fun benchSessionKey(): ByteArray = ByteArray(32) { it.toByte() }
 @Composable
 fun AppRoot() {
     val context = LocalContext.current
-    val gattClient = remember {
-        Mlm2proGattClient(context, HandshakeSequencer(benchSessionKey(), EnvironmentConfig()))
+    // FIX 5: hoisted so SettingsScreen can toggle/export notification capture.
+    val captureLog = remember { com.hpsmiles.golfsim.core.connect.CaptureLog() }
+    val gattClient = remember(captureLog) {
+        Mlm2proGattClient(context, HandshakeSequencer(benchSessionKey(), EnvironmentConfig()), captureLog)
             .apply { setSessionKey(benchSessionKey()) }
     }
     val connectionState by gattClient.state.collectAsState()
@@ -98,7 +102,7 @@ fun AppRoot() {
                         onDemoChanged = { demo = it },
                         onConnectRequested = { onConnectRequested() },
                     )
-                    RangeTab.SETTINGS -> SettingsScreen()
+                    RangeTab.SETTINGS -> SettingsScreen(captureLog = captureLog)
                 }
             }
             // M4b FIX 2: ARM/STANDBY control — visible once the handshake has
