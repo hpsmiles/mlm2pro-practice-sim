@@ -48,9 +48,9 @@ class Mlm2proGattClient(
     // pass it to connectGatt().
     private val context: Context,
     private val sequencer: HandshakeSequencer,
+    /** M4b notification capture the UI can enable/export (default off). */
+    val captureLog: CaptureLog = CaptureLog(),
 ) {
-
-    private val gattQueue = GattOpQueue()
 
     private val _state = MutableStateFlow<ConnectionState>(ConnectionState.Disconnected)
     val state: StateFlow<ConnectionState> = _state
@@ -136,6 +136,9 @@ class Mlm2proGattClient(
 
     /** Route one decrypted/raw notification through the M1 decoder. */
     internal fun handleNotification(uuid: String, value: ByteArray) {
+        // M4b capture: record the raw payload (decrypted variant recorded after
+        // a successful decode below).
+        captureLog.record(uuid = uuid.take(8).uppercase(), encrypted = value, decrypted = null)
         sequencer.onNotification(clockMs())
         // Plan deviation (mechanical): the M1 Characteristic enum deliberately
         // excludes WRITE_RESPONSE (M4 scope there), and adding an enum constant
@@ -148,7 +151,10 @@ class Mlm2proGattClient(
         }
         val fromUuid = Characteristic.fromUuid(uuid) ?: return
         val plain = maybeDecrypt(value, sessionKeyBytes)
-        when (val msg = Mlm2proDecoder.decode(fromUuid, value, sessionKeyBytes)) {
+        val msg = Mlm2proDecoder.decode(fromUuid, value, sessionKeyBytes)
+        // M4b capture: decode succeeded — record with the decrypted bytes.
+        captureLog.record(uuid = uuid.take(8).uppercase(), encrypted = value, decrypted = plain)
+        when (msg) {
             is Mlm2proMessage.Measurement ->
                 (msg.result as? BallDataResult.Shot)?.let { onMeasurement?.invoke(it.data) }
             is Mlm2proMessage.Event ->
