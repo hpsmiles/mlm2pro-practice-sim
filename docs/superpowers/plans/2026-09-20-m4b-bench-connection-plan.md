@@ -873,6 +873,30 @@ EOF
 
 ---
 
+## Remediation Deviations (post-review fixes, commits 63e928f..4bd1e39)
+
+The oracle final review (REQUEST_CHANGES) mandated five fixes (3 Critical, 2 Important); all landed as six
+committing units verified by exp-1. The following deviations from the original plan text are legal here:
+
+- **PR #6 creation circumstance:** the first PR-6 attempt could not complete Task 7 (gattQueue regression,
+  fixed at `61e259f`); the PR was finally created during the remediation flow rather than the original
+  Task 7 run. The PR title/body/checkbox contract is exactly as Task 7 specified.
+- **No fetch-in-progress connection state:** the token fetch (63e928f) reuses existing ConnectionState
+  members rather than adding a Fetching state — the user-visible effect is that describe() shows
+  HANDSHAKING while the fetch runs. Faulted is set on failure.
+- **ARM/STANDBY chip placement (b174711):** lives in AppRoot above the StatusStrip rather than
+  next-to-CONNECT inside RangeScreen — avoids threading three extra parameters for equivalent UX.
+- **Capture card home (49aae83):** the CAPTURE ON/OFF + EXPORT controls live on the SettingsScreen
+  DEBUG card rather than on the RangeScreen. CaptureLog is hoisted in AppRoot and injected.
+- **Share intent contents (49aae83):** the share intent embeds the fixture text via
+  Intent.EXTRA_TEXT (text/plain) rather than a stream URI — no FileProvider plumbing. The file is
+  also written to filesDir/capture.properties with its path logged for adb pull.
+- **ConnectionState.Disarmed (b174711):** added as an additive enum member (all five original members
+  byte-identical) to represent the user-visible standby state between ARM and DISARMED.
+
+Also disclosed: fix 5's first working-tree commit chained un-gated while red (1e7ac3d, two missing
+imports) — amended into `49aae83` before push, so the pushed history is green.
+
 ## Self-Review Checklist (completed by plan author)
 
 - **Spec coverage:** spec §3 fixes (a)-(g) → Tasks 1-6 (a→T1/T2 queue+CCCD; b→T2 callbacks; c→T2/T4 arm/live-status exposure; d→T4 runtime permissions; e→T3 embedded Secret; f→T5 guidance; g→T6 capture). §4 bench session → Task 7 handoff + interactive session. §5 testing → per-task tests + census. §6 out-of-scope respected (no follow-cam, no shed capture). ✓
