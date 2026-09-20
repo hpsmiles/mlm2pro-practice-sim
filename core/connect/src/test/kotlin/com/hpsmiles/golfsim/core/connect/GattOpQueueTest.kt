@@ -84,4 +84,22 @@ class GattOpQueueTest {
         queue.enqueue(next)
         assertTrue(next.started)
     }
+
+    @Test
+    fun resetDropsRunningAndPendingOperations() {
+        val queue = GattOpQueue()
+        val first = FakeOp("a")
+        val second = FakeOp("b")
+        queue.enqueue(first)
+        queue.enqueue(second)
+        assertFalse(second.started)
+
+        queue.reset()
+
+        // The dropped running op's callback never arrives; a fresh op must
+        // start immediately instead of waiting behind the dead one.
+        val fresh = FakeOp("c")
+        queue.enqueue(fresh)
+        assertTrue(fresh.started)
+    }
 }

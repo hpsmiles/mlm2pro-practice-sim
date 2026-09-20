@@ -3,6 +3,7 @@ package com.hpsmiles.golfsim.range
 
 import android.bluetooth.BluetoothManager
 import android.content.Context
+import android.util.Log
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -75,10 +76,15 @@ fun AppRoot() {
         scope.launch {
             try {
                 val device = Mlm2proScanner(context).scan().first()
+                Log.i(Mlm2proGattClient.TAG, "scan found device=${device.address}")
                 val manager = context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
                 gattClient.connect(manager.adapter.getRemoteDevice(device.address))
-            } catch (ignored: Exception) {
-                // scan cancelled or no adapter — status text falls back to describe().
+            } catch (e: Exception) {
+                // Bench diagnostics (attempt 3): this catch previously swallowed
+                // every scan/connect-flow failure silently, leaving the strip
+                // stuck on CONNECTING with no reason.
+                Log.w(Mlm2proGattClient.TAG, "connect flow failed", e)
+                gattClient.reportFault(e.javaClass.simpleName)
             } finally {
                 scanning = false
             }

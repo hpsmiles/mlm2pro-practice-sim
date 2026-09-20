@@ -8,8 +8,10 @@ import android.bluetooth.BluetoothGattCallback
 import android.bluetooth.BluetoothGattCharacteristic
 import android.bluetooth.BluetoothGattDescriptor
 import android.bluetooth.BluetoothManager
+import android.bluetooth.BluetoothProfile
 import android.content.Context
 import android.os.Build
+import android.util.Log
 import com.hpsmiles.golfsim.core.ble.BallData
 import com.hpsmiles.golfsim.core.ble.Characteristic
 import com.hpsmiles.golfsim.core.ble.Mlm2proDecoder
@@ -86,12 +88,33 @@ class Mlm2proGattClient(
     @Suppress("MissingPermission")
     @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
     fun connect(device: BluetoothDevice) {
+        Log.i(TAG, "connect() device=${device.address}")
         _state.value = ConnectionState.Connecting
         gatt = device.connectGatt(
             context,
             /* autoConnect = */ false,
             object : BluetoothGattCallback() {
+                // ROOT-CAUSE FIX (bench attempt 3): connectGatt does NOT
+                // auto-start service discovery — nothing ever called
+                // discoverServices(), so onServicesDiscovered never fired and
+                // the session stalled in Connecting forever.
+                override fun onConnectionStateChange(g: BluetoothGatt, status: Int, newState: Int) {
+                    Log.i(TAG, "onConnectionStateChange state=$newState status=$status")
+                    when (newState) {
+                        BluetoothProfile.STATE_CONNECTED ->
+                            if (!g.discoverServices()) {
+                                Log.e(TAG, "discoverServices() rejected")
+                                _state.value = ConnectionState.Faulted("discoverServices rejected")
+                            }
+                        BluetoothProfile.STATE_DISCONNECTED -> {
+                            Log.w(TAG, "link lost, cleaning up (status=$status)")
+                            cleanupConnection(status)
+                        }
+                    }
+                }
+
                 override fun onServicesDiscovered(g: BluetoothGatt, status: Int) {
+                    Log.i(TAG, "onServicesDiscovered status=$status")
                     if (status != BluetoothGatt.GATT_SUCCESS) {
                         _state.value = ConnectionState.Faulted("service discovery $status")
                         return
@@ -110,6 +133,7 @@ class Mlm2proGattClient(
                     descriptor: BluetoothGattDescriptor,
                     status: Int,
                 ) {
+                    Log.i(TAG, "descriptor write done ${descriptor.uuid} status=$status")
                     gattQueue.onOperationComplete()
                 }
 
@@ -121,6 +145,7 @@ class Mlm2proGattClient(
                     // Single surface at compileSdk 37: both the legacy 3-arg
                     // writeCharacteristic and the API-33 two-arg overload
                     // report through this callback.
+                    Log.i(TAG, "characteristic write done ${characteristic.uuid} status=$status")
                     gattQueue.onOperationComplete()
                 }
 
@@ -143,17 +168,46 @@ class Mlm2proGattClient(
                 }
             },
         )
+        if (gatt == null) {
+            Log.e(TAG, "connectGatt returned null (adapter off?)")
+            _state.value = ConnectionState.Faulted("connectGatt returned null")
+        }
     }
 
     @Suppress("MissingPermission")
     @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
     fun disconnect() {
+        Log.i(TAG, "disconnect() requested")
+        gatt?.disconnect()
+        cleanupConnection(BluetoothGatt.GATT_SUCCESS)
+    }
+
+    /**
+     * Bench-session fault surface for app-layer failures that occur outside
+     * GATT callbacks (e.g. the scan/connect flow in AppRoot); previously those
+     * exceptions left the strip stuck on CONNECTING with no reason shown.
+     */
+    fun reportFault(reason: String) {
+        Log.w(TAG, "reportFault: $reason")
+        _state.value = ConnectionState.Faulted(reason)
+    }
+
+    /**
+     * Cancels the ticker, closes the GATT handle and drops queued operations
+     * (GattOpQueue [GattOpQueue.reset] — a callback that never arrives would
+     * otherwise stall every future write). Benign if already disconnected.
+     */
+    @Suppress("MissingPermission")
+    private fun cleanupConnection(status: Int) {
+        Log.i(TAG, "cleanupConnection status=$status")
         tickerJob?.cancel()
         tickerJob = null
-        gatt?.disconnect()
+        gattQueue.reset()
         gatt?.close()
         gatt = null
-        _state.value = ConnectionState.Disconnected
+        _state.value =
+            if (status == BluetoothGatt.GATT_SUCCESS) ConnectionState.Disconnected
+            else ConnectionState.Faulted("gatt $status")
     }
 
     /**
@@ -222,16 +276,20 @@ class Mlm2proGattClient(
             // TOKEN_WAIT with the authed userId parsed — fetch the token async.
             val uid = sequencer.userId
             if (sequencer.state == HandshakeState.TOKEN_WAIT && uid >= 0) {
+                Log.i(TAG, "token fetch start userId=$uid")
                 scope.launch {
                     when (val result = tokenProvider.fetch(uid, SecretProvider.apiSecret())) {
                         is TokenResult.Success -> {
+                            Log.i(TAG, "token fetch ok")
                             // A second WRITE_RESPONSE may have raced the fetch.
                             if (sequencer.state == HandshakeState.TOKEN_WAIT) {
                                 sequencer.onToken(result.token, clockMs())?.let { performWrite(it) }
                             }
                         }
-                        is TokenResult.Failure ->
+                        is TokenResult.Failure -> {
+                            Log.w(TAG, "token fetch failed: ${result.reason}")
                             _state.value = ConnectionState.Faulted("token fetch: ${result.reason}")
+                        }
                     }
                 }
             }
@@ -263,7 +321,11 @@ class Mlm2proGattClient(
             CommandTarget.COMMAND -> findCharacteristic(g, COMMAND_UUID)
             CommandTarget.CONFIGURE -> findCharacteristic(g, CONFIGURE_UUID)
             CommandTarget.HEARTBEAT -> findCharacteristic(g, HEARTBEAT_UUID)
-        } ?: return
+        } ?: run {
+            Log.w(TAG, "performWrite: characteristic missing for ${write.target}")
+            return
+        }
+        Log.i(TAG, "enqueue write ${write.target} (${write.plaintext.size}B)")
         // Serialized: Android allows one in-flight GATT operation; the queue
         // starts this write only after the previous operation's callback.
         gattQueue.enqueue {
@@ -282,6 +344,7 @@ class Mlm2proGattClient(
     @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
     private fun subscribe(g: BluetoothGatt, uuid: String) {
         val characteristic = findCharacteristic(g, uuid) ?: return
+        Log.i(TAG, "subscribe $uuid")
         g.setCharacteristicNotification(characteristic, true)
         // CCCD (0x2902) ENABLE_NOTIFICATION descriptor write — queued so it
         // cannot overlap another in-flight operation.
@@ -313,6 +376,7 @@ class Mlm2proGattClient(
     }
 
     companion object {
+        const val TAG = "BenchGatt"
         const val SERVICE_UUID = "daf9b2a4-e4db-4be4-816d-298a050f25cd"
         const val EVENTS_UUID = "02e525fd-7960-4ef0-bfb7-de0f514518ff"
         const val HEARTBEAT_UUID = "ef6a028e-f78b-47a4-b56c-dda6dae85cbf"

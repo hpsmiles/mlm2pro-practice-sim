@@ -49,4 +49,15 @@ class GattOpQueue {
             next.start()
         }
     }
+
+    /**
+     * Drops the running and all pending operations (disconnect path). A
+     * callback that will never arrive would otherwise stall every future
+     * operation behind the dead one.
+     */
+    @Synchronized
+    fun reset() {
+        pending.clear()
+        running = null
+    }
 }
