@@ -19,9 +19,12 @@ import com.hpsmiles.golfsim.core.ble.Mlm2proMessage
 import com.hpsmiles.golfsim.core.ble.Mlm2proEvent
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
     /** Lifecycle state surfaced to the UI (rendered in the range status strip). */
@@ -65,6 +68,9 @@ class Mlm2proGattClient(
     /** FIX 1: scope for the async token fetch (cancelled on disconnect). */
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
+    /** FIX 3: heartbeat/resubscribe poll ticker (started on services discovered). */
+    private var tickerJob: Job? = null
+
     private val _state = MutableStateFlow<ConnectionState>(ConnectionState.Disconnected)
     val state: StateFlow<ConnectionState> = _state
 
@@ -96,6 +102,7 @@ class Mlm2proGattClient(
                     subscribe(g, WRITE_RESPONSE_UUID)
                     _state.value = ConnectionState.Handshaking
                     performWrite(sequencer.onSubscriptionsComplete(clockMs()))
+                    startTicker()   // FIX 3: heartbeat + resubscribe cadence
                 }
 
                 override fun onDescriptorWrite(
@@ -141,10 +148,39 @@ class Mlm2proGattClient(
     @Suppress("MissingPermission")
     @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
     fun disconnect() {
+        tickerJob?.cancel()
+        tickerJob = null
         gatt?.disconnect()
         gatt?.close()
         gatt = null
         _state.value = ConnectionState.Disconnected
+    }
+
+    /**
+     * FIX 3 (spec §3c): while connected, poll the sequencer every ~500 ms so
+     * heartbeats (2 s cadence), the second CONFIG write (200 ms gap) and
+     * resubscriptions (~20 s) fire from real time; resubscription re-writes
+     * the EVENTS CCCD through the queue and refreshes the notification clock.
+     */
+    @Suppress("MissingPermission")
+    private fun startTicker() {
+        if (tickerJob?.isActive == true) return
+        tickerJob = scope.launch {
+            while (isActive) {
+                delay(500)
+                val g = gatt ?: break
+                sequencer.poll(clockMs()).forEach { performWrite(it) }
+                if (sequencer.isResubscribeDue(clockMs())) {
+                    val events = g.getService(java.util.UUID.fromString(SERVICE_UUID))
+                        ?.getCharacteristic(java.util.UUID.fromString(EVENTS_UUID))
+                    if (events != null) {
+                        g.setCharacteristicNotification(events, true)
+                        subscribe(g, EVENTS_UUID) // re-queues the CCCD write
+                        sequencer.onNotification(clockMs())
+                    }
+                }
+            }
+        }
     }
 
     /**
