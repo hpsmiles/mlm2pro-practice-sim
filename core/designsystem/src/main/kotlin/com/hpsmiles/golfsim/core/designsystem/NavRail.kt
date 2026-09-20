@@ -17,7 +17,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
 
-/** Slim 56 dp navigation rail for landscape (left edge of every screen). */
+/** Slim 72 dp navigation rail for landscape (left edge of every screen). */
 @Composable
 fun NavRail(
     modifier: Modifier = Modifier,
@@ -55,6 +55,9 @@ fun NavRailButton(
             )
             .clickable(onClick = onClick)
             .padding(horizontal = GolfSpacing.Sm, vertical = GolfSpacing.Xs)
-            .size(width = 40.dp, height = 40.dp),
+            // Inner label box = NavRailWidth - 2 * Sm (56 dp): wide enough
+            // for the longest label ("SETTINGS", 10 sp caps) on one line —
+            // the previous 40 dp box wrapped its last letter.
+            .size(width = 56.dp, height = 40.dp),
     )
 }

@@ -49,8 +49,14 @@ object CommandEncoder {
     fun disarm(key: ByteArray): WriteCommand =
         WriteCommand(CommandTarget.COMMAND, Mlm2proCrypto.encrypt(DISARM_PLAINTEXT, key))
 
+    /**
+     * Heartbeat keep-alive. Reference (BluetoothBase.SendHeartbeatSignal) writes
+     * a single UNENCRYPTED 0x01 byte to the heartbeat characteristic every 2 s.
+     * Bench attempt 6: an encrypted 16-byte payload here was not recognized by
+     * the device and the link dropped ~15 s after auth.
+     */
     fun heartbeat(key: ByteArray): WriteCommand =
-        WriteCommand(CommandTarget.HEARTBEAT, Mlm2proCrypto.encrypt(byteArrayOf(0x01), key))
+        WriteCommand(CommandTarget.HEARTBEAT, byteArrayOf(0x01))
 
     /** CONFIGURE write: 14-byte plaintext, then encrypted. Token from the Rapsodo API. */
     fun config(cfg: EnvironmentConfig, token: Int, key: ByteArray): WriteCommand {
@@ -59,18 +65,19 @@ object CommandEncoder {
         p[1] = cfg.ballType.toByte()
         p[2] = if (cfg.indoor) 1 else 0
         p[3] = 0x00
-        // Plan deviation (mechanical, pin-verified): the verified CONFIG
-        // ciphertext decrypts to 01 02 00 00 7DC8 DC05 A63C5A44 0000 — i.e.
-        // pressure BE16, temperature LE16, token BE32 (the plan's LE helpers
-        // produced a different ciphertext and self-contradicted the pin).
+        // Wire layout verified against the reference implementation
+        // (DeviceManager.GetInitialParameters + ByteConversionUtils):
+        // header {1,2,0,0} + pressure LE16 (wire bytes 7D C8 — our BE16 default
+        // emits the identical bytes) + temp LE16 + token LE32 (BitConverter
+        // semantics in the reference; the M4a pin misread it as BE32) + {0,0}.
         p[4] = ((cfg.pressureRaw shr 8) and 0xFF).toByte()
         p[5] = (cfg.pressureRaw and 0xFF).toByte()
         p[6] = (cfg.tempCentiC and 0xFF).toByte()
         p[7] = ((cfg.tempCentiC shr 8) and 0xFF).toByte()
-        p[8] = ((token shr 24) and 0xFF).toByte()
-        p[9] = ((token shr 16) and 0xFF).toByte()
-        p[10] = ((token shr 8) and 0xFF).toByte()
-        p[11] = (token and 0xFF).toByte()
+        p[8] = (token and 0xFF).toByte()
+        p[9] = ((token shr 8) and 0xFF).toByte()
+        p[10] = ((token shr 16) and 0xFF).toByte()
+        p[11] = ((token shr 24) and 0xFF).toByte()
         p[12] = 0x00
         p[13] = 0x00
         return WriteCommand(CommandTarget.CONFIGURE, Mlm2proCrypto.encrypt(p, key))

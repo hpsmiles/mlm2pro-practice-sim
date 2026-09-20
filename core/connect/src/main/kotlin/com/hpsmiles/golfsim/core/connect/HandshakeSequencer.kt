@@ -8,7 +8,8 @@ package com.hpsmiles.golfsim.core.connect
  * State flow:
  * IDLE -> (subscriptions complete) AUTH_SENT -> (WRITE_RESPONSE 0x02)
  * TOKEN_WAIT -> (token fetched) CONFIG_WRITE_1 -> (+200 ms) READY
- * -> arm/disarm at will; heartbeat every 2 s while connected.
+ * -> (auto, +AUTO_ARM_DELAY_MS) ARMED; disarm/re-arm at will;
+ * heartbeat every 2 s while connected.
  */
 class HandshakeSequencer(
     private val key: ByteArray,
@@ -26,6 +27,7 @@ class HandshakeSequencer(
 
     private var token = 0
     private var config1AtMs = Long.MIN_VALUE
+    private var readyAtMs = Long.MIN_VALUE
     private var lastHeartbeatAtMs = Long.MIN_VALUE
 
     fun onSubscriptionsComplete(nowMs: Long): WriteCommand {
@@ -60,13 +62,25 @@ class HandshakeSequencer(
         if (state == HandshakeState.TOKEN_WAIT) state = HandshakeState.FAULTED
     }
 
-    /** Time-driven writes: CONFIGURE #2 after the 200 ms gap; heartbeats every 2 s. */
+    /**
+     * Time-driven writes: CONFIGURE #2 after the 200 ms gap; auto-ARM once the
+     * config has settled (reference pauses 500 ms after the second config
+     * write before proceeding — bench user request: arm automatically on
+     * READY, there is no workflow with a deliberately dormant device);
+     * heartbeats every 2 s. Manual [arm]/[disarm] still work afterwards for
+     * re-arming a deliberately disarmed device.
+     */
     fun poll(nowMs: Long): List<WriteCommand> {
         val out = mutableListOf<WriteCommand>()
         if (state == HandshakeState.CONFIG_WRITE_1 && nowMs - config1AtMs >= CONFIG_GAP_MS) {
             state = HandshakeState.READY
+            readyAtMs = nowMs
             lastHeartbeatAtMs = nowMs
             out += CommandEncoder.config(config, token, key)
+        }
+        if (state == HandshakeState.READY && nowMs - readyAtMs >= AUTO_ARM_DELAY_MS) {
+            state = HandshakeState.ARMED
+            out += CommandEncoder.arm(key)
         }
         if (state == HandshakeState.READY || state == HandshakeState.ARMED || state == HandshakeState.DISARMED) {
             if (nowMs - lastHeartbeatAtMs >= HEARTBEAT_PERIOD_MS) {
@@ -100,6 +114,7 @@ class HandshakeSequencer(
 
     companion object {
         const val CONFIG_GAP_MS = 200L
+        const val AUTO_ARM_DELAY_MS = 500L
         const val HEARTBEAT_PERIOD_MS = 2_000L
         const val RESUBSCRIBE_PERIOD_MS = 20_000L
     }

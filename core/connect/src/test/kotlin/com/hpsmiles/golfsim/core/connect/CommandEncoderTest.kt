@@ -37,12 +37,15 @@ class CommandEncoderTest {
     }
 
     @Test
-    fun heartbeatEncryptsSingleByte() {
+    fun heartbeatIsPlaintextSingleByte() {
         val cmd = CommandEncoder.heartbeat(key)
         assertEquals(CommandTarget.HEARTBEAT, cmd.target)
-        // Decrypt straight back: plaintext must be exactly [0x01].
-        val decrypted = com.hpsmiles.golfsim.core.ble.Mlm2proCrypto.decrypt(cmd.plaintext, key)
-        assertArrayEquals(byteArrayOf(0x01), decrypted)
+        // Reference (BluetoothBase.SendHeartbeatSignal): byte[] heartbeatData = [0x01];
+        // written UNENCRYPTED to the heartbeat characteristic every 2 s.
+        // Bench attempt 6: the 16-byte AES ciphertext we used to send here was
+        // not recognized by the device as a keep-alive -> link dropped ~15 s
+        // after auth.
+        assertArrayEquals(byteArrayOf(0x01), cmd.plaintext)
     }
 
     @Test
@@ -58,7 +61,7 @@ class CommandEncoderTest {
         // for onToken; bit pattern and pinned ciphertext unchanged.
         val cmd = CommandEncoder.config(cfg, token = 0xA63C5A44.toInt(), key = key)
         assertEquals(CommandTarget.CONFIGURE, cmd.target)
-        assertEquals("4A4552B700BFBFC3D19C87B2B9379766", hex(cmd.plaintext))
+        assertEquals("9C34D51DEE811E6383ABBA5742BAC222", hex(cmd.plaintext))
         // Decrypt back and verify the 14-byte layout field by field.
         val p = com.hpsmiles.golfsim.core.ble.Mlm2proCrypto.decrypt(cmd.plaintext, key)
         assertEquals(14, p.size)
@@ -66,14 +69,18 @@ class CommandEncoderTest {
         assertEquals(0x02, p[1].toInt() and 0xFF)
         assertEquals(0x00, p[2].toInt() and 0xFF)
         assertEquals(0x00, p[3].toInt() and 0xFF)
-        // Deviation (matches the pin-verified big-endian layout; the plan's
-        // LE reads contradicted its own verified ciphertext pin):
+        // Pressure wire bytes are 7D C8: the reference packs LE16(51325);
+        // our BE16(0x7DC8) default produces the identical bytes (pin-verified).
         assertEquals(0x7DC8, ((p[4].toInt() and 0xFF) shl 8) or (p[5].toInt() and 0xFF))
         // temp is LE16 in the pin-verified layout (plan's LE read was right here):
         assertEquals(1500, (p[6].toInt() and 0xFF) or ((p[7].toInt() and 0xFF) shl 8))
-        assertEquals(0xA63C5A44.toInt(), ((p[8].toInt() and 0xFF) shl 24) or
-            ((p[9].toInt() and 0xFF) shl 16) or ((p[10].toInt() and 0xFF) shl 8) or
-            (p[11].toInt() and 0xFF))
+        // Token is LITTLE-ENDIAN per the reference (DeviceManager.GetInitialParameters
+        // -> LongToUintToByteArray -> BitConverter.GetBytes). The M4a pin's captured
+        // plaintext 01 02 00 00 7DC8 DC05 A63C5A44 0000 reads correctly as
+        // LE32(0x445A3CA6) for the token; the old BE read reversed the bytes.
+        assertEquals(0xA63C5A44.toInt(), (p[8].toInt() and 0xFF) or
+            ((p[9].toInt() and 0xFF) shl 8) or ((p[10].toInt() and 0xFF) shl 16) or
+            ((p[11].toInt() and 0xFF) shl 24))
         assertEquals(0, p[12].toInt())
         assertEquals(0, p[13].toInt())
     }

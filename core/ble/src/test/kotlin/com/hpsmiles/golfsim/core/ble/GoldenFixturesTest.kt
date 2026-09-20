@@ -34,6 +34,12 @@ class GoldenFixturesTest(private val fixtureName: String, private val fixture: P
         when (fixture.getProperty("type")) {
             "measurement" -> assertShot(payload)
             "misread" -> assertEquals(BallDataResult.Misread, MeasurementParser.parse(payload))
+            // M4b live bench capture: battery events on the EVENTS
+            // characteristic; first byte 0x03, second byte = percent.
+            "event-battery" -> assertEquals(
+                Mlm2proEvent.Battery(i("percent")),
+                EventParser.parse(payload),
+            )
             "malformed" -> assertTrue(
                 "$fixtureName should be Malformed",
                 MeasurementParser.parse(payload) is BallDataResult.Malformed,

@@ -1,5 +1,8 @@
 package com.hpsmiles.golfsim.range
 
+import android.Manifest
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -30,7 +33,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import com.hpsmiles.golfsim.core.ble.BallData
 import com.hpsmiles.golfsim.core.ble.DemoShotSource
 import com.hpsmiles.golfsim.core.designsystem.GolfColors
@@ -66,9 +71,19 @@ private enum class ViewMode(val label: String) { POV("POV"), TOP_DOWN("TOP-DOWN"
  * Tracer controls (user demo-gate feedback): a toggle for the current
  * shot's tracer, a sub-toggle for faded previous-shot lines, and a slider
  * for how many previous lines are shown.
+ *
+ * M4b connect flow: the CONNECT button checks/request the runtime BLE
+ * permissions and fires [onConnectRequested]; AppRoot owns the GATT client
+ * and the scanner. The MODE toggle keeps the M4a demo pipeline as fallback
+ * (demo = FIRE produces seeded demo shots).
  */
 @Composable
-fun RangeScreen(modifier: Modifier = Modifier) {
+fun RangeScreen(
+    modifier: Modifier = Modifier,
+    demo: Boolean,
+    onDemoChanged: (Boolean) -> Unit,
+    onConnectRequested: () -> Unit = {},
+) {
     val shots = remember { mutableStateListOf<DisplayShot>() }
     val demoSource = remember { DemoShotSource() }
     var playFraction by remember { mutableFloatStateOf(1f) }
@@ -78,6 +93,11 @@ fun RangeScreen(modifier: Modifier = Modifier) {
     var showHistory by remember { mutableStateOf(true) }
     var historyLimit by remember { mutableFloatStateOf(8f) }
     val currentShot = shots.lastOrNull()
+
+    // M4b: live BLE connection state. The MODE toggle state is hoisted to
+    // AppRoot (it owns the live StatusStrip mapping); demo gates whether
+    // FIRE produces demo shots.
+    var permissionDenied by remember { mutableStateOf(false) }
 
     // Tracer playback: animate playFraction over the shot's real duration.
     LaunchedEffect(currentShot, speedMult) {
@@ -94,6 +114,8 @@ fun RangeScreen(modifier: Modifier = Modifier) {
     }
 
     fun fire() {
+        // Demo pipeline only fires in DEMO mode (M4b: LIVE shots come from BLE).
+        if (!demo) return
         val ballData: BallData = demoSource.nextShot()
         val launch = LaunchConditions(
             ballSpeedMps = ballData.ballSpeed,
@@ -115,6 +137,17 @@ fun RangeScreen(modifier: Modifier = Modifier) {
         shots.dropLast(1).map { it.shotResult }.takeLast(historyLimit.toInt())
     } else {
         emptyList()
+    }
+
+    // M4b runtime permission gate: the Compose activity-result launcher is the
+    // plan-approved mechanism here (wiring note: the Activity cast variant and
+    // the "tap CONNECT again" bench path were the sketch alternatives) — the
+    // denial callback drives the guidance line without touching MainActivity.
+    val context = LocalContext.current
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions(),
+    ) { grants ->
+        permissionDenied = grants.values.any { !it }
     }
 
     Row(modifier = modifier.fillMaxSize().background(GolfColors.Base)) {
@@ -193,6 +226,60 @@ fun RangeScreen(modifier: Modifier = Modifier) {
                             modifier = Modifier.padding(start = GolfSpacing.Xxl),
                         )
                     }
+                }
+            }
+            // M4b: CONNECT gate + MODE toggle, BELOW the VIEW toggle.
+            // (Both were anchored TopEnd+Sm and overlapped: the later-drawn
+            // VIEW chip occluded CONNECT and swallowed its taps.)
+            Column(
+                modifier = Modifier.align(Alignment.TopEnd).padding(top = 48.dp, end = GolfSpacing.Sm),
+                horizontalAlignment = Alignment.End,
+            ) {
+                Text(
+                    text = "CONNECT",
+                    style = GolfTypography.MetricLabel,
+                    color = GolfColors.TextPrimary,
+                    modifier = Modifier
+                        .clickable {
+                            val scanGranted = ContextCompat.checkSelfPermission(
+                                context, Manifest.permission.BLUETOOTH_SCAN,
+                            ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+                            val connectGranted = ContextCompat.checkSelfPermission(
+                                context, Manifest.permission.BLUETOOTH_CONNECT,
+                            ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+                            if (scanGranted && connectGranted) {
+                                permissionDenied = false
+                                onConnectRequested()
+                            } else {
+                                permissionLauncher.launch(
+                                    arrayOf(
+                                        Manifest.permission.BLUETOOTH_SCAN,
+                                        Manifest.permission.BLUETOOTH_CONNECT,
+                                    ),
+                                )
+                            }
+                        }
+                        .padding(horizontal = GolfSpacing.Md, vertical = GolfSpacing.Xs),
+                )
+                Text(
+                    text = if (demo) "MODE: DEMO" else "MODE: LIVE",
+                    color = if (demo) GolfColors.TextSecondary else GolfColors.Teal,
+                    style = GolfTypography.Status,
+                    modifier = Modifier
+                        .clickable { onDemoChanged(!demo) }
+                        .border(
+                            1.dp,
+                            if (demo) GolfColors.Line else GolfColors.Teal,
+                            RoundedCornerShape(50),
+                        )
+                        .padding(horizontal = GolfSpacing.Sm, vertical = 2.dp),
+                )
+                if (permissionDenied) {
+                    Text(
+                        text = "Bluetooth permission required - enable in system settings",
+                        style = GolfTypography.Status,
+                        color = GolfColors.AlertRed,
+                    )
                 }
             }
             Text(

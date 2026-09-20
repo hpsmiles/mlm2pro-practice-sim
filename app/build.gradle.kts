@@ -43,6 +43,9 @@ dependencies {
     implementation(project(":core:designsystem"))
     implementation(project(":core:ble"))
     implementation(project(":core:physics"))
+    // M4b Task 4 (mechanical prerequisite): the connect flow in :app imports
+    // Mlm2proGattClient/Mlm2proScanner/ConnectionState from :core:connect.
+    implementation(project(":core:connect"))
     implementation(platform(libs.compose.bom))
     implementation(libs.androidx.activity.compose)
     implementation(libs.compose.ui)
