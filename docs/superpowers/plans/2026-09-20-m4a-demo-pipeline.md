@@ -76,12 +76,12 @@ class DemoShotSourceTest {
         val source = DemoShotSource(seed = 1L)
         repeat(400) {
             val shot = source.nextShot()
-            assertTrue("ball speed ${shot.ballSpeedMps}", shot.ballSpeedMps in 40.0..85.0)
-            assertTrue("vla ${shot.vlaDeg}", shot.vlaDeg in 9.0..28.0)
-            assertTrue("spin ${shot.totalSpinRpm}", shot.totalSpinRpm in 2000.0..10500.0)
-            assertTrue("hla ${shot.hlaDeg}", Math.abs(shot.hlaDeg) <= 2.5)
-            assertTrue("axis ${shot.spinAxisDeg}", Math.abs(shot.spinAxisDeg) <= 7.0)
-            assertTrue("smash", shot.clubHeadSpeedMps > 0.0 && shot.clubHeadSpeedMps < shot.ballSpeedMps)
+            assertTrue("ball speed ${shot.ballSpeed}", shot.ballSpeed in 40.0..85.0)
+            assertTrue("vla ${shot.launchAngle}", shot.launchAngle in 9.0..28.0)
+            assertTrue("spin ${shot.totalSpin}", shot.totalSpin.toDouble() in 2000.0..10500.0)
+            assertTrue("hla ${shot.launchDirection}", Math.abs(shot.launchDirection) <= 2.5)
+            assertTrue("axis ${shot.spinAxis}", Math.abs(shot.spinAxis) <= 7.0)
+            assertTrue("smash", shot.clubHeadSpeed > 0.0 && shot.clubHeadSpeed < shot.ballSpeed)
             assertEquals(0, shot.unknown1)
             assertEquals(0, shot.unknown2)
         }
@@ -90,20 +90,20 @@ class DemoShotSourceTest {
     @Test
     fun clubsCycleInOrder() {
         val source = DemoShotSource(seed = 99L)
-        val firstFour = List(4) { source.nextShot().ballSpeedMps }
+        val firstFour = List(4) { source.nextShot().ballSpeed }
         // Centers: Driver 75, 5-iron 60, 7-iron 55, PW 46 — each within ±9%.
         assertTrue(firstFour[0] in 68.3..81.8) // Driver ±9%
         assertTrue(firstFour[1] in 54.6..65.4)  // 5-iron ±9%
         assertTrue(firstFour[2] in 50.1..60.0)  // 7-iron ±9%
         assertTrue(firstFour[3] in 41.9..50.1) // PW ±9%
-        val fifth = source.nextShot().ballSpeedMps
+        val fifth = source.nextShot().ballSpeed
         assertTrue(fifth in 68.3..81.8)        // cycles back to Driver
     }
 
     @Test
     fun isAShotSource() {
         val source: ShotSource = DemoShotSource()
-        assertTrue(source.nextShot().ballSpeedMps > 0.0)
+        assertTrue(source.nextShot().ballSpeed > 0.0)
     }
 }
 ```
@@ -157,13 +157,17 @@ class DemoShotSource(
         val vla = club.vlaDeg * jitter()
         val hla = random.nextDouble() * 5.0 - 2.5          // ±2.5°
         val axis = random.nextDouble() * 14.0 - 7.0        // ±7.0°
+        // BallData's shipped constructor parameter names (M1 API) are
+        // clubHeadSpeed/ballSpeed/launchDirection/launchAngle/spinAxis/totalSpin —
+        // mapped 1:1 from this plan's original clubHeadSpeedMps/ballSpeedMps/
+        // hlaDeg/vlaDeg/spinAxisDeg/totalSpinRpm wording (amended to the real API).
         return BallData(
-            clubHeadSpeedMps = ballSpeed / SMASH_FACTOR,
-            ballSpeedMps = ballSpeed,
-            hlaDeg = hla,
-            vlaDeg = vla,
-            spinAxisDeg = axis,
-            totalSpinRpm = spin.toInt(),
+            clubHeadSpeed = ballSpeed / SMASH_FACTOR,
+            ballSpeed = ballSpeed,
+            launchDirection = hla,
+            launchAngle = vla,
+            spinAxis = axis,
+            totalSpin = spin.toInt(),
             unknown1 = 0,
             unknown2 = 0,
         )
@@ -1632,11 +1636,11 @@ fun RangeScreen(modifier: Modifier = Modifier) {
     fun fire() {
         val ballData: BallData = demoSource.nextShot()
         val launch = LaunchConditions(
-            ballSpeedMps = ballData.ballSpeedMps,
-            launchAngleDeg = ballData.vlaDeg,
-            spinRpm = ballData.totalSpinRpm,
-            spinAxisDeg = ballData.spinAxisDeg,
-            launchDirDeg = ballData.hlaDeg,
+            ballSpeedMps = ballData.ballSpeed,
+            launchAngleDeg = ballData.launchAngle,
+            spinRpm = ballData.totalSpin,
+            spinAxisDeg = ballData.spinAxis,
+            launchDirDeg = ballData.launchDirection,
         )
         val result = BallFlightEngine.simulate(
             launch, Environment(), UniformSurface(com.hpsmiles.golfsim.core.physics.Surface.FAIRWAY_NORMAL),
@@ -1721,15 +1725,15 @@ fun RangeScreen(modifier: Modifier = Modifier) {
                     MetricChip("total", String.format(Locale.US, "%.0f", r.totalM), "M")
                     Spacer(Modifier.size(GolfSpacing.Xs))
                     MetricChip(
-                        "ball", String.format(Locale.US, "%.1f", shot.ballData.ballSpeedMps * MPH_PER_MS), "MPH",
+                        "ball", String.format(Locale.US, "%.1f", shot.ballData.ballSpeed * MPH_PER_MS), "MPH",
                         accent = GolfColors.Amber,
                     )
                     Spacer(Modifier.size(GolfSpacing.Xs))
-                    MetricChip("spin", String.format(Locale.US, "%.0f", shot.ballData.totalSpinRpm), "RPM")
+                    MetricChip("spin", String.format(Locale.US, "%.0f", shot.ballData.totalSpin), "RPM")
                     Spacer(Modifier.size(GolfSpacing.Xs))
-                    MetricChip("launch", String.format(Locale.US, "%.1f", shot.ballData.vlaDeg), "DEG")
+                    MetricChip("launch", String.format(Locale.US, "%.1f", shot.ballData.launchAngle), "DEG")
                     Spacer(Modifier.size(GolfSpacing.Xs))
-                    MetricChip("axis", String.format(Locale.US, "%.1f", shot.ballData.spinAxisDeg), "DEG")
+                    MetricChip("axis", String.format(Locale.US, "%.1f", shot.ballData.spinAxis), "DEG")
                 }
             }
             SectionCard("SESSION") {
