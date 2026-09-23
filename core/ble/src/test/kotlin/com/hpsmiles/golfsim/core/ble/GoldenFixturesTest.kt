@@ -16,10 +16,15 @@ import java.util.Properties
  * test-code change.
  *
  * File schema:
- *   type   = measurement | misread | malformed
+ *   type   = measurement | misread | malformed | event-battery | event-misread
  *   hex    = payload bytes (case-insensitive; empty string = empty payload)
  *   (measurement only) clubHeadSpeed, ballSpeed, launchDirection, launchAngle,
  *   spinAxis (Double); totalSpin, unknown1, unknown2 (Int)
+ *
+ * A fixture file may carry free-text `#` comments before its keys — used to
+ * record capture provenance (session, event id, observed flight shape). The
+ * verbatim multi-event capture is `mlm2pro-live-shapetest-2026-09-23.properties`;
+ * per-event measurement/misread assertions live in [LiveShapetestCaptureTest].
  *
  * NOTE: this harness exercises the DECRYPTED payload against MeasurementParser.
  * Full ciphertext-in → result-out coverage lives in Mlm2proDecoderTest; M4
@@ -38,6 +43,12 @@ class GoldenFixturesTest(private val fixtureName: String, private val fixture: P
             // characteristic; first byte 0x03, second byte = percent.
             "event-battery" -> assertEquals(
                 Mlm2proEvent.Battery(i("percent")),
+                EventParser.parse(payload),
+            )
+            // M4c live shed capture (2026-09-23): EVENTS characteristic
+            // delivering the 0x05 0x00 misread alert after a real duff.
+            "event-misread" -> assertEquals(
+                Mlm2proEvent.MisreadAlert,
                 EventParser.parse(payload),
             )
             "malformed" -> assertTrue(
@@ -66,12 +77,27 @@ class GoldenFixturesTest(private val fixtureName: String, private val fixture: P
     private fun i(key: String) = fixture.getProperty(key).toInt()
 
     companion object {
+        // The schema types the table harness knows how to assert. Raw
+        // multi-event captures (e.g. mlm2pro-live-shapetest-2026-09-23) carry
+        // a protocol-level `type=event` key that is NOT a harness schema type;
+        // they are pinned by LiveShapetestCaptureTest, so the harness skips
+        // anything outside this set instead of failing on unknown types.
+        private val HARNESS_TYPES = setOf(
+            "measurement", "misread", "malformed", "event-battery", "event-misread",
+        )
+
         @JvmStatic
         @Parameterized.Parameters(name = "{0}")
         fun fixtures(): Collection<Array<Any>> =
-            goldenFiles().map { file ->
-                arrayOf(file.name, file.inputStream().use { Properties().apply { load(it) } })
-            }
+            goldenFiles()
+                .mapNotNull { file ->
+                    val props = file.inputStream().use { Properties().apply { load(it) } }
+                    if (props.getProperty("type") in HARNESS_TYPES) {
+                        arrayOf(file.name, props)
+                    } else {
+                        null
+                    }
+                }
 
         private fun goldenFiles(): List<File> =
             GoldenFixturesTest::class.java.classLoader.getResources("golden").toList()
