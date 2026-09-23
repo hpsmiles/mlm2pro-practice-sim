@@ -19,14 +19,16 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -36,7 +38,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
-import com.hpsmiles.golfsim.core.ble.BallData
 import com.hpsmiles.golfsim.core.ble.DemoShotSource
 import com.hpsmiles.golfsim.core.designsystem.GolfColors
 import com.hpsmiles.golfsim.core.designsystem.GolfSpacing
@@ -45,10 +46,6 @@ import com.hpsmiles.golfsim.core.designsystem.GolfTypography
 import com.hpsmiles.golfsim.core.designsystem.MetricChip
 import com.hpsmiles.golfsim.core.designsystem.MetricRow
 import com.hpsmiles.golfsim.core.designsystem.SectionCard
-import com.hpsmiles.golfsim.core.physics.BallFlightEngine
-import com.hpsmiles.golfsim.core.physics.Environment
-import com.hpsmiles.golfsim.core.physics.LaunchConditions
-import com.hpsmiles.golfsim.core.physics.UniformSurface
 import java.util.Locale
 import kotlin.math.sqrt
 
@@ -83,8 +80,8 @@ fun RangeScreen(
     demo: Boolean,
     onDemoChanged: (Boolean) -> Unit,
     onConnectRequested: () -> Unit = {},
+    session: RangeSession,
 ) {
-    val shots = remember { mutableStateListOf<DisplayShot>() }
     val demoSource = remember { DemoShotSource() }
     var playFraction by remember { mutableFloatStateOf(1f) }
     var speedMult by remember { mutableStateOf(SpeedMult.X15) }
@@ -92,12 +89,17 @@ fun RangeScreen(
     var showTracer by remember { mutableStateOf(true) }
     var showHistory by remember { mutableStateOf(true) }
     var historyLimit by remember { mutableFloatStateOf(8f) }
-    val currentShot = shots.lastOrNull()
+    val currentShot = session.shots.lastOrNull()
 
     // M4b: live BLE connection state. The MODE toggle state is hoisted to
     // AppRoot (it owns the live StatusStrip mapping); demo gates whether
     // FIRE produces demo shots.
     var permissionDenied by remember { mutableStateOf(false) }
+
+    // New shot (demo or live): restart the tracer animation.
+    LaunchedEffect(session.tick.intValue) {
+        playFraction = 0f
+    }
 
     // Tracer playback: animate playFraction over the shot's real duration.
     LaunchedEffect(currentShot, speedMult) {
@@ -114,27 +116,16 @@ fun RangeScreen(
     }
 
     fun fire() {
-        // Demo pipeline only fires in DEMO mode (M4b: LIVE shots come from BLE).
+        // Demo pipeline only fires in DEMO mode (live shots arrive via
+        // AppRoot's onMeasurement → session.add).
         if (!demo) return
-        val ballData: BallData = demoSource.nextShot()
-        val launch = LaunchConditions(
-            ballSpeedMps = ballData.ballSpeed,
-            launchAngleDeg = ballData.launchAngle,
-            spinRpm = ballData.totalSpin,
-            spinAxisDeg = ballData.spinAxis,
-            launchDirDeg = ballData.launchDirection,
-        )
-        val result = BallFlightEngine.simulate(
-            launch, Environment(), UniformSurface(com.hpsmiles.golfsim.core.physics.Surface.FAIRWAY_NORMAL),
-        )
-        playFraction = 0f
-        shots.add(DisplayShot(ballData, launch, result))
-        // Metrics render immediately from `shots`; the tracer animates on top.
+        session.add(demoSource.nextShot())
+        // Metrics render immediately from session.shots; the tracer animates on top.
     }
 
     // Previous-shot lines: faded, most recent first, limited by the slider.
     val previousShots = if (showHistory) {
-        shots.dropLast(1).map { it.shotResult }.takeLast(historyLimit.toInt())
+        session.shots.dropLast(1).map { it.shotResult }.takeLast(historyLimit.toInt())
     } else {
         emptyList()
     }
@@ -159,7 +150,7 @@ fun RangeScreen(
                     Modifier.fillMaxSize(),
                 )
             } else {
-                TopDownCanvas(shots, Modifier.fillMaxSize())
+                TopDownCanvas(session.shots, Modifier.fillMaxSize())
             }
             // DEMO badge + tracer controls (toggle, sub-toggle, slider).
             Column(
@@ -225,6 +216,29 @@ fun RangeScreen(
                             style = GolfTypography.Status,
                             modifier = Modifier.padding(start = GolfSpacing.Xxl),
                         )
+                    }
+                }
+            }
+            // M4d no-read pill: live misreads coalesced in RangeSession. Surfaced
+            // next to the DEMO controls; dismiss clears the counter.
+            if (session.misreadCount.intValue > 0) {
+                Surface(
+                    shape = RoundedCornerShape(16.dp),
+                    color = MaterialTheme.colorScheme.errorContainer,
+                    modifier = Modifier.align(Alignment.BottomStart).padding(GolfSpacing.Sm),
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                    ) {
+                        Text(
+                            text = "no read (${session.misreadCount.intValue})",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.onErrorContainer,
+                        )
+                        TextButton(onClick = { session.dismissMisreads() }) {
+                            Text("dismiss")
+                        }
                     }
                 }
             }
@@ -354,7 +368,7 @@ fun RangeScreen(
                 }
             }
             SectionCard("SESSION") {
-                val carries = shots.map { it.shotResult.carryM }
+                val carries = session.shots.map { it.shotResult.carryM }
                 val count = carries.size
                 MetricRow("shots", "$count", "")
                 MetricRow(

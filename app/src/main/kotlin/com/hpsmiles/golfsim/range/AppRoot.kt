@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -61,6 +62,25 @@ fun AppRoot() {
     }
     val connectionState by gattClient.state.collectAsState()
     val scope = rememberCoroutineScope()
+    // M4d: shared Range shot list + no-read counter, owned at the composition
+    // root so demo (RangeScreen fire) and live BLE callbacks append to one list.
+    val session = remember { RangeSession() }
+
+    // Live shot delivery: GATT callbacks fire on a binder thread; hop to main
+    // before touching Compose snapshot state.
+    DisposableEffect(gattClient) {
+        gattClient.onMeasurement = { ballData ->
+            scope.launch { session.add(ballData) }
+        }
+        gattClient.onMisread = {
+            scope.launch { session.markMisread() }
+        }
+        onDispose {
+            gattClient.onMeasurement = null
+            gattClient.onMisread = null
+        }
+    }
+
     var scanning by remember { mutableStateOf(false) }
     // MODE toggle state lives here so the StatusStrip demo fallback mirrors it.
     var demo by remember { mutableStateOf(true) }
@@ -116,6 +136,7 @@ fun AppRoot() {
                         demo = demo,
                         onDemoChanged = { demo = it },
                         onConnectRequested = { onConnectRequested() },
+                        session = session,
                     )
                     RangeTab.SETTINGS -> SettingsScreen(captureLog = captureLog)
                 }
