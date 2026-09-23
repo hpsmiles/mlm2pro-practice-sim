@@ -5,9 +5,12 @@ package com.hpsmiles.golfsim.core.physics
  * [com.hpsmiles.golfsim.core.ble.BallData] onto this — speeds are already m/s
  * tenths there, no unit conversion drift).
  *
- * Sign conventions (unverified against live capture — M1 spec §9 list):
- * +launchDirDeg pushes toward +x; +spinAxisDeg tilts the spin axis so the
- * ball curves toward +x. Both preserved raw through the decoder.
+ * Sign conventions [Verified on-device] — 2026-09-23 M4c shed session (8i,
+ * shaped shots; see golden fixture mlm2pro-live-shapetest-2026-09-23):
+ * launchDirDeg negative = left of target / positive = right;
+ * spinAxisDeg positive = right curve (fade) / negative = left curve (draw).
+ * +launchDirDeg still pushes toward +x; +spinAxisDeg still tilts the spin
+ * axis so the ball curves toward +x. Both preserved raw through the decoder.
  */
 data class LaunchConditions(
     val ballSpeedMps: Double,

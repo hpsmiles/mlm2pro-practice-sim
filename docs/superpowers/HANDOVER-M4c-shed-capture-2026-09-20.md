@@ -136,18 +136,61 @@ against observable ball flight.
    live capture are the raw material).
 
 ### Acceptance (M4c done when)
-- [ ] Live MEASUREMENT notifications decoded to sane BallData (spot-check
+- [x] Live MEASUREMENT notifications decoded to sane BallData (spot-check
       ball speeds vs expectations for the club used)
-- [ ] Golden fixtures: ≥1 live measurement + ≥1 live misread committed
-- [ ] Sign conventions resolved and documented (or explicitly deferred
+- [x] Golden fixtures: ≥1 live measurement + ≥1 live misread committed
+- [x] Sign conventions resolved and documented (or explicitly deferred
       with evidence for why undecided)
-- [ ] Full build census green; PR merged with bench box ticked
+- [x] Full build census green; PR merged with bench box ticked
       (follow the M4b PR pattern: branch, PR, boxes, merge)
+
+## 5b. M4c session results (2026-09-23)
+
+Two live batches captured on-device (8-iron, Lenovo tablet, session ~16:40–17:00):
+`batch1` = 5 warm-up shots (sane 8i numbers: ball speed 98.9–107.0 mph, smash
+1.21–1.28, VLA 16–23°, spin 5.9k–8.2k rpm). `batch2` = 4 shaped shots (fade,
+punch, high, draw) + 1 mishit, saved as
+`core/ble/src/test/resources/golden/mlm2pro-live-shapetest-2026-09-23.properties`
+(+ per-event fixtures, pinned by `LiveShapetestCaptureTest`). Census
+178 tests green (ble 39→51).
+
+**Sign conventions verified** (user-observed flight vs bytes, moderate
+confidence — net made sighting imprecise, but all four shots are mutually
+consistent with the TrackMan convention):
+- HLA / `launchDirection`: negative = left of target, positive = right.
+  Fade started left (−6.9°), draw started righter (−1.8°).
+- Spin axis: positive = right curve (fade, +11.3°), negative = left curve
+  (draw, −18.6°). No parser change needed — mapping was already correct;
+  `BallData.kt` + `LaunchConditions.kt` docs updated with
+  [Verified on-device] markers.
+- **Live misread captured in BOTH forms**: EVENTS `05 00` frame (event-010)
+  AND all-zero 20-byte MEASUREMENT payload (event-027). Both pinned as
+  golden fixtures and asserted in `LiveShapetestCaptureTest`.
+
+### M4d scope notes: misread-filtering requirements
+
+Raw material for bag mapping (Feature 1): real duffs arrive as either the
+EVENTS `05 00` misread event or the all-zero MEASUREMENT sentinel (confirmed
+live, both forms in one batch). Requirements for M4d:
+
+1. A shot flow that ends in either misread form must be recorded as a
+   **non-shot** in any session/bag-mapping aggregation — never as a BallData
+   row with zeros.
+2. Misreads must NOT re-trigger auto-ARM misbehavior: after `05 00` the link
+   returns to READY and auto-ARM fires +500 ms as usual (observed live —
+   shot cadence continued normally).
+3. Duff *filtering* (suspect metrics on otherwise-plausible shots, e.g.
+   anomalous smash vs. the club's history) is a separate, later heuristic —
+   out of scope until gapping data exists; do not conflate with the
+   protocol-level misread sentinel.
+4. UI should surface misreads as a dismissible "no read" pill, not silently
+   drop them (player must know the monitor didn't see the ball).
 
 ## 6. Known gaps / open questions
 
-- **Misread live event still unpinned** (hand-waves did not produce one —
-  real duffs should).
+- ~~**Misread live event still unpinned**~~ **RESOLVED 2026-09-23**: real
+  mishit produced both `05 00` and all-zero MEASUREMENT — both pinned as
+  golden fixtures (see section 5b).
 - **`firmware=` in capture exports** is a placeholder (`unknown-M4b-bench`)
   — no channel known to read device firmware; update if discovered.
 - Battery byte stepping (85→82 over minutes) semantics unverified.
