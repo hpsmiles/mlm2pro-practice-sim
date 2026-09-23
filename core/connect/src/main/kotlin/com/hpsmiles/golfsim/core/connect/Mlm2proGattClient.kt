@@ -79,6 +79,9 @@ class Mlm2proGattClient(
     /** Fired for every decoded shot measurement. */
     var onMeasurement: ((BallData) -> Unit)? = null
 
+    /** Fired on any live misread indication (EVENTS 05 00 or all-zero MEASUREMENT). */
+    var onMisread: (() -> Unit)? = null
+
     private var gatt: BluetoothGatt? = null
     private var clockMs: () -> Long = { System.currentTimeMillis() }
 
@@ -332,12 +335,16 @@ class Mlm2proGattClient(
         // M4b capture: decode succeeded — record with the decrypted bytes.
         captureLog.record(uuid = uuid.take(8).uppercase(), encrypted = value, decrypted = plain)
         when (msg) {
-            is Mlm2proMessage.Measurement ->
-                (msg.result as? BallDataResult.Shot)?.let { onMeasurement?.invoke(it.data) }
-            is Mlm2proMessage.Event ->
-                if (msg.event is Mlm2proEvent.ShotDetected ||
-                    msg.event is Mlm2proEvent.Ready
-                ) _state.value = _state.value // state kept; sequencer owns protocol
+            is Mlm2proMessage.Measurement -> when (val result = msg.result) {
+                is BallDataResult.Shot -> onMeasurement?.invoke(result.data)
+                is BallDataResult.Misread -> onMisread?.invoke()
+                // Malformed MEASUREMENT already recorded in captureLog; drop.
+                is BallDataResult.Malformed -> Unit
+            }
+            is Mlm2proMessage.Event -> {
+                // ShotDetected/Ready/battery: state kept; sequencer owns protocol.
+                if (msg.event is Mlm2proEvent.MisreadAlert) onMisread?.invoke()
+            }
             else -> Unit
         }
         sequencer.poll(clockMs()).forEach { performWrite(it) }
