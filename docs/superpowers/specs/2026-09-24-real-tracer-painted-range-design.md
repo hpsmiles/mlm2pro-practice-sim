@@ -66,6 +66,13 @@ Date: 2026-09-24 · Status: approved (design discussion 2026-09-24)
 5. Distance-band lines + labels (existing, labels drawn last among ground layers)
 6. Horizon haze: alpha gradient overlay over the top ~15% of the ground area
 
+### Palette (user-approved via browser mockup, 2026-09-24)
+
+**Option A — "Tour Broadcast"** (mockup: `.superpowers/brainstorm/m4d-range/content/range-styles.html`):
+vivid saturated fairway green, darker emerald rough, blue sky gradient, crisp white
+distance labels; mow stripes = two lightness levels of the fairway hue. Amber live
+tracer + teal landing ring per the existing design-system color language.
+
 ### Landing marker
 
 Landing dot/ring unchanged in behavior; it already projects to ground level and will
