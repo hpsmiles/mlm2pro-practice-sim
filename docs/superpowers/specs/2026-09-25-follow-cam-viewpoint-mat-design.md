@@ -19,7 +19,7 @@ data class RangeCamera(val x: Double, val y: Double, val z: Double, val pitchRad
 ```
 
 - World camera position + pitch (nose-down angle; 0 = level). No yaw, no roll — one rotation axis only.
-- `RangeCamera.STATIC = (0, CAM_BACK_M, CAM_HEIGHT_M, 0)` where **`CAM_HEIGHT_M = 8.0`**, **`CAM_BACK_M = 21.2`** (tee stays at `v ≈ 0.377`, visible just above the bottom edge — matches approved mockup C).
+- `RangeCamera.STATIC = (0, −CAM_BACK_M, CAM_HEIGHT_M, 0)` (camera sits behind the tee at negative world y) where **`CAM_HEIGHT_M = 8.0`**, **`CAM_BACK_M = 21.2`** (tee stays at `v ≈ 0.377`, visible just above the bottom edge — matches approved mockup C).
 - Projection with pitch θ, relative point `(dx, dy, dz)` where `dz = z − camZ`:
   - `depth = dy·cosθ − dz·sinθ`
   - screen `u = dx / depth`
