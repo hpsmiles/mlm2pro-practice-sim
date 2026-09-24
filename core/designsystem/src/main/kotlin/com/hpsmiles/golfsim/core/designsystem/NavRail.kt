@@ -3,6 +3,7 @@ package com.hpsmiles.golfsim.core.designsystem
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -45,11 +46,9 @@ fun NavRailButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Text(
-        text = label,
-        style = GolfTypography.Status.copy(fontSize = 13.sp),
-        color = if (selected) GolfColors.Teal else GolfColors.TextMuted,
-        textAlign = TextAlign.Center,
+    // Button box: NavRailWidth - 2 * Sm (80 dp), label centered both axes
+    // (2026-09-24 user request).
+    Box(
         modifier = modifier
             .clip(RoundedCornerShape(GolfSpacing.Sm))
             .background(
@@ -57,9 +56,14 @@ fun NavRailButton(
                 RoundedCornerShape(GolfSpacing.Sm),
             )
             .clickable(onClick = onClick)
-            .padding(horizontal = GolfSpacing.Sm, vertical = GolfSpacing.Xs)
-            // Inner label box = NavRailWidth - 2 * Sm (80 dp) with centered
-            // text: rail widened 2026-09-24 so 13 sp labels fit unwrapped.
             .size(width = 80.dp, height = 40.dp),
-    )
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = label,
+            style = GolfTypography.Status.copy(fontSize = 13.sp),
+            color = if (selected) GolfColors.Teal else GolfColors.TextMuted,
+            textAlign = TextAlign.Center,
+        )
+    }
 }
