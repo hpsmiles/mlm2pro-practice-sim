@@ -5,7 +5,10 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
@@ -13,24 +16,34 @@ import androidx.compose.ui.unit.sp
 import com.hpsmiles.golfsim.core.designsystem.GolfColors
 import com.hpsmiles.golfsim.core.physics.ShotResult
 
-private val SKY_TOP = GolfColors.Panel
-private val SKY_BOTTOM = GolfColors.Base
-private val GROUND_TOP = Color(0xFF131A20)
-private val GROUND_BOTTOM = GolfColors.Base
+// Painted-ground palette A — "Tour Broadcast" (approved spec palette).
+private val SKY_TOP = Color(0xFF6FA8DC)
+private val SKY_BOTTOM = Color(0xFFC9E2F5)
+private val ROUGH_BASE = Color(0xFF1E4D26)
+private val FAIRWAY = Color(0xFF3E8E43)
+private val STRIPE_LIGHT = Color(0xFF47A04C)
+private val STRIPE_DARK = Color(0xFF3A8440)
+private val GREEN_SURFACE = Color(0xFF5FBF63)
+private val FRINGE = Color(0xFF2F6E35)
+private val HAZE = Color.White.copy(alpha = 0.22f)
 
 // Previous-shot tracer lines: faded teal per the M3 design language
 // (history = teal, live moment = amber).
 private val HISTORY_LINE = GolfColors.Teal.copy(alpha = 0.35f)
 
 /**
- * Player-perspective range view. Static scene (bands, targets) plus the
- * current shot's tracer and landing pulse, driven by [playFraction] in 0..1
- * (1 = flight complete), and faded tracer lines for [previousShots].
+ * Player-perspective range view. Painted "Tour Broadcast" scene (rough base,
+ * fairway, mow stripes, greens with fringes, horizon haze; bands and target
+ * ovals stay on top) plus the current shot's tracer and landing pulse, driven
+ * by [playFraction] in 0..1 (1 = flight complete), and faded tracer lines for
+ * [previousShots].
  *
- * All world-to-screen math goes through PovProjector. The tracer arc is a
- * stylized quadratic anchored to the real solve endpoints (documented plan
- * deviation: ShotResult carries no trajectory samples; physical arcs are a
- * Phase C design decision).
+ * All world-to-screen math goes through PovProjector. Ground layers are flat
+ * polygons: world vertices at z = RangeScene.groundHeight are projected into
+ * closed Paths, with vertices at/behind the camera clipped (y > 0.5) or the
+ * layer skipped entirely. The tracer arc is still a stylized quadratic
+ * anchored to the real solve endpoints this phase; the modelled ODE flight
+ * samples replace it in the following task.
  *
  * Visual clamps (user demo-gate feedback): the stylized arc is scaled so its
  * apex stays inside the top 8% of the frame, and near-field points that
@@ -53,36 +66,80 @@ fun PovRangeCanvas(
         val focalPx = w * 1.10f
         val centerX = w / 2f
 
-        // Sky and ground gradients.
+        // Sky, then painted ground back-to-front: rough base (full bleed),
+        // fairway, mow stripes, greens with fringes. All layers are flat
+        // polygons at z = groundHeight in front of the camera.
         drawRect(
-            brush = androidx.compose.ui.graphics.Brush.verticalGradient(
+            brush = Brush.verticalGradient(
                 listOf(SKY_TOP, SKY_BOTTOM), startY = 0f, endY = horizonPx,
             ),
-            size = androidx.compose.ui.geometry.Size(w, horizonPx),
+            size = Size(w, horizonPx),
         )
-        drawRect(
-            brush = androidx.compose.ui.graphics.Brush.verticalGradient(
-                listOf(GROUND_TOP, GROUND_BOTTOM), startY = horizonPx, endY = h,
-            ),
-            topLeft = Offset(0f, horizonPx),
-            size = androidx.compose.ui.geometry.Size(w, h - horizonPx),
-        )
-        drawLine(GolfColors.Line, Offset(0f, horizonPx), Offset(w, horizonPx), 1f)
+        drawRect(ROUGH_BASE, topLeft = Offset(0f, horizonPx), size = Size(w, h - horizonPx))
+
+        // Flat-ground polygon: project world vertices (at ground height) into
+        // a closed Path. Vertices at/behind the camera (y <= 0.5) are clipped
+        // away; if any remaining vertex still fails to project, the layer is
+        // skipped rather than drawn malformed.
+        fun groundPath(vertices: List<Pair<Double, Double>>): Path? {
+            val visible = vertices.filter { it.second > 0.5 }
+            if (visible.size < 3) return null
+            val path = Path()
+            var first = true
+            for ((x, y) in visible) {
+                val p = worldToScreen(centerX, focalPx, horizonPx, x, y, RangeScene.groundHeight(x, y))
+                    ?: return null
+                if (first) { path.moveTo(p.x, p.y); first = false } else path.lineTo(p.x, p.y)
+            }
+            path.close()
+            return path
+        }
+
+        val fairway = groundPath(RangeScene.fairwayOutline())
+        if (fairway != null) drawPath(fairway, FAIRWAY)
+
+        // Alternating 12 m mow stripes as trapezoids clipped to the fairway.
+        for (index in 0..14) {
+            val (yFrom, yTo) = RangeScene.stripeBand(index)
+            if (yFrom >= RangeScene.FAIRWAY_END_Y) break
+            val halfFrom = RangeScene.fairwayHalfWidth(yFrom)
+            val halfTo = RangeScene.fairwayHalfWidth(yTo)
+            val stripe = groundPath(
+                listOf(-halfFrom to yFrom, halfFrom to yFrom, halfTo to yTo, -halfTo to yTo),
+            )
+            if (stripe != null) {
+                drawPath(stripe, if (RangeScene.stripeIsLight(0.0, yFrom)) STRIPE_LIGHT else STRIPE_DARK)
+            }
+        }
+
+        // Greens: fringe ring first, putting surface on top.
+        for (green in RangeScene.greens) {
+            if (green.distanceM < 8.0) continue // near edge would sit at/behind the camera
+            val fringe = groundPath(
+                RangeScene.circleOutline(green.lateralM, green.distanceM, green.fringeRadiusM),
+            ) ?: continue
+            drawPath(fringe, FRINGE)
+            val surface = groundPath(
+                RangeScene.circleOutline(green.lateralM, green.distanceM, green.radiusM),
+            ) ?: continue
+            drawPath(surface, GREEN_SURFACE)
+        }
 
         // Plan-verbatim correction: use android.graphics.Paint directly for
         // native text (androidx Paint.asFrameworkPaint() was wrong in the draft).
         val labelPaint = android.graphics.Paint().apply {
             isAntiAlias = true
             textSize = 10.sp.toPx()
-            color = GolfColors.TextMuted.toArgb()
+            color = Color.White.toArgb()
         }
 
-        // Distance bands on the ground: v = camH / distance.
+        // Distance bands on the ground: v = camH / distance. White for
+        // "Tour Broadcast" crispness against the painted fairway.
         val bandDistances = listOf(50f, 100f, 150f, 200f)
         for (d in bandDistances) {
             val y = horizonPx + PovProjector.bandV(d.toDouble()) * focalPx
             drawLine(
-                color = GolfColors.Line.copy(alpha = 0.8f),
+                color = Color.White.copy(alpha = 0.45f),
                 start = Offset(0f, y.toFloat()),
                 end = Offset(w, y.toFloat()),
                 strokeWidth = 1f,
@@ -119,6 +176,19 @@ fun PovRangeCanvas(
                 style = Stroke(width = 1f),
             )
         }
+
+        // Horizon haze, last over the painted ground: a soft white fade at
+        // the top of the rough blending the scene into the sky.
+        drawRect(
+            brush = Brush.verticalGradient(
+                0f to HAZE,
+                1f to Color.Transparent,
+                startY = horizonPx,
+                endY = horizonPx + h * 0.15f,
+            ),
+            topLeft = Offset(0f, horizonPx),
+            size = Size(w, h * 0.15f),
+        )
 
         // The launch anchor: the tracer attaches here while the ball is too
         // close to project inside the frame, so the ball is visible leaving.
