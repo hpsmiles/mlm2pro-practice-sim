@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
@@ -36,6 +37,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.hpsmiles.golfsim.core.connect.ConnectionState
 import com.hpsmiles.golfsim.core.connect.EnvironmentConfig
 import com.hpsmiles.golfsim.core.connect.HandshakeSequencer
@@ -171,9 +173,11 @@ fun AppRoot() {
                 NavRail {
                     NavRailButton("RANGE", tab == RangeTab.RANGE, onClick = { tab = RangeTab.RANGE })
                     NavRailButton("SETTINGS", tab == RangeTab.SETTINGS, onClick = { tab = RangeTab.SETTINGS })
-                    // M4d user request (2026-09-24): FIRE / MODE / CONNECT sit
-                    // vertically under RANGE / SETTINGS in the same rail column;
-                    // the range canvas is bordered by exactly one left column.
+
+                    // M4d user request (2026-09-24, revised): FIRE / MODE /
+                    // CONNECT live at the BOTTOM of the rail, under a flexible
+                    // spacer; ARM/STANDBY + DISCONNECT follow beneath them.
+                    Spacer(Modifier.weight(1f))
                     RailChip("FIRE", border = GolfColors.Amber, labelColor = GolfColors.Amber,
                         onClick = { fireDemo() })
                     RailChip(
@@ -187,16 +191,14 @@ fun AppRoot() {
                             labelColor = GolfColors.AlertRed, onClick = {})
                     }
 
-                    // M4d user request (2026-09-24): ARM/STANDBY and DISCONNECT
-                    // live in the LEFT panel (bottom of the rail) instead of a
-                    // floating bottom row. Visible whenever a link (or stale
-                    // faulted handle) exists so the user can tear it down.
+                    // ARM/STANDBY and DISCONNECT stay bottom-most, visible only
+                    // when a link (or stale faulted handle) exists.
                     val armed = connectionState is ConnectionState.Armed
                     val linkVisible = connectionState is ConnectionState.Handshaking ||
                         armed || connectionState is ConnectionState.Disarmed ||
                         connectionState is ConnectionState.Faulted
                     if (linkVisible) {
-                        Spacer(Modifier.weight(1f))
+                        Spacer(Modifier.height(4.dp))
                         RailChip(
                             label = if (armed) "STANDBY" else "ARM",
                             border = GolfColors.Teal,
@@ -246,15 +248,15 @@ private fun RailChip(
 ) {
     Box(
         modifier = Modifier
-            .width(56.dp)
+            .width(GolfSpacing.NavRailWidth - GolfSpacing.Sm * 2)
             .border(1.dp, border, RoundedCornerShape(GolfSpacing.Sm))
             .clickable(onClick = onClick)
-            .padding(vertical = GolfSpacing.Xs),
+            .padding(vertical = GolfSpacing.Sm),
         contentAlignment = Alignment.Center,
     ) {
         Text(
             text = label,
-            style = GolfTypography.Status,
+            style = GolfTypography.Status.copy(fontSize = 15.sp),
             color = labelColor,
             textAlign = TextAlign.Center,
         )

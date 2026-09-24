@@ -14,7 +14,8 @@ object GolfSpacing {
 
     // Wide enough for the longest rail label ("SETTINGS") on one line —
     // the NavRailButton inner box is NavRailWidth - 2 * Sm.
-    val NavRailWidth = 72.dp
+    // Widened 2026-09-24 (user request) so RailChip labels fit at 15 sp.
+    val NavRailWidth = 96.dp
     val StatusStripHeight = 24.dp
     val CornerCard = 14.dp
 }

@@ -34,6 +34,7 @@ import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.hpsmiles.golfsim.core.designsystem.GolfColors
 import com.hpsmiles.golfsim.core.designsystem.GolfSpacing
 import com.hpsmiles.golfsim.core.designsystem.GolfTheme
@@ -52,7 +53,7 @@ import kotlin.math.sqrt
 private fun OverlayChip(text: String, active: Boolean, onClick: () -> Unit) {
     Text(
         text = text,
-        style = GolfTypography.Status,
+        style = ChipFont,
         color = if (active) GolfColors.Teal else GolfColors.TextMuted,
         modifier = Modifier
             .clickable(onClick = onClick)
@@ -60,6 +61,8 @@ private fun OverlayChip(text: String, active: Boolean, onClick: () -> Unit) {
             .padding(horizontal = GolfSpacing.Sm, vertical = 2.dp),
     )
 }
+
+private val ChipFont = GolfTypography.Status.copy(fontSize = 15.sp)
 
 /** Metres/second to mph for display. */
 private const val MPH_PER_MS = 2.23694
@@ -195,7 +198,7 @@ fun RangeScreen(
             Text(
                 "VIEW: ${viewMode.label}",
                 color = GolfColors.TextSecondary,
-                style = GolfTypography.Status,
+                style = ChipFont,
                 modifier = Modifier.align(Alignment.TopEnd).padding(GolfSpacing.Sm)
                     .clickable {
                         viewMode = if (viewMode == ViewMode.POV) ViewMode.TOP_DOWN else ViewMode.POV

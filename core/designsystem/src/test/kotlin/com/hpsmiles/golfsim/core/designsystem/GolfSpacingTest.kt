@@ -16,9 +16,9 @@ class GolfSpacingTest {
     }
 
     @Test fun componentDimensionsMatchSpec() {
-        // 72 dp: fits "SETTINGS" unwrapped in the rail button (bench finding
-        // — 56 dp wrapped the final S onto a second line).
-        assertEquals(72.dp, GolfSpacing.NavRailWidth)
+        // 96 dp (2026-09-24 user request): wider rail so RailChip labels fit
+        // at 15 sp ("MODE: DEMO" unwrapped in one line).
+        assertEquals(96.dp, GolfSpacing.NavRailWidth)
         assertEquals(24.dp, GolfSpacing.StatusStripHeight)
         assertEquals(14.dp, GolfSpacing.CornerCard)
     }
