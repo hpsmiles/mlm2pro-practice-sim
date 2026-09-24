@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -35,6 +36,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
@@ -48,6 +50,26 @@ import com.hpsmiles.golfsim.core.designsystem.MetricRow
 import com.hpsmiles.golfsim.core.designsystem.SectionCard
 import java.util.Locale
 import kotlin.math.sqrt
+
+/**
+ * Uniform control chip for the left controls panel — same box proportions as
+ * the FIRE chip (user request 2026-09-24: "all of them a similar size").
+ * Active chips tint teal like the rest of the design language.
+ */
+@Composable
+private fun ControlChip(text: String, active: Boolean, onClick: () -> Unit) {
+    Text(
+        text = text,
+        style = GolfTypography.MetricLabel,
+        color = if (active) GolfColors.Teal else GolfColors.TextPrimary,
+        textAlign = TextAlign.Center,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .border(1.dp, if (active) GolfColors.Teal else GolfColors.Line, RoundedCornerShape(50))
+            .padding(horizontal = GolfSpacing.Xs, vertical = GolfSpacing.Sm),
+    )
+}
 
 /** Metres/second to mph for display. */
 private const val MPH_PER_MS = 2.23694
@@ -142,6 +164,88 @@ fun RangeScreen(
     }
 
     Row(modifier = modifier.fillMaxSize().background(GolfColors.Base)) {
+        // Left controls panel (user request 2026-09-24): FIRE, CONNECT, MODE
+        // and the tracer toggles move OUT of the canvas overlays into a
+        // dedicated column, all sized like the FIRE chip, so the POV view
+        // grows and stays uncluttered.
+        Column(
+            modifier = Modifier
+                .width(96.dp)
+                .fillMaxHeight()
+                .background(GolfColors.Panel)
+                .padding(GolfSpacing.Sm),
+            verticalArrangement = Arrangement.spacedBy(GolfSpacing.Md),
+        ) {
+            // FIRE — the primary action, amber, prominent.
+            Text(
+                "FIRE",
+                color = GolfColors.Base,
+                style = GolfTypography.MetricLabel,
+                textAlign = TextAlign.Center,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(GolfColors.Amber, RoundedCornerShape(50))
+                    .clickable { fire() }
+                    .padding(horizontal = GolfSpacing.Xs, vertical = GolfSpacing.Sm),
+            )
+            ControlChip("CONNECT", active = false) {
+                val scanGranted = ContextCompat.checkSelfPermission(
+                    context, Manifest.permission.BLUETOOTH_SCAN,
+                ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+                val connectGranted = ContextCompat.checkSelfPermission(
+                    context, Manifest.permission.BLUETOOTH_CONNECT,
+                ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+                if (scanGranted && connectGranted) {
+                    permissionDenied = false
+                    onConnectRequested()
+                } else {
+                    permissionLauncher.launch(
+                        arrayOf(
+                            Manifest.permission.BLUETOOTH_SCAN,
+                            Manifest.permission.BLUETOOTH_CONNECT,
+                        ),
+                    )
+                }
+            }
+            ControlChip(if (demo) "MODE: DEMO" else "MODE: LIVE", active = !demo) {
+                onDemoChanged(!demo)
+            }
+            ControlChip("TRACER: ${if (showTracer) "ON" else "OFF"}", active = showTracer) {
+                showTracer = !showTracer
+            }
+            if (showTracer) {
+                ControlChip("PREV: ${if (showHistory) "ON" else "OFF"}", active = showHistory) {
+                    showHistory = !showHistory
+                }
+                if (showHistory) {
+                    Slider(
+                        value = historyLimit,
+                        onValueChange = { historyLimit = it },
+                        valueRange = 0f..20f,
+                        steps = 19,
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = SliderDefaults.colors(
+                            thumbColor = GolfColors.Teal,
+                            activeTrackColor = GolfColors.Teal,
+                            inactiveTrackColor = GolfColors.Line,
+                        ),
+                    )
+                    Text(
+                        "LAST ${historyLimit.toInt()} LINES",
+                        color = GolfColors.TextMuted,
+                        style = GolfTypography.Status,
+                    )
+                }
+            }
+            if (permissionDenied) {
+                Text(
+                    text = "Bluetooth permission required - enable in system settings",
+                    style = GolfTypography.Status,
+                    color = GolfColors.AlertRed,
+                )
+            }
+        }
+
         // Range canvas with overlays.
         Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
             if (viewMode == ViewMode.POV) {
@@ -152,75 +256,7 @@ fun RangeScreen(
             } else {
                 TopDownCanvas(session.shots, Modifier.fillMaxSize())
             }
-            // DEMO badge + tracer controls (toggle, sub-toggle, slider).
-            Column(
-                modifier = Modifier.align(Alignment.TopStart).padding(GolfSpacing.Sm),
-                verticalArrangement = Arrangement.spacedBy(GolfSpacing.Xs),
-            ) {
-                Text(
-                    "DEMO",
-                    color = GolfColors.Amber,
-                    style = GolfTypography.Status,
-                    modifier = Modifier
-                        .border(1.dp, GolfColors.Amber, RoundedCornerShape(50))
-                        .padding(horizontal = GolfSpacing.Sm, vertical = 2.dp),
-                )
-                Text(
-                    "TRACER: ${if (showTracer) "ON" else "OFF"}",
-                    color = if (showTracer) GolfColors.Teal else GolfColors.TextMuted,
-                    style = GolfTypography.Status,
-                    modifier = Modifier
-                        .clickable { showTracer = !showTracer }
-                        .border(1.dp, if (showTracer) GolfColors.Teal else GolfColors.Line, RoundedCornerShape(50))
-                        .padding(horizontal = GolfSpacing.Sm, vertical = 2.dp),
-                )
-                if (showTracer) {
-                    // Sub-toggle under the main one, indented.
-                    Row(
-                        modifier = Modifier.padding(start = GolfSpacing.Xl),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text(
-                            "PREV: ${if (showHistory) "ON" else "OFF"}",
-                            color = if (showHistory) GolfColors.Teal else GolfColors.TextMuted,
-                            style = GolfTypography.Status,
-                            modifier = Modifier
-                                .clickable { showHistory = !showHistory }
-                                .border(
-                                    1.dp,
-                                    if (showHistory) GolfColors.Teal else GolfColors.Line,
-                                    RoundedCornerShape(50),
-                                )
-                                .padding(horizontal = GolfSpacing.Sm, vertical = 2.dp),
-                        )
-                        // Slider for how many previous lines are shown.
-                        if (showHistory) {
-                            Slider(
-                                value = historyLimit,
-                                onValueChange = { historyLimit = it },
-                                valueRange = 0f..20f,
-                                steps = 19,
-                                modifier = Modifier.width(110.dp).padding(start = GolfSpacing.Xs),
-                                colors = SliderDefaults.colors(
-                                    thumbColor = GolfColors.Teal,
-                                    activeTrackColor = GolfColors.Teal,
-                                    inactiveTrackColor = GolfColors.Line,
-                                ),
-                            )
-                        }
-                    }
-                    if (showHistory) {
-                        Text(
-                            "LAST ${historyLimit.toInt()} LINES",
-                            color = GolfColors.TextMuted,
-                            style = GolfTypography.Status,
-                            modifier = Modifier.padding(start = GolfSpacing.Xxl),
-                        )
-                    }
-                }
-            }
-            // M4d no-read pill: live misreads coalesced in RangeSession. Surfaced
-            // next to the DEMO controls; dismiss clears the counter.
+            // M4d no-read pill: live misreads coalesced in RangeSession.
             if (session.misreadCount.intValue > 0) {
                 Surface(
                     shape = RoundedCornerShape(16.dp),
@@ -240,60 +276,6 @@ fun RangeScreen(
                             Text("dismiss")
                         }
                     }
-                }
-            }
-            // M4b: CONNECT gate + MODE toggle, BELOW the VIEW toggle.
-            // (Both were anchored TopEnd+Sm and overlapped: the later-drawn
-            // VIEW chip occluded CONNECT and swallowed its taps.)
-            Column(
-                modifier = Modifier.align(Alignment.TopEnd).padding(top = 48.dp, end = GolfSpacing.Sm),
-                horizontalAlignment = Alignment.End,
-            ) {
-                Text(
-                    text = "CONNECT",
-                    style = GolfTypography.MetricLabel,
-                    color = GolfColors.TextPrimary,
-                    modifier = Modifier
-                        .clickable {
-                            val scanGranted = ContextCompat.checkSelfPermission(
-                                context, Manifest.permission.BLUETOOTH_SCAN,
-                            ) == android.content.pm.PackageManager.PERMISSION_GRANTED
-                            val connectGranted = ContextCompat.checkSelfPermission(
-                                context, Manifest.permission.BLUETOOTH_CONNECT,
-                            ) == android.content.pm.PackageManager.PERMISSION_GRANTED
-                            if (scanGranted && connectGranted) {
-                                permissionDenied = false
-                                onConnectRequested()
-                            } else {
-                                permissionLauncher.launch(
-                                    arrayOf(
-                                        Manifest.permission.BLUETOOTH_SCAN,
-                                        Manifest.permission.BLUETOOTH_CONNECT,
-                                    ),
-                                )
-                            }
-                        }
-                        .padding(horizontal = GolfSpacing.Md, vertical = GolfSpacing.Xs),
-                )
-                Text(
-                    text = if (demo) "MODE: DEMO" else "MODE: LIVE",
-                    color = if (demo) GolfColors.TextSecondary else GolfColors.Teal,
-                    style = GolfTypography.Status,
-                    modifier = Modifier
-                        .clickable { onDemoChanged(!demo) }
-                        .border(
-                            1.dp,
-                            if (demo) GolfColors.Line else GolfColors.Teal,
-                            RoundedCornerShape(50),
-                        )
-                        .padding(horizontal = GolfSpacing.Sm, vertical = 2.dp),
-                )
-                if (permissionDenied) {
-                    Text(
-                        text = "Bluetooth permission required - enable in system settings",
-                        style = GolfTypography.Status,
-                        color = GolfColors.AlertRed,
-                    )
                 }
             }
             Text(
@@ -323,17 +305,7 @@ fun RangeScreen(
                     )
                 }
             }
-            // FIRE button, amber, bottom-right.
-            Text(
-                "FIRE",
-                color = GolfColors.Base,
-                style = GolfTypography.MetricLabel,
-                modifier = Modifier.align(Alignment.BottomEnd)
-                    .padding(GolfSpacing.Lg)
-                    .background(GolfColors.Amber, RoundedCornerShape(50))
-                    .clickable { fire() }
-                    .padding(horizontal = GolfSpacing.Xl, vertical = GolfSpacing.Sm),
-            )
+            // FIRE moved to the left controls panel (2026-09-24).
         }
 
         // Right panel: metrics.

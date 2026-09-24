@@ -18,8 +18,9 @@ import com.hpsmiles.golfsim.core.physics.ShotResult
 import com.hpsmiles.golfsim.core.physics.TrajectorySample
 
 // Painted-ground palette A — "Tour Broadcast" (approved spec palette).
-private val SKY_TOP = Color(0xFF6FA8DC)
-private val SKY_BOTTOM = Color(0xFFC9E2F5)
+// Sky switched to a white background at user request (2026-09-24).
+private val SKY_TOP = Color(0xFFFCFDFE)
+private val SKY_BOTTOM = Color(0xFFD9E4EA)
 private val ROUGH_BASE = Color(0xFF1E4D26)
 private val FAIRWAY = Color(0xFF3E8E43)
 private val STRIPE_LIGHT = Color(0xFF47A04C)
@@ -267,9 +268,12 @@ fun PovRangeCanvas(
 
         // Static ball on the tee while waiting for a shot: a true world-ball
         // (~42.7 mm) projected at the tee position (0, 0, ball radius), sized
-        // by the projection so it reads as an object at that depth.
+        // by the projection so it reads as an object at that depth. It also
+        // returns to the tee once the previous flight has completed (the
+        // monitor is then ready for the next shot) while the old tracer and
+        // landing marker persist for review.
         val ballRadiusM = 0.02135
-        val waiting = currentShot == null || playFraction <= 0f
+        val waiting = currentShot == null || playFraction <= 0f || playFraction >= 1f
         if (showTracer && waiting) {
             val tee = worldToScreen(centerX, focalPx, horizonPx, 0.0, 0.0, ballRadiusM)
             if (tee != null) {

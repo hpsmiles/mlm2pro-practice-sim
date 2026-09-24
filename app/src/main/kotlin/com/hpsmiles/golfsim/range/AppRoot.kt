@@ -9,12 +9,15 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.safeDrawing
@@ -31,6 +34,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.hpsmiles.golfsim.core.connect.ConnectionState
 import com.hpsmiles.golfsim.core.connect.EnvironmentConfig
@@ -131,6 +135,27 @@ fun AppRoot() {
                 NavRail {
                     NavRailButton("RANGE", tab == RangeTab.RANGE, onClick = { tab = RangeTab.RANGE })
                     NavRailButton("SETTINGS", tab == RangeTab.SETTINGS, onClick = { tab = RangeTab.SETTINGS })
+                    // M4d user request (2026-09-24): ARM/STANDBY and DISCONNECT
+                    // live in the LEFT panel (bottom of the rail) instead of a
+                    // floating bottom row. Visible whenever a link (or stale
+                    // faulted handle) exists so the user can tear it down.
+                    val armed = connectionState is ConnectionState.Armed
+                    val linkVisible = connectionState is ConnectionState.Handshaking ||
+                        armed || connectionState is ConnectionState.Disarmed ||
+                        connectionState is ConnectionState.Faulted
+                    if (linkVisible) {
+                        Spacer(Modifier.weight(1f))
+                        RailChip(
+                            label = if (armed) "STANDBY" else "ARM",
+                            border = GolfColors.Teal,
+                            onClick = { if (armed) gattClient.disarm() else gattClient.arm() },
+                        )
+                        RailChip(
+                            label = "DISCONNECT",
+                            border = GolfColors.Line,
+                            onClick = { disconnectClient(gattClient) },
+                        )
+                    }
                 }
                 when (tab) {
                     RangeTab.RANGE -> RangeScreen(
@@ -141,41 +166,6 @@ fun AppRoot() {
                         session = session,
                     )
                     RangeTab.SETTINGS -> SettingsScreen(captureLog = captureLog)
-                }
-            }
-            // M4b FIX 2: ARM/STANDBY control — visible once the handshake has
-            // subscriptions+auth complete (Handshaking) and through Armed/Disarmed.
-            // DISCONNECT appears whenever a link (or stale faulted handle) exists
-            // so the user can explicitly tear the BLE link down from the UI.
-            val armed = connectionState is ConnectionState.Armed
-            val linkVisible = connectionState is ConnectionState.Handshaking ||
-                armed || connectionState is ConnectionState.Disarmed ||
-                connectionState is ConnectionState.Faulted
-            if (linkVisible) {
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = GolfSpacing.Md, vertical = GolfSpacing.Xs),
-                    horizontalArrangement = Arrangement.spacedBy(GolfSpacing.Md, Alignment.End),
-                ) {
-                    Text(
-                        text = if (armed) "STANDBY" else "ARM",
-                        color = if (armed) GolfColors.TextSecondary else GolfColors.TextPrimary,
-                        style = GolfTypography.MetricLabel,
-                        modifier = Modifier
-                            .border(1.dp, GolfColors.Teal, RoundedCornerShape(50))
-                            .clickable {
-                                if (armed) gattClient.disarm() else gattClient.arm()
-                            }
-                            .padding(horizontal = GolfSpacing.Lg, vertical = GolfSpacing.Sm),
-                    )
-                    Text(
-                        text = "DISCONNECT",
-                        color = GolfColors.TextSecondary,
-                        style = GolfTypography.MetricLabel,
-                        modifier = Modifier
-                            .border(1.dp, GolfColors.Line, RoundedCornerShape(50))
-                            .clickable { disconnectClient(gattClient) }
-                            .padding(horizontal = GolfSpacing.Lg, vertical = GolfSpacing.Sm),
-                    )
                 }
             }
             StatusStrip(
@@ -195,6 +185,29 @@ fun AppRoot() {
 @SuppressLint("MissingPermission")
 private fun disconnectClient(gattClient: Mlm2proGattClient) {
     gattClient.disconnect()
+}
+
+/**
+ * Control chip for the left NavRail (ARM/STANDBY, DISCONNECT). 56 dp wide to
+ * match the rail button boxes, centered two-line-tolerant label.
+ */
+@Composable
+private fun RailChip(label: String, border: androidx.compose.ui.graphics.Color, onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .width(56.dp)
+            .border(1.dp, border, RoundedCornerShape(GolfSpacing.Sm))
+            .clickable(onClick = onClick)
+            .padding(vertical = GolfSpacing.Xs),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = label,
+            style = GolfTypography.Status,
+            color = GolfColors.TextPrimary,
+            textAlign = TextAlign.Center,
+        )
+    }
 }
 
 /** StatusStrip text mapping per the M4b plan (demo fallback first). */
