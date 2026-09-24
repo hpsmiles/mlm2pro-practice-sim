@@ -3,6 +3,7 @@ package com.hpsmiles.golfsim.range
 
 import android.bluetooth.BluetoothManager
 import android.content.Context
+import android.annotation.SuppressLint
 import android.util.Log
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -27,6 +28,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -143,13 +145,16 @@ fun AppRoot() {
             }
             // M4b FIX 2: ARM/STANDBY control — visible once the handshake has
             // subscriptions+auth complete (Handshaking) and through Armed/Disarmed.
+            // DISCONNECT appears whenever a link (or stale faulted handle) exists
+            // so the user can explicitly tear the BLE link down from the UI.
             val armed = connectionState is ConnectionState.Armed
-            if (connectionState is ConnectionState.Handshaking ||
-                armed || connectionState is ConnectionState.Disarmed
-            ) {
+            val linkVisible = connectionState is ConnectionState.Handshaking ||
+                armed || connectionState is ConnectionState.Disarmed ||
+                connectionState is ConnectionState.Faulted
+            if (linkVisible) {
                 Row(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = GolfSpacing.Md, vertical = GolfSpacing.Xs),
-                    horizontalArrangement = Arrangement.End,
+                    horizontalArrangement = Arrangement.spacedBy(GolfSpacing.Md, Alignment.End),
                 ) {
                     Text(
                         text = if (armed) "STANDBY" else "ARM",
@@ -162,6 +167,15 @@ fun AppRoot() {
                             }
                             .padding(horizontal = GolfSpacing.Lg, vertical = GolfSpacing.Sm),
                     )
+                    Text(
+                        text = "DISCONNECT",
+                        color = GolfColors.TextSecondary,
+                        style = GolfTypography.MetricLabel,
+                        modifier = Modifier
+                            .border(1.dp, GolfColors.Line, RoundedCornerShape(50))
+                            .clickable { disconnectClient(gattClient) }
+                            .padding(horizontal = GolfSpacing.Lg, vertical = GolfSpacing.Sm),
+                    )
                 }
             }
             StatusStrip(
@@ -170,6 +184,17 @@ fun AppRoot() {
             )
         }
     }
+}
+
+/**
+ * DISCONNECT chip handler. The runtime BLUETOOTH_CONNECT permission is
+ * requested by RangeScreen's CONNECT flow before any link exists; a live link
+ * therefore implies the permission was granted for this process lifetime.
+ * Local suppression keeps the lint contract documented at the call site.
+ */
+@SuppressLint("MissingPermission")
+private fun disconnectClient(gattClient: Mlm2proGattClient) {
+    gattClient.disconnect()
 }
 
 /** StatusStrip text mapping per the M4b plan (demo fallback first). */

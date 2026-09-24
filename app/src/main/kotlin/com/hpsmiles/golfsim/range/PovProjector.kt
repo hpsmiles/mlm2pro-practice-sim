@@ -18,8 +18,13 @@ object PovProjector {
     /** Eye height of the camera above the hitting mat, in metres. */
     const val CAM_HEIGHT_M = 1.7
 
-    /** Camera distance behind the ball (y = 0), in metres. */
-    const val CAM_BACK_M = 5.0
+    /**
+     * Camera distance behind the ball (y = 0), in metres. 4.5 puts the tee at
+     * v = 1.7/4.5 = 0.378 — ~95% of the way down the 0.7h ground area on the
+     * landscape tablet (focal 1.1w), i.e. the launch point is visible just
+     * above the bottom edge (user request 2026-09-24).
+     */
+    const val CAM_BACK_M = 4.5
 
     /**
      * Normalized projection of a world point. `u` is lateral position (0 =

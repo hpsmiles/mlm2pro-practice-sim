@@ -265,6 +265,21 @@ fun PovRangeCanvas(
             }
         }
 
+        // Static ball on the tee while waiting for a shot: a true world-ball
+        // (~42.7 mm) projected at the tee position (0, 0, ball radius), sized
+        // by the projection so it reads as an object at that depth.
+        val ballRadiusM = 0.02135
+        val waiting = currentShot == null || playFraction <= 0f
+        if (showTracer && waiting) {
+            val tee = worldToScreen(centerX, focalPx, horizonPx, 0.0, 0.0, ballRadiusM)
+            if (tee != null) {
+                val scale = PovProjector.project(0.0, 0.0, ballRadiusM)!!.scale
+                val rPx = (ballRadiusM * scale * focalPx).toFloat()
+                drawCircle(GolfColors.AmberGlow, radius = rPx * 2f, center = tee)
+                drawCircle(GolfColors.Amber, radius = rPx, center = tee)
+            }
+        }
+
         if (currentShot != null) {
             val s = currentShot
 
