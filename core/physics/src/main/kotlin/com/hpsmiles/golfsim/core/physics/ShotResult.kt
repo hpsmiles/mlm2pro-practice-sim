@@ -12,4 +12,5 @@ data class ShotResult(
     val sideM: Double,
     val apexM: Double,
     val flightTimeSec: Double,
+    val samples: List<TrajectorySample> = emptyList(),
 )

@@ -47,6 +47,7 @@ object BallFlightEngine {
             sideM = endX,
             apexM = landing.apexM,
             flightTimeSec = landing.flightTimeSec,
+            samples = landing.samples,
         )
     }
 }
