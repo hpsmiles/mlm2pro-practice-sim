@@ -1,4 +1,4 @@
-// app/src/main/kotlin/com/hpsmiles/golfsim/range/AppRoot.kt
+﻿// app/src/main/kotlin/com/hpsmiles/golfsim/range/AppRoot.kt
 package com.hpsmiles.golfsim.range
 
 import android.bluetooth.BluetoothManager
@@ -90,6 +90,21 @@ fun AppRoot() {
     var scanning by remember { mutableStateOf(false) }
     // MODE toggle state lives here so the StatusStrip demo fallback mirrors it.
     var demo by remember { mutableStateOf(true) }
+    val demoSource = remember { com.hpsmiles.golfsim.core.ble.DemoShotSource() }
+
+    // FIRE lives in the rail (2026-09-24 user request); demo firing appends to
+    // the shared session exactly like RangeScreen did.
+    fun fireDemo() {
+        if (demo) session.add(demoSource.nextShot())
+    }
+
+    // BLE permission gate hoisted from RangeScreen (CONNECT moved to the rail).
+    var permissionDenied by remember { mutableStateOf(false) }
+    val permissionLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.RequestMultiplePermissions(),
+    ) { grants ->
+        permissionDenied = grants.values.any { !it }
+    }
 
     // M4b bench connect flow: scan for the first MLM2- device, then GATT-connect.
     // Mlm2proScanner stops scanning when the collecting coroutine is cancelled.
@@ -123,6 +138,27 @@ fun AppRoot() {
         }
     }
 
+    // BLE permission gate for the rail CONNECT chip (hoisted from RangeScreen).
+    fun connectTapped() {
+        val scanGranted = androidx.core.content.ContextCompat.checkSelfPermission(
+            context, android.Manifest.permission.BLUETOOTH_SCAN,
+        ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+        val connectGranted = androidx.core.content.ContextCompat.checkSelfPermission(
+            context, android.Manifest.permission.BLUETOOTH_CONNECT,
+        ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+        if (scanGranted && connectGranted) {
+            permissionDenied = false
+            onConnectRequested()
+        } else {
+            permissionLauncher.launch(
+                arrayOf(
+                    android.Manifest.permission.BLUETOOTH_SCAN,
+                    android.Manifest.permission.BLUETOOTH_CONNECT,
+                ),
+            )
+        }
+    }
+
     var tab by remember { mutableStateOf(RangeTab.RANGE) }
     GolfTheme {
         Column(
@@ -135,6 +171,22 @@ fun AppRoot() {
                 NavRail {
                     NavRailButton("RANGE", tab == RangeTab.RANGE, onClick = { tab = RangeTab.RANGE })
                     NavRailButton("SETTINGS", tab == RangeTab.SETTINGS, onClick = { tab = RangeTab.SETTINGS })
+                    // M4d user request (2026-09-24): FIRE / MODE / CONNECT sit
+                    // vertically under RANGE / SETTINGS in the same rail column;
+                    // the range canvas is bordered by exactly one left column.
+                    RailChip("FIRE", border = GolfColors.Amber, labelColor = GolfColors.Amber,
+                        onClick = { fireDemo() })
+                    RailChip(
+                        label = if (demo) "MODE: DEMO" else "MODE: LIVE",
+                        border = if (demo) GolfColors.Line else GolfColors.Teal,
+                        onClick = { demo = !demo },
+                    )
+                    RailChip("CONNECT", border = GolfColors.Line, onClick = { connectTapped() })
+                    if (permissionDenied) {
+                        RailChip("NO PERM", border = GolfColors.AlertRed,
+                            labelColor = GolfColors.AlertRed, onClick = {})
+                    }
+
                     // M4d user request (2026-09-24): ARM/STANDBY and DISCONNECT
                     // live in the LEFT panel (bottom of the rail) instead of a
                     // floating bottom row. Visible whenever a link (or stale
@@ -158,13 +210,7 @@ fun AppRoot() {
                     }
                 }
                 when (tab) {
-                    RangeTab.RANGE -> RangeScreen(
-                        Modifier.weight(1f),
-                        demo = demo,
-                        onDemoChanged = { demo = it },
-                        onConnectRequested = { onConnectRequested() },
-                        session = session,
-                    )
+                    RangeTab.RANGE -> RangeScreen(Modifier.weight(1f), session = session)
                     RangeTab.SETTINGS -> SettingsScreen(captureLog = captureLog)
                 }
             }
@@ -192,7 +238,12 @@ private fun disconnectClient(gattClient: Mlm2proGattClient) {
  * match the rail button boxes, centered two-line-tolerant label.
  */
 @Composable
-private fun RailChip(label: String, border: androidx.compose.ui.graphics.Color, onClick: () -> Unit) {
+private fun RailChip(
+    label: String,
+    border: androidx.compose.ui.graphics.Color,
+    onClick: () -> Unit,
+    labelColor: androidx.compose.ui.graphics.Color = GolfColors.TextPrimary,
+) {
     Box(
         modifier = Modifier
             .width(56.dp)
@@ -204,7 +255,7 @@ private fun RailChip(label: String, border: androidx.compose.ui.graphics.Color, 
         Text(
             text = label,
             style = GolfTypography.Status,
-            color = GolfColors.TextPrimary,
+            color = labelColor,
             textAlign = TextAlign.Center,
         )
     }
