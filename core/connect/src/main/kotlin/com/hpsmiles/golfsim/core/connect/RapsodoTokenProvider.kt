@@ -63,16 +63,20 @@ class HttpRapsodoTokenProvider : RapsodoTokenProvider {
     companion object {
         const val BASE_URL = "https://mlm.rapsodo.com/api/simulator"
 
-        /** Minimal tolerant parse: the first `"token": <int>` occurrence. */
+        /** Minimal tolerant parse: the first `"token": <int>` occurrence.
+         *  The token is an UNSIGNED 32-bit value on the wire (CommandEncoder
+         *  emits it LE32); decode via Long and keep the exact bit pattern. */
         fun parseToken(body: String): Int? {
             val idx = body.indexOf("\"token\"")
             if (idx < 0) return null
             val tail = body.substring(idx)
-            // Bench attempt 5: the real response ships the token as a QUOTED
-            // numeric string ("token":"1043255814") per the reference spec
-            // (Duwaynef mlm2pro.md) — accept quoted and unquoted integers.
+            // The real response ships the token as a QUOTED numeric string
+            // ("token":"1043255814") per the reference spec (Duwaynef
+            // mlm2pro.md) — accept quoted and unquoted integers, unsigned-32.
             val match = Regex("\"token\"\\s*:\\s*\"?(-?\\d+)\"?").find(tail) ?: return null
-            return match.groupValues[1].toIntOrNull()
+            val raw = match.groupValues[1].toLongOrNull() ?: return null
+            if (raw < 0L || raw > 0xFFFF_FFFFL) return null
+            return raw.toInt()
         }
     }
 }

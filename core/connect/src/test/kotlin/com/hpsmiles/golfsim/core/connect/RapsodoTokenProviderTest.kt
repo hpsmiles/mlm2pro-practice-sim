@@ -26,6 +26,15 @@ class RapsodoTokenProviderTest {
     }
 
     @Test
+    fun parsesTokenAboveIntMaxAsUnsigned32BitPattern() {
+        // Real shed capture 2026-09-24: token 2951339326 fits unsigned-32 but
+        // overflows Int.MAX; parse must preserve the uint32 bit pattern (the
+        // wire encoding in CommandEncoder is LE32 of the same bits).
+        val body = """{"success":true,"user":{"id":76087,"token":"2951339326","expireDate":1790320999}}"""
+        assertEquals(2951339326L.toLong().toInt(), HttpRapsodoTokenProvider.parseToken(body))
+    }
+
+    @Test
     fun returnsNullWhenNoTokenField() {
         val body = """{"success":false,"message":"not authorized"}"""
         assertNull(HttpRapsodoTokenProvider.parseToken(body))
