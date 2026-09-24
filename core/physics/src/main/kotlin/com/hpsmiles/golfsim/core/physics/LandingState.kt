@@ -7,4 +7,5 @@ data class LandingState(
     val spin: Vec3,
     val apexM: Double,
     val flightTimeSec: Double,
+    val samples: List<TrajectorySample> = emptyList(),
 )

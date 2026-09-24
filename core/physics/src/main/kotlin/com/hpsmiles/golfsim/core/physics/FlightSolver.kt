@@ -34,6 +34,9 @@ object FlightSolver {
         var spin = initialSpin
         val wind = Vec3(environment.windXmps, environment.windYmps, 0.0)
 
+        val samples = ArrayList<TrajectorySample>()
+        samples.add(TrajectorySample(px, py, pz, t))
+
         while (true) {
             val rvx = vx - wind.x
             val rvy = vy - wind.y
@@ -71,18 +74,28 @@ object FlightSolver {
             pz += vz * DT
             t += DT
             if (pz > apex) apex = pz
+            samples.add(TrajectorySample(px, py, pz, t))
             if (omega > 0.0) spin = spin.times(Math.exp(-DT / spinTauSec))
             if (pz <= 0.0 && vz < 0.0) break
             if (t > MAX_FLIGHT_SEC) break
         }
 
         val f = if (vz != 0.0) Math.min(Math.max(pz / (vz * DT), 0.0), 1.0) else 0.5
+        val landingTime = t - f * DT
+        // The loop's final sample is the below-ground overshoot of the crossing
+        // step; the interpolated landing replaces it so samples stay on-flight
+        // and strictly monotonic in time. Pure bookkeeping — no math touched.
+        if (samples.isNotEmpty() && samples.last().pz < 0.0) samples.removeAt(samples.lastIndex)
+        samples.add(TrajectorySample(
+            px - f * vx * DT, py - f * vy * DT, pz - f * vz * DT, landingTime,
+        ))
         return LandingState(
             position = Vec3(px - f * vx * DT, py - f * vy * DT, pz - f * vz * DT),
             velocity = Vec3(vx, vy, vz),
             spin = spin,
             apexM = apex,
-            flightTimeSec = t - f * DT,
+            flightTimeSec = landingTime,
+            samples = samples,
         )
     }
 }
