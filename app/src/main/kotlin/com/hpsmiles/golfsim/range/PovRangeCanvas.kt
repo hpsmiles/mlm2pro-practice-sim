@@ -15,6 +15,7 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.unit.sp
 import com.hpsmiles.golfsim.core.designsystem.GolfColors
 import com.hpsmiles.golfsim.core.physics.ShotResult
+import com.hpsmiles.golfsim.core.physics.TrajectorySample
 
 // Painted-ground palette A — "Tour Broadcast" (approved spec palette).
 private val SKY_TOP = Color(0xFF6FA8DC)
@@ -41,12 +42,13 @@ private val HISTORY_LINE = GolfColors.Teal.copy(alpha = 0.35f)
  * All world-to-screen math goes through PovProjector. Ground layers are flat
  * polygons: world vertices at z = RangeScene.groundHeight are projected into
  * closed Paths, with vertices at/behind the camera clipped (y > 0.5) or the
- * layer skipped entirely. The tracer arc is still a stylized quadratic
- * anchored to the real solve endpoints this phase; the modelled ODE flight
- * samples replace it in the following task.
+ * layer skipped entirely. The tracer follows the real flight: ShotResult
+ * carries the modelled ODE samples (one per 10 ms integration step; first =
+ * launch at t = 0, last = the interpolated landing point), so the arc bends
+ * with actual spin axis and apex instead of a stylized quadratic.
  *
- * Visual clamps (user demo-gate feedback): the stylized arc is scaled so its
- * apex stays inside the top 8% of the frame, and near-field points that
+ * Visual clamps (user demo-gate feedback): a single apex-scale scalar keeps
+ * big apexes inside the top 8% of the frame, and near-field points that
  * would project below the bottom edge are clamped to the launch anchor so
  * the ball is visible leaving the club.
  */
@@ -196,10 +198,10 @@ fun PovRangeCanvas(
         // Most-negative projected v allowed (apex must stay below the top 8%).
         val vMin = (h * 0.08f - horizonPx) / focalPx
 
-        fun tracerPath(s: ShotResult, fraction: Float): androidx.compose.ui.graphics.Path? {
-            // Arc scaling so the apex stays inside the frame: at t = 0.5 the
-            // quadratic peaks at apexM over carryM/2; if that projects above
-            // the top margin, scale the arc's height down.
+        // Real-trajectory polyline: project the modelled flight samples.
+        // apexScale (single scalar, top-8% rule) keeps big apexes in frame.
+        fun scaledSamples(s: ShotResult): List<TrajectorySample> {
+            if (s.samples.isEmpty()) return emptyList()
             val yApex = s.carryM / 2.0
             val vApex = (PovProjector.CAM_HEIGHT_M - s.apexM) / yApex
             val apexScale = if (vApex < vMin) {
@@ -207,29 +209,29 @@ fun PovRangeCanvas(
             } else {
                 1.0
             }
-            val points = 40
-            val drawn = (points * fraction.coerceIn(0f, 1f)).toInt()
-            if (drawn <= 0) return null
-            val path = androidx.compose.ui.graphics.Path()
+            if (apexScale >= 1.0) return s.samples
+            return s.samples.map { it.copy(pz = it.pz * apexScale) }
+        }
+
+        fun drawTracer(s: ShotResult, timeSec: Double, color: Color, width: Float) {
+            val samples = scaledSamples(s)
+            if (samples.size < 2) return
+            val path = Path()
             var first = true
-            for (i in 0..drawn) {
-                val t = i.toFloat() / points
-                val x = s.sideM * t
-                val y = s.carryM * t
-                val z = apexScale * 4.0 * s.apexM * t * (1.0 - t)
-                var point = worldToScreen(centerX, focalPx, horizonPx, x, y, z)
+            for (sample in samples) {
+                if (sample.tSec > timeSec && !first) break
+                var point = worldToScreen(centerX, focalPx, horizonPx, sample.px, sample.py, sample.pz)
                 // Near-field clamp: below the bottom edge, hold the launch anchor.
                 if (point == null || point.y > h - 8f) point = launchAnchor
                 if (first) { path.moveTo(point.x, point.y); first = false } else path.lineTo(point.x, point.y)
             }
-            return if (first) null else path
+            if (!first) drawPath(path, color, style = Stroke(width = width))
         }
 
         // Previous shots first (under the current tracer).
         if (showHistory) {
             for (prev in previousShots.asReversed()) {
-                val path = tracerPath(prev, 1f) ?: continue
-                drawPath(path, HISTORY_LINE, style = Stroke(width = 2f))
+                drawTracer(prev, Double.POSITIVE_INFINITY, HISTORY_LINE, 2f)
             }
         }
 
@@ -238,34 +240,20 @@ fun PovRangeCanvas(
 
             // Current tracer: full line persists after landing (fraction = 1).
             if (showTracer) {
-                val path = tracerPath(s, playFraction)
-                if (path != null) {
-                    drawPath(path, GolfColors.Amber, style = Stroke(width = 2.5f))
-                }
+                drawTracer(s, playFraction * s.flightTimeSec, GolfColors.Amber, 2.5f)
             }
 
-            // Ball at the tracer head, clamped to the anchor until it clears
-            // the bottom edge — visible leaving the club.
+            // Ball at the tracer head — the sample nearest the animation time —
+            // clamped to the anchor until it clears the bottom edge, so the
+            // ball is visible leaving the club.
             if (showTracer) {
-                val points = 40
-                val drawn = (points * playFraction.coerceIn(0f, 1f)).toInt()
-                if (drawn > 0) {
-                    val t = drawn.toFloat() / points
-                    val yApex = s.carryM / 2.0
-                    val vApex = (PovProjector.CAM_HEIGHT_M - s.apexM) / yApex
-                    val apexScale = if (vApex < vMin) {
-                        ((PovProjector.CAM_HEIGHT_M - vMin * yApex) / s.apexM).coerceIn(0.1, 1.0)
-                    } else {
-                        1.0
-                    }
-                    var head = worldToScreen(
-                        centerX, focalPx, horizonPx,
-                        s.sideM * t, s.carryM * t, apexScale * 4.0 * s.apexM * t * (1.0 - t),
-                    )
-                    if (head == null || head.y > h - 8f) head = launchAnchor
-                    drawCircle(GolfColors.AmberGlow, radius = 12.sp.toPx(), center = head)
-                    drawCircle(GolfColors.Amber, radius = 6.sp.toPx(), center = head)
-                }
+                val timeSec = playFraction * s.flightTimeSec
+                val samples = scaledSamples(s)
+                val head = samples.lastOrNull { it.tSec <= timeSec } ?: samples.firstOrNull()
+                var headPos = head?.let { worldToScreen(centerX, focalPx, horizonPx, it.px, it.py, it.pz) }
+                if (headPos == null || headPos.y > h - 8f) headPos = launchAnchor
+                drawCircle(GolfColors.AmberGlow, radius = 12.sp.toPx(), center = headPos)
+                drawCircle(GolfColors.Amber, radius = 6.sp.toPx(), center = headPos)
             }
 
             // Landing dot plus ring once the flight has completed.
