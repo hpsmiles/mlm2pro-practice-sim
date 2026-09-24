@@ -7,13 +7,19 @@ package com.hpsmiles.golfsim.range
  * JVM. The canvas layer converts these normalized values to pixels.
  *
  * World axes (metres): x lateral (+right), y down-range (+away from the
- * hitter), z up. Camera: at the origin, [CAM_HEIGHT_M] above the ground,
- * looking straight down +y with no tilt — the horizon is exactly at v = 0.
+ * hitter), z up. Camera: [CAM_BACK_M] BEHIND the ball (shed decision
+ * 2026-09-24: the launch must be visible, so the eye sits back from the tee),
+ * [CAM_HEIGHT_M] above the ground, looking straight down +y with no tilt —
+ * the horizon is exactly at v = 0. All distances inside the projection are
+ * measured from the camera plane: depth = y + CAM_BACK_M.
  */
 object PovProjector {
 
     /** Eye height of the camera above the hitting mat, in metres. */
     const val CAM_HEIGHT_M = 1.7
+
+    /** Camera distance behind the ball (y = 0), in metres. */
+    const val CAM_BACK_M = 5.0
 
     /**
      * Normalized projection of a world point. `u` is lateral position (0 =
@@ -25,20 +31,23 @@ object PovProjector {
 
     /**
      * Projects a world point to the screen, or returns null when the point is
-     * at or behind the camera plane (y <= 0) — such points must not be drawn.
+     * at or behind the camera plane (y <= -CAM_BACK_M) — such points must not
+     * be drawn.
      */
     fun project(x: Double, y: Double, z: Double): ProjectedPoint? {
-        if (y <= 0.0) return null
+        val depth = y + CAM_BACK_M
+        if (depth <= 0.0) return null
         return ProjectedPoint(
-            u = x / y,
-            v = (CAM_HEIGHT_M - z) / y,
-            scale = 1.0 / y,
+            u = x / depth,
+            v = (CAM_HEIGHT_M - z) / depth,
+            scale = 1.0 / depth,
         )
     }
 
     /**
      * The `v` of the ground at a given down-range distance (a horizontal
-     * distance band line on the POV canvas).
+     * distance band line on the POV canvas). The [distanceM] argument is a
+     * world y; band lines sit at depth y + [CAM_BACK_M] from the camera.
      */
-    fun bandV(distanceM: Double): Double = CAM_HEIGHT_M / distanceM
+    fun bandV(distanceM: Double): Double = CAM_HEIGHT_M / (distanceM + CAM_BACK_M)
 }
