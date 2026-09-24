@@ -216,39 +216,44 @@ fun PovRangeCanvas(
         fun drawTracer(s: ShotResult, timeSec: Double, color: Color, width: Float) {
             val samples = scaledSamples(s)
             if (samples.size < 2) return
+            // Screen-space clip: collect only in-frame projections, keeping
+            // sample indices so we can break the path across frame-exit gaps.
+            val pts = ArrayList<Pair<Int, Offset>>()
+            for (i in samples.indices) {
+                if (samples[i].tSec > timeSec) break
+                val p = worldToScreen(centerX, focalPx, horizonPx, samples[i].px, samples[i].py, samples[i].pz)
+                    ?: continue
+                if (p.y > h - 8f) continue
+                pts.add(i to p)
+            }
+            if (pts.isEmpty()) return
             val path = Path()
-            // Screen-space clip: out-of-frame samples are skipped, NOT pinned
-            // to the launch anchor. (Pinning every near-field sample to one
-            // pixel produced a straight vertical shaft with a hard elbow.)
-            // The anchor appears at most once, and only when the first
-            // in-frame sample is low in frame, so the ball is still visibly
-            // seen leaving the club without drawing a long straight shaft up
-            // the frame on steep wedge shots.
-            var onPath = false
-            var anchorUsed = false
-            for (sample in samples) {
-                if (sample.tSec > timeSec) break
-                val point = worldToScreen(centerX, focalPx, horizonPx, sample.px, sample.py, sample.pz)
-                val inFrame = point != null && point.y <= h - 8f
-                if (!inFrame) {
-                    onPath = false
-                    continue
-                }
-                if (!onPath && !anchorUsed && point.y > h * 0.6f) {
-                    // Start low in the frame: open at the launch anchor once,
-                    // then join the first in-frame sample with a short lead-in.
-                    path.moveTo(launchAnchor.x, launchAnchor.y)
-                    anchorUsed = true
-                    path.lineTo(point!!.x, point.y)
-                } else if (!onPath) {
-                    // Resuming after a frame exit (or first point high up):
-                    // start a fresh sub-path — never draw across the gap.
-                    path.moveTo(point.x, point.y)
-                    anchorUsed = true
+            path.moveTo(pts[0].second.x, pts[0].second.y)
+            for (j in 1 until pts.size) {
+                if (pts[j].first - pts[j - 1].first > 30) {
+                    // Frame exit gap: resume as a new sub-path, never draw
+                    // a straight line across it.
+                    path.moveTo(pts[j].second.x, pts[j].second.y)
                 } else {
-                    path.lineTo(point!!.x, point.y)
+                    path.lineTo(pts[j].second.x, pts[j].second.y)
                 }
-                onPath = true
+            }
+            // Tangent lead-in: extend the arc's own first segment backwards to
+            // the bottom edge (when the arc starts low in frame), so the launch
+            // lead-in is exactly collinear with the curve — no fixed anchor
+            // point, no elbow where it joins.
+            if (pts.size >= 2 && pts[1].first == pts[0].first + 1 && pts[0].second.y > h * 0.6f) {
+                val p0 = pts[0].second
+                val p1 = pts[1].second
+                val dy = p1.y - p0.y
+                if (dy < -1f) {
+                    val u = ((h - 8f) - p0.y) / dy
+                    val qx = p0.x + u * (p1.x - p0.x)
+                    if (u > 0.02f && qx >= 0f && qx <= w) {
+                        path.moveTo(qx, h - 8f)
+                        path.lineTo(p0.x, p0.y)
+                    }
+                }
             }
             drawPath(path, color, style = Stroke(width = width))
         }
