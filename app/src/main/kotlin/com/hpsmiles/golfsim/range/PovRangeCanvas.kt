@@ -217,15 +217,40 @@ fun PovRangeCanvas(
             val samples = scaledSamples(s)
             if (samples.size < 2) return
             val path = Path()
-            var first = true
+            // Screen-space clip: out-of-frame samples are skipped, NOT pinned
+            // to the launch anchor. (Pinning every near-field sample to one
+            // pixel produced a straight vertical shaft with a hard elbow.)
+            // The anchor appears at most once, and only when the first
+            // in-frame sample is low in frame, so the ball is still visibly
+            // seen leaving the club without drawing a long straight shaft up
+            // the frame on steep wedge shots.
+            var onPath = false
+            var anchorUsed = false
             for (sample in samples) {
-                if (sample.tSec > timeSec && !first) break
-                var point = worldToScreen(centerX, focalPx, horizonPx, sample.px, sample.py, sample.pz)
-                // Near-field clamp: below the bottom edge, hold the launch anchor.
-                if (point == null || point.y > h - 8f) point = launchAnchor
-                if (first) { path.moveTo(point.x, point.y); first = false } else path.lineTo(point.x, point.y)
+                if (sample.tSec > timeSec) break
+                val point = worldToScreen(centerX, focalPx, horizonPx, sample.px, sample.py, sample.pz)
+                val inFrame = point != null && point.y <= h - 8f
+                if (!inFrame) {
+                    onPath = false
+                    continue
+                }
+                if (!onPath && !anchorUsed && point.y > h * 0.6f) {
+                    // Start low in the frame: open at the launch anchor once,
+                    // then join the first in-frame sample with a short lead-in.
+                    path.moveTo(launchAnchor.x, launchAnchor.y)
+                    anchorUsed = true
+                    path.lineTo(point!!.x, point.y)
+                } else if (!onPath) {
+                    // Resuming after a frame exit (or first point high up):
+                    // start a fresh sub-path — never draw across the gap.
+                    path.moveTo(point.x, point.y)
+                    anchorUsed = true
+                } else {
+                    path.lineTo(point!!.x, point.y)
+                }
+                onPath = true
             }
-            if (!first) drawPath(path, color, style = Stroke(width = width))
+            drawPath(path, color, style = Stroke(width = width))
         }
 
         // Previous shots first (under the current tracer).
