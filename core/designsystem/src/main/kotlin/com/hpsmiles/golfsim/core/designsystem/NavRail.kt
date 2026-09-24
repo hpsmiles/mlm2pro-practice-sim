@@ -15,7 +15,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 
 /** Slim 72 dp navigation rail for landscape (left edge of every screen). */
 @Composable
@@ -45,8 +47,9 @@ fun NavRailButton(
 ) {
     Text(
         text = label,
-        style = GolfTypography.Status,
+        style = GolfTypography.Status.copy(fontSize = 13.sp),
         color = if (selected) GolfColors.Teal else GolfColors.TextMuted,
+        textAlign = TextAlign.Center,
         modifier = modifier
             .clip(RoundedCornerShape(GolfSpacing.Sm))
             .background(
@@ -55,9 +58,8 @@ fun NavRailButton(
             )
             .clickable(onClick = onClick)
             .padding(horizontal = GolfSpacing.Sm, vertical = GolfSpacing.Xs)
-            // Inner label box = NavRailWidth - 2 * Sm (56 dp): wide enough
-            // for the longest label ("SETTINGS", 10 sp caps) on one line —
-            // the previous 40 dp box wrapped its last letter.
-            .size(width = 56.dp, height = 40.dp),
+            // Inner label box = NavRailWidth - 2 * Sm (80 dp) with centered
+            // text: rail widened 2026-09-24 so 13 sp labels fit unwrapped.
+            .size(width = 80.dp, height = 40.dp),
     )
 }
