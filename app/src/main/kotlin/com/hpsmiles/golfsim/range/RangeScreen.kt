@@ -97,6 +97,13 @@ fun RangeScreen(
     var historyLimit by remember { mutableFloatStateOf(8f) }
     val currentShot = session.shots.lastOrNull()
 
+    // Follow cam (spec 2026-09-25): the per-frame camera from the pure
+    // phase machine; STATIC whenever there is nothing in flight.
+    val camera = when (val shot = currentShot) {
+        null -> RangeCamera.STATIC
+        else -> FollowCam.cameraAt(shot.shotResult, playFraction)
+    }
+
     // M4d: live BLE connection state lives in AppRoot (which now also owns
     // DEMO toggle, FIRE and CONNECT).
 
@@ -105,17 +112,21 @@ fun RangeScreen(
         playFraction = 0f
     }
 
-    // Tracer playback: animate playFraction over the shot's real duration.
+    // Tracer playback: animate playFraction over the shot's real duration,
+    // EXTENDED past 1 by the follow-cam landing hold (FollowCam.endFraction).
+    // The speed multiplier scales the whole timeline, hold included —
+    // consistent with slow-mo review.
     LaunchedEffect(currentShot, speedMult) {
         val shot = currentShot ?: return@LaunchedEffect
         if (shot.shotResult.flightTimeSec <= 0.0) return@LaunchedEffect
         val durationMs = shot.shotResult.flightTimeSec * 1000.0 / speedMult.divisor
+        val end = FollowCam.endFraction(shot.shotResult).toFloat()
         var lastNanos = withFrameNanos { it }
-        while (playFraction < 1f) {
+        while (playFraction < end) {
             val now = withFrameNanos { it }
             val deltaMs = (now - lastNanos) / 1_000_000.0
             lastNanos = now
-            playFraction = (playFraction + (deltaMs / durationMs).toFloat()).coerceAtMost(1f)
+            playFraction = (playFraction + (deltaMs / durationMs).toFloat()).coerceAtMost(end)
         }
     }
 
@@ -133,7 +144,8 @@ fun RangeScreen(
             if (viewMode == ViewMode.POV) {
                 PovRangeCanvas(
                     currentShot?.shotResult, previousShots, playFraction, showTracer, showHistory,
-                    Modifier.fillMaxSize(),
+                    camera = camera,
+                    modifier = Modifier.fillMaxSize(),
                 )
             } else {
                 TopDownCanvas(session.shots, Modifier.fillMaxSize())

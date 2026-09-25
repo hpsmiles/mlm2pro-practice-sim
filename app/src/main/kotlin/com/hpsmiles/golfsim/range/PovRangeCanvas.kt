@@ -17,6 +17,7 @@ import com.hpsmiles.golfsim.core.designsystem.GolfColors
 import com.hpsmiles.golfsim.core.physics.ShotResult
 import com.hpsmiles.golfsim.core.physics.TrajectorySample
 import kotlin.math.max
+import kotlin.math.min
 import kotlin.math.tan
 
 // Painted-ground palette A — "Tour Broadcast" (approved spec palette).
@@ -199,6 +200,14 @@ fun PovRangeCanvas(
             size = Size(w, h * 0.15f),
         )
 
+        // Waiting = no shot, before impact, or after the follow cam has cut
+        // back (the hold is over — the monitor is ready for the next shot).
+        val endF = currentShot?.let {
+            if (it.flightTimeSec > 0.0) FollowCam.endFraction(it).toFloat() else 1f
+        } ?: 1f
+        val waiting = currentShot == null || playFraction <= 0f || playFraction >= endF
+        val ballRadiusM = 0.02135
+
         // The launch anchor: the tracer attaches here while the ball is too
         // close to project inside the frame, so the ball is visible leaving.
         val launchAnchor = Offset(centerX, h - 24f)
@@ -280,8 +289,6 @@ fun PovRangeCanvas(
         // so it reads as an object at that depth, with a 4 px minimum
         // on-screen radius (spec 2026-09-25: a true-scale ball is ~2 px at
         // the 21.2 m crane rig).
-        val ballRadiusM = 0.02135
-        val waiting = currentShot == null || playFraction <= 0f || playFraction >= 1f
         if (showTracer && waiting) {
             val teeP = PovProjector.project(camera, 0.0, 0.0, ballRadiusM)
             if (teeP != null) {
@@ -300,14 +307,14 @@ fun PovRangeCanvas(
 
             // Current tracer: full line persists after landing (fraction = 1).
             if (showTracer) {
-                drawTracer(s, playFraction * s.flightTimeSec, GolfColors.Amber, 2.5f)
+                drawTracer(s, min(playFraction, 1f) * s.flightTimeSec, GolfColors.Amber, 2.5f)
             }
 
             // Ball at the tracer head — the sample nearest the animation time —
             // clamped to the anchor until it clears the bottom edge, so the
             // ball is visible leaving the club.
             if (showTracer) {
-                val timeSec = playFraction * s.flightTimeSec
+                val timeSec = min(playFraction, 1f) * s.flightTimeSec
                 val samples = scaledSamples(s)
                 val head = samples.lastOrNull { it.tSec <= timeSec } ?: samples.firstOrNull()
                 var headPos = head?.let { worldToScreen(camera, v0Px, focalPx, centerX, it.px, it.py, it.pz) }
