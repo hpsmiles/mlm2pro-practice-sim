@@ -102,26 +102,29 @@ fun PovRangeCanvas(
         val groundTop = horizonPx.coerceAtLeast(0f)
         drawRect(ROUGH_BASE, topLeft = Offset(0f, groundTop), size = Size(w, h - groundTop))
 
-        // Flat-ground polygon: project world vertices (at ground height) into
-        // a closed Path. Vertices at/behind the camera (y <= 0.5) are clipped
-        // away; if any remaining vertex still fails to project, the layer is
-        // skipped rather than drawn malformed.
-        fun groundPath(vertices: List<Pair<Double, Double>>): Path? {
-            val visible = vertices.filter { it.second > 0.5 }
-            if (visible.size < 3) return null
+        // Flat-ground polygon: clip the world vertices against the camera
+        // near plane, project them, and return the closed Path plus the
+        // near-fade alpha for this layer (Fix B 2026-09-25: layers used to
+        // pop off wholesale when the camera passed them; now they fade out
+        // gracefully). Empty clip -> skip the layer.
+        fun groundPath(vertices: List<Pair<Double, Double>>): Pair<Path, Float>? {
+            val clipped = PovProjector.clipGroundPath(vertices, camera)
+            if (clipped.size < 3) return null
+            var nearest = Double.POSITIVE_INFINITY
+            for ((_, y) in clipped) nearest = minOf(nearest, PovProjector.groundDepth(camera, y))
             val path = Path()
             var first = true
-            for ((x, y) in visible) {
+            for ((x, y) in clipped) {
                 val p = worldToScreen(camera, v0Px, focalPx, centerX, x, y, RangeScene.groundHeight(x, y))
                     ?: return null
                 if (first) { path.moveTo(p.x, p.y); first = false } else path.lineTo(p.x, p.y)
             }
             path.close()
-            return path
+            return path to PovProjector.nearFadeFactor(nearest).toFloat()
         }
 
         val fairway = groundPath(RangeScene.fairwayOutline())
-        if (fairway != null) drawPath(fairway, FAIRWAY)
+        if (fairway != null) drawPath(fairway.first, FAIRWAY.copy(alpha = fairway.second))
 
         // Alternating 12 m mow stripes as trapezoids clipped to the fairway.
         for (index in 0..14) {
@@ -133,7 +136,8 @@ fun PovRangeCanvas(
                 listOf(-halfFrom to yFrom, halfFrom to yFrom, halfTo to yTo, -halfTo to yTo),
             )
             if (stripe != null) {
-                drawPath(stripe, if (RangeScene.stripeIsLight(0.0, yFrom)) STRIPE_LIGHT else STRIPE_DARK)
+                val base = if (RangeScene.stripeIsLight(0.0, yFrom)) STRIPE_LIGHT else STRIPE_DARK
+                drawPath(stripe.first, base.copy(alpha = stripe.second))
             }
         }
 
@@ -143,11 +147,11 @@ fun PovRangeCanvas(
             val fringe = groundPath(
                 RangeScene.circleOutline(green.lateralM, green.distanceM, green.fringeRadiusM),
             ) ?: continue
-            drawPath(fringe, FRINGE)
+            drawPath(fringe.first, FRINGE.copy(alpha = fringe.second))
             val surface = groundPath(
                 RangeScene.circleOutline(green.lateralM, green.distanceM, green.radiusM),
             ) ?: continue
-            drawPath(surface, GREEN_SURFACE)
+            drawPath(surface.first, GREEN_SURFACE.copy(alpha = surface.second))
         }
 
         labelPaint.apply {

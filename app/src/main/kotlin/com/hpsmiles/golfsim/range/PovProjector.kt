@@ -50,6 +50,16 @@ object PovProjector {
     const val CAM_BACK_M = 21.2
 
     /**
+     * Near-plane depth for ground layers, in metres. Ground polygons are
+     * clipped to this camera depth before projection; the [nearFadeFactor]
+     * ramp starts here so a layer clipped at the plane is fully faded.
+     */
+    const val GROUND_MIN_DEPTH_M = 0.5
+
+    /** Depth at which a ground layer reaches full opacity in [nearFadeFactor]. */
+    const val GROUND_FULL_DEPTH_M = 20.0
+
+    /**
      * Normalized projection of a world point. `u` is lateral position (0 =
      * dead ahead, +right), `v` is vertical position (0 = camera level,
      * +toward the viewer's feet), `scale` is the relative on-screen size
@@ -93,5 +103,63 @@ object PovProjector {
         val sinPitch = sin(cam.pitchRad)
         val depth = dy * cosPitch - dz * sinPitch
         return -(dy * sinPitch + dz * cosPitch) / depth
+    }
+
+    /**
+     * Camera-plane depth of a GROUND point (z = 0) at down-range [y] for
+     * [cam]. This is `project()`'s `dy*cos - dz*sin` with `dz = -cam.z`,
+     * so it matches the projection's own behind-camera test exactly.
+     */
+    fun groundDepth(cam: RangeCamera, y: Double): Double {
+        val dy = y - cam.y
+        val cosPitch = cos(cam.pitchRad)
+        val sinPitch = sin(cam.pitchRad)
+        return dy * cosPitch + cam.z * sinPitch
+    }
+
+    /**
+     * Sutherland-Hodgman clip of a closed ground polygon (world (x, y)
+     * vertices, z = 0) against the camera near plane: every returned vertex
+     * has [groundDepth] >= [minDepthM]. Edges crossing the plane are split
+     * with linear interpolation so the silhouette stays continuous instead
+     * of popping off wholesale. Returns an empty list when the whole
+     * polygon is behind the plane; the caller then skips the layer.
+     */
+    fun clipGroundPath(
+        points: List<Pair<Double, Double>>,
+        cam: RangeCamera,
+        minDepthM: Double = GROUND_MIN_DEPTH_M,
+    ): List<Pair<Double, Double>> {
+        if (points.size < 3) return emptyList()
+        val out = ArrayList<Pair<Double, Double>>(points.size + 4)
+        var prev = points.last()
+        var prevDepth = groundDepth(cam, prev.second)
+        var prevInside = prevDepth >= minDepthM
+        for (curr in points) {
+            val currDepth = groundDepth(cam, curr.second)
+            val currInside = currDepth >= minDepthM
+            if (currInside != prevInside) {
+                // Crossing: interpolate along the edge to the exact plane.
+                val t = (minDepthM - prevDepth) / (currDepth - prevDepth)
+                out.add(prev.first + (curr.first - prev.first) * t to prev.second + (curr.second - prev.second) * t)
+            }
+            if (currInside) out.add(curr)
+            prev = curr
+            prevDepth = currDepth
+            prevInside = currInside
+        }
+        return out
+    }
+
+    /**
+     * Opacity ramp for a ground layer as the camera nears it: 0 at/below
+     * [GROUND_MIN_DEPTH_M], 1 at/above [fullDepthM], quintic smoothstep
+     * (monotonic, zero derivative at both ends) in between.
+     */
+    fun nearFadeFactor(nearestDepthM: Double, fullDepthM: Double = GROUND_FULL_DEPTH_M): Double {
+        val span = fullDepthM - GROUND_MIN_DEPTH_M
+        if (span <= 0.0) return if (nearestDepthM >= fullDepthM) 1.0 else 0.0
+        val x = ((nearestDepthM - GROUND_MIN_DEPTH_M) / span).coerceIn(0.0, 1.0)
+        return x * x * x * (x * (x * 6.0 - 15.0) + 10.0)
     }
 }

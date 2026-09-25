@@ -141,4 +141,62 @@ class PovProjectorTest {
         val far = PovProjector.project(cam, 0.0, 200.0, 0.0)!!
         assertTrue(near.scale > far.scale)
     }
+
+    // --- Ground-path near-plane clip + near fade (Fix B, 2026-09-25) ---
+
+    /** Depth of a ground point for a level camera at the origin. */
+    private fun depth(y: Double, c: RangeCamera = RangeCamera(0.0, 0.0, 0.0, 0.0)) =
+        (y - c.y) * Math.cos(c.pitchRad) + c.z * Math.sin(c.pitchRad)
+
+    @Test
+    fun fullyAheadGroundPolygonIsUnchanged() {
+        val square = listOf(0.0 to 10.0, 5.0 to 10.0, 5.0 to 20.0, 0.0 to 20.0)
+        val clipped = PovProjector.clipGroundPath(square, RangeCamera(0.0, 0.0, 0.0, 0.0), 0.5)
+        assertEquals(square, clipped)
+    }
+
+    @Test
+    fun straddlingGroundPolygonIsClippedAtTheNearPlane() {
+        // Level camera at the origin, min depth 0.5: the square spans
+        // y = -1..1 so its near edge (y < 0.5) is clipped and new vertices
+        // are interpolated exactly on the y = 0.5 plane.
+        val square = listOf(0.0 to -1.0, 1.0 to -1.0, 1.0 to 1.0, 0.0 to 1.0)
+        val clipped = PovProjector.clipGroundPath(square, RangeCamera(0.0, 0.0, 0.0, 0.0), 0.5)
+        assertTrue(clipped.isNotEmpty())
+        for ((_, y) in clipped) {
+            assertTrue("clipped point behind near plane: y=$y", depth(y) >= 0.5 - 1e-9)
+        }
+        // Every crossing sits exactly on y = 0.5.
+        val crossings = clipped.filter { it.second < 1.0 - 1e-9 }
+        assertEquals(2, crossings.size)
+        for ((_, y) in crossings) assertEquals(0.5, y, 1e-9)
+    }
+
+    @Test
+    fun fullyBehindGroundPolygonIsEmpty() {
+        val square = listOf(0.0 to -5.0, 1.0 to -5.0, 1.0 to -1.0, 0.0 to -1.0)
+        val clipped = PovProjector.clipGroundPath(square, RangeCamera(0.0, 0.0, 0.0, 0.0), 0.5)
+        assertTrue(clipped.isEmpty())
+    }
+
+    @Test
+    fun nearFadeFactorRampsFromZeroToOne() {
+        assertEquals(0.0, PovProjector.nearFadeFactor(0.0), 1e-12)
+        assertEquals(0.0, PovProjector.nearFadeFactor(PovProjector.GROUND_MIN_DEPTH_M), 1e-12)
+        assertEquals(1.0, PovProjector.nearFadeFactor(20.0), 1e-12)
+        assertEquals(1.0, PovProjector.nearFadeFactor(50.0), 1e-12)
+        // Monotonic through the ramp.
+        var prev = -1.0
+        var d = PovProjector.GROUND_MIN_DEPTH_M
+        while (d <= 20.0) {
+            val f = PovProjector.nearFadeFactor(d)
+            assertTrue("fade not monotonic at depth=$d", f >= prev - 1e-12)
+            assertTrue(f >= 0.0 && f <= 1.0)
+            prev = f
+            d += 0.5
+        }
+        // Mid-ramp strictly between the endpoints.
+        val mid = PovProjector.nearFadeFactor((PovProjector.GROUND_MIN_DEPTH_M + 20.0) / 2.0)
+        assertTrue(mid > 0.0 && mid < 1.0)
+    }
 }
