@@ -16,6 +16,8 @@ import androidx.compose.ui.unit.sp
 import com.hpsmiles.golfsim.core.designsystem.GolfColors
 import com.hpsmiles.golfsim.core.physics.ShotResult
 import com.hpsmiles.golfsim.core.physics.TrajectorySample
+import kotlin.math.max
+import kotlin.math.tan
 
 // Painted-ground palette A — "Tour Broadcast" (approved spec palette).
 // Sky switched to a white background at user request (2026-09-24).
@@ -40,18 +42,15 @@ private val HISTORY_LINE = GolfColors.Teal.copy(alpha = 0.35f)
  * by [playFraction] in 0..1 (1 = flight complete), and faded tracer lines for
  * [previousShots].
  *
- * All world-to-screen math goes through PovProjector. Ground layers are flat
- * polygons: world vertices at z = RangeScene.groundHeight are projected into
- * closed Paths, with vertices at/behind the camera clipped (y > 0.5) or the
- * layer skipped entirely. The tracer follows the real flight: ShotResult
- * carries the modelled ODE samples (one per 10 ms integration step; first =
- * launch at t = 0, last = the interpolated landing point), so the arc bends
- * with actual spin axis and apex instead of a stylized quadratic.
+ * Everything is projected through [camera] (spec 2026-09-25: the FollowCam
+ * moves the rig per frame, and the static rig is the 8 m crane position).
+ * The world horizon is derived from the camera pitch (v = -tan(pitch) at
+ * infinite distance); the sky is only drawn above it.
  *
- * Visual clamps (user demo-gate feedback): a single apex-scale scalar keeps
- * big apexes inside the top 8% of the frame, and near-field points that
- * would project below the bottom edge are clamped to the launch anchor so
- * the ball is visible leaving the club.
+ * Visual clamps (user demo-gate feedback): the apex scale is computed
+ * against the STATIC rig only (so trajectory geometry stays constant while
+ * the follow cam moves), and the waiting tee ball gets a minimum on-screen
+ * radius (a true-scale ball is ~2 px at 21.2 m).
  */
 @Composable
 fun PovRangeCanvas(
@@ -61,24 +60,31 @@ fun PovRangeCanvas(
     showTracer: Boolean,
     showHistory: Boolean,
     modifier: Modifier = Modifier,
+    camera: RangeCamera = RangeCamera.STATIC,
 ) {
     Canvas(modifier = modifier.fillMaxSize()) {
         val w = size.width
         val h = size.height
-        val horizonPx = h * 0.30f
         val focalPx = w * 1.10f
         val centerX = w / 2f
+        // Screen y of v = 0 (camera level). The world horizon sits at
+        // v = -tan(pitch) — it moves up the frame as the camera noses down.
+        val v0Px = h * 0.30f
+        val horizonPx = v0Px - tan(camera.pitchRad).toFloat() * focalPx
 
         // Sky, then painted ground back-to-front: rough base (full bleed),
         // fairway, mow stripes, greens with fringes. All layers are flat
         // polygons at z = groundHeight in front of the camera.
-        drawRect(
-            brush = Brush.verticalGradient(
-                listOf(SKY_TOP, SKY_BOTTOM), startY = 0f, endY = horizonPx,
-            ),
-            size = Size(w, horizonPx),
-        )
-        drawRect(ROUGH_BASE, topLeft = Offset(0f, horizonPx), size = Size(w, h - horizonPx))
+        if (horizonPx > 0f) {
+            drawRect(
+                brush = Brush.verticalGradient(
+                    listOf(SKY_TOP, SKY_BOTTOM), startY = 0f, endY = horizonPx,
+                ),
+                size = Size(w, horizonPx),
+            )
+        }
+        val groundTop = horizonPx.coerceAtLeast(0f)
+        drawRect(ROUGH_BASE, topLeft = Offset(0f, groundTop), size = Size(w, h - groundTop))
 
         // Flat-ground polygon: project world vertices (at ground height) into
         // a closed Path. Vertices at/behind the camera (y <= 0.5) are clipped
@@ -90,7 +96,7 @@ fun PovRangeCanvas(
             val path = Path()
             var first = true
             for ((x, y) in visible) {
-                val p = worldToScreen(centerX, focalPx, horizonPx, x, y, RangeScene.groundHeight(x, y))
+                val p = worldToScreen(camera, v0Px, focalPx, centerX, x, y, RangeScene.groundHeight(x, y))
                     ?: return null
                 if (first) { path.moveTo(p.x, p.y); first = false } else path.lineTo(p.x, p.y)
             }
@@ -136,11 +142,12 @@ fun PovRangeCanvas(
             color = Color.White.toArgb()
         }
 
-        // Distance bands on the ground: v = camH / distance. White for
-        // "Tour Broadcast" crispness against the painted fairway.
+        // Distance bands on the ground: screen-horizontal under pitch
+        // (rotation is about the lateral axis). White for "Tour Broadcast"
+        // crispness against the painted fairway.
         val bandDistances = listOf(50f, 100f, 150f, 200f)
         for (d in bandDistances) {
-            val y = horizonPx + PovProjector.bandV(d.toDouble()) * focalPx
+            val y = v0Px + PovProjector.bandV(camera, d.toDouble()) * focalPx
             drawLine(
                 color = Color.White.copy(alpha = 0.45f),
                 start = Offset(0f, y.toFloat()),
@@ -156,15 +163,14 @@ fun PovRangeCanvas(
         val targets = listOf(-12f to 75f, 0f to 100f, 12f to 150f)
         val targetRadiusM = 5f
         for ((lateralM, distM) in targets) {
-            val centre = PovProjector.project(lateralM.toDouble(), distM.toDouble(), 0.0) ?: continue
+            val centre = PovProjector.project(camera, lateralM.toDouble(), distM.toDouble(), 0.0) ?: continue
             val cx = centerX + centre.u * focalPx
-            val cy = horizonPx + centre.v * focalPx
-            // Ground circle: horizontal radius projects directly; vertical
-            // extent from the near/far edge band difference.
-            val rx = (targetRadiusM / distM) * focalPx
-            val nearV = PovProjector.bandV((distM - targetRadiusM).toDouble())
-            val farV = PovProjector.bandV((distM + targetRadiusM).toDouble())
-            // Mechanical: bandV returns Double — Size() needs Float.
+            val cy = v0Px + centre.v * focalPx
+            // Ground circle: horizontal radius from the projection scale;
+            // vertical extent from the near/far edge band difference.
+            val rx = (targetRadiusM * centre.scale * focalPx).toFloat()
+            val nearV = PovProjector.bandV(camera, (distM - targetRadiusM).toDouble())
+            val farV = PovProjector.bandV(camera, (distM + targetRadiusM).toDouble())
             val ry = (((nearV - farV) / 2.0) * focalPx).toFloat()
             drawOval(
                 color = GolfColors.Teal,
@@ -181,7 +187,7 @@ fun PovRangeCanvas(
         }
 
         // Horizon haze, last over the painted ground: a soft white fade at
-        // the top of the rough blending the scene into the sky.
+        // the world horizon blending the scene into the sky.
         drawRect(
             brush = Brush.verticalGradient(
                 0f to HAZE,
@@ -197,16 +203,19 @@ fun PovRangeCanvas(
         // close to project inside the frame, so the ball is visible leaving.
         val launchAnchor = Offset(centerX, h - 24f)
         // Most-negative projected v allowed (apex must stay below the top 8%).
-        val vMin = (h * 0.08f - horizonPx) / focalPx
+        val vMin = (h * 0.08f - v0Px) / focalPx
 
         // Real-trajectory polyline: project the modelled flight samples.
-        // apexScale (single scalar, top-8% rule) keeps big apexes in frame.
+        // apexScale (single scalar, top-8% rule) keeps big apexes in frame;
+        // it is computed against the STATIC rig only so the drawn geometry
+        // does not breathe while the follow cam moves.
         fun scaledSamples(s: ShotResult): List<TrajectorySample> {
             if (s.samples.isEmpty()) return emptyList()
             val yApex = s.carryM / 2.0
-            val vApex = (PovProjector.CAM_HEIGHT_M - s.apexM) / yApex
+            val depthApex = yApex + PovProjector.CAM_BACK_M
+            val vApex = (PovProjector.CAM_HEIGHT_M - s.apexM) / depthApex
             val apexScale = if (vApex < vMin) {
-                ((PovProjector.CAM_HEIGHT_M - vMin * yApex) / s.apexM).coerceIn(0.1, 1.0)
+                ((PovProjector.CAM_HEIGHT_M - vMin * depthApex) / s.apexM).coerceIn(0.1, 1.0)
             } else {
                 1.0
             }
@@ -222,7 +231,7 @@ fun PovRangeCanvas(
             val pts = ArrayList<Pair<Int, Offset>>()
             for (i in samples.indices) {
                 if (samples[i].tSec > timeSec) break
-                val p = worldToScreen(centerX, focalPx, horizonPx, samples[i].px, samples[i].py, samples[i].pz)
+                val p = worldToScreen(camera, v0Px, focalPx, centerX, samples[i].px, samples[i].py, samples[i].pz)
                     ?: continue
                 if (p.y > h - 8f) continue
                 pts.add(i to p)
@@ -267,18 +276,20 @@ fun PovRangeCanvas(
         }
 
         // Static ball on the tee while waiting for a shot: a true world-ball
-        // (~42.7 mm) projected at the tee position (0, 0, ball radius), sized
-        // by the projection so it reads as an object at that depth. It also
-        // returns to the tee once the previous flight has completed (the
-        // monitor is then ready for the next shot) while the old tracer and
-        // landing marker persist for review.
+        // (~42.7 mm) projected at the tee position, sized by the projection
+        // so it reads as an object at that depth, with a 4 px minimum
+        // on-screen radius (spec 2026-09-25: a true-scale ball is ~2 px at
+        // the 21.2 m crane rig).
         val ballRadiusM = 0.02135
         val waiting = currentShot == null || playFraction <= 0f || playFraction >= 1f
         if (showTracer && waiting) {
-            val tee = worldToScreen(centerX, focalPx, horizonPx, 0.0, 0.0, ballRadiusM)
-            if (tee != null) {
-                val scale = PovProjector.project(0.0, 0.0, ballRadiusM)!!.scale
-                val rPx = (ballRadiusM * scale * focalPx).toFloat()
+            val teeP = PovProjector.project(camera, 0.0, 0.0, ballRadiusM)
+            if (teeP != null) {
+                val tee = Offset(
+                    (centerX + teeP.u * focalPx).toFloat(),
+                    (v0Px + teeP.v * focalPx).toFloat(),
+                )
+                val rPx = max(4f, (ballRadiusM * teeP.scale * focalPx).toFloat())
                 drawCircle(GolfColors.AmberGlow, radius = rPx * 2f, center = tee)
                 drawCircle(GolfColors.Amber, radius = rPx, center = tee)
             }
@@ -299,7 +310,7 @@ fun PovRangeCanvas(
                 val timeSec = playFraction * s.flightTimeSec
                 val samples = scaledSamples(s)
                 val head = samples.lastOrNull { it.tSec <= timeSec } ?: samples.firstOrNull()
-                var headPos = head?.let { worldToScreen(centerX, focalPx, horizonPx, it.px, it.py, it.pz) }
+                var headPos = head?.let { worldToScreen(camera, v0Px, focalPx, centerX, it.px, it.py, it.pz) }
                 if (headPos == null || headPos.y > h - 8f) headPos = launchAnchor
                 drawCircle(GolfColors.AmberGlow, radius = 12.sp.toPx(), center = headPos)
                 drawCircle(GolfColors.Amber, radius = 6.sp.toPx(), center = headPos)
@@ -307,7 +318,7 @@ fun PovRangeCanvas(
 
             // Landing dot plus ring once the flight has completed.
             if (playFraction >= 1f) {
-                val landing = worldToScreen(centerX, focalPx, horizonPx, s.sideM, s.carryM, 0.0)
+                val landing = worldToScreen(camera, v0Px, focalPx, centerX, s.sideM, s.carryM, 0.0)
                 if (landing != null) {
                     drawCircle(
                         GolfColors.AmberHalo,
@@ -324,13 +335,14 @@ fun PovRangeCanvas(
 
 /** Screen-space projection helper shared by the tracer routines. */
 private fun worldToScreen(
-    centerX: Float,
+    camera: RangeCamera,
+    v0Px: Float,
     focalPx: Float,
-    horizonPx: Float,
+    centerX: Float,
     x: Double,
     y: Double,
     z: Double,
 ): Offset? {
-    val p = PovProjector.project(x, y, z) ?: return null
-    return Offset((centerX + p.u * focalPx).toFloat(), (horizonPx + p.v * focalPx).toFloat())
+    val p = PovProjector.project(camera, x, y, z) ?: return null
+    return Offset((centerX + p.u * focalPx).toFloat(), (v0Px + p.v * focalPx).toFloat())
 }

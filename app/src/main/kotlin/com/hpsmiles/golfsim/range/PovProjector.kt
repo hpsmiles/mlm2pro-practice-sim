@@ -93,16 +93,4 @@ object PovProjector {
         val depth = dy * cosPitch - dz * sinPitch
         return -(dy * sinPitch + dz * cosPitch) / depth
     }
-
-    // ------------------------------------------------------------------
-    // Temporary compat overloads (old call sites in PovRangeCanvas).
-    // DELETED in the canvas task — do not use in new code.
-    // ------------------------------------------------------------------
-
-    @Deprecated("Use project(cam, x, y, z)")
-    fun project(x: Double, y: Double, z: Double): ProjectedPoint? =
-        project(RangeCamera.STATIC, x, y, z)
-
-    @Deprecated("Use bandV(cam, distanceM)")
-    fun bandV(distanceM: Double): Double = bandV(RangeCamera.STATIC, distanceM)
 }
