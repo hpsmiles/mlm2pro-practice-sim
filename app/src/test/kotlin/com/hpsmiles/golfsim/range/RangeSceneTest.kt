@@ -18,11 +18,11 @@ class RangeSceneTest {
     fun `fairway bounds taper from tee to end`() {
         assertTrue(RangeScene.isOnFairway(0.0, 100.0))
         assertFalse(RangeScene.isOnFairway(30.0, 100.0))
-        assertFalse(RangeScene.isOnFairway(0.0, 190.0))
+        assertFalse(RangeScene.isOnFairway(0.0, 340.0))
         assertFalse(RangeScene.isOnFairway(0.0, 5.0))
-        // Width ~40 m at tee, widening slightly toward y = 180.
+        // Width ~40 m at tee, widening slightly toward the fairway end.
         assertTrue(abs(RangeScene.fairwayHalfWidth(10.0) - 20.0) < 0.5)
-        assertTrue(RangeScene.fairwayHalfWidth(180.0) > 20.0)
+        assertTrue(RangeScene.fairwayHalfWidth(330.0) > 20.0)
     }
 
     @Test
@@ -37,8 +37,8 @@ class RangeSceneTest {
     }
 
     @Test
-    fun `stripe parity alternates every 12 m`() {
-        assertEquals(RangeScene.stripeIsLight(0.0, 12.0), !RangeScene.stripeIsLight(0.0, 0.0))
-        assertEquals(RangeScene.stripeIsLight(0.0, 24.0), RangeScene.stripeIsLight(0.0, 0.0))
+    fun `stripe parity alternates every 10 m`() {
+        assertEquals(RangeScene.stripeIsLight(0.0, 10.0), !RangeScene.stripeIsLight(0.0, 0.0))
+        assertEquals(RangeScene.stripeIsLight(0.0, 20.0), RangeScene.stripeIsLight(0.0, 0.0))
     }
 }

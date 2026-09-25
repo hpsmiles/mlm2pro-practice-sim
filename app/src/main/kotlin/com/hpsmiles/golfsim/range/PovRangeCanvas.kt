@@ -126,8 +126,8 @@ fun PovRangeCanvas(
         val fairway = groundPath(RangeScene.fairwayOutline())
         if (fairway != null) drawPath(fairway.first, FAIRWAY.copy(alpha = fairway.second))
 
-        // Alternating 12 m mow stripes as trapezoids clipped to the fairway.
-        for (index in 0..14) {
+        // Alternating 10 m mow stripes as trapezoids clipped to the fairway.
+        for (index in 0 until RangeScene.stripeBandCount()) {
             val (yFrom, yTo) = RangeScene.stripeBand(index)
             if (yFrom >= RangeScene.FAIRWAY_END_Y) break
             val halfFrom = RangeScene.fairwayHalfWidth(yFrom)
@@ -154,6 +154,44 @@ fun PovRangeCanvas(
             drawPath(surface.first, GREEN_SURFACE.copy(alpha = surface.second))
         }
 
+        // Practice grid painted on the ground, under the ball/tracers and
+        // distance bands: a solid centre line at x = 0 and light dashed
+        // guide lines at x = +/-10 and +/-20. Both flow through the same
+        // groundPath clip+near-fade pipeline as the other painted layers, so
+        // they cull and fade as the camera sweeps past.
+        val half = RangeScene.CENTER_LINE_HALF_WIDTH_M
+        val centerLine = groundPath(
+            listOf(
+                -half to RangeScene.FAIRWAY_TEE_Y,
+                half to RangeScene.FAIRWAY_TEE_Y,
+                half to RangeScene.GROUND_END_Y,
+                -half to RangeScene.GROUND_END_Y,
+            ),
+        )
+        if (centerLine != null) {
+            drawPath(
+                centerLine.first,
+                Color.White.copy(alpha = RangeScene.CENTER_LINE_ALPHA * centerLine.second),
+            )
+        }
+        for (lateralM in RangeScene.GUIDE_LINE_LATERALS_M) {
+            val gHalf = RangeScene.GUIDE_LINE_HALF_WIDTH_M
+            for ((yFrom, yTo) in RangeScene.guideDashSegments()) {
+                val dash = groundPath(
+                    listOf(
+                        (lateralM - gHalf) to yFrom,
+                        (lateralM + gHalf) to yFrom,
+                        (lateralM + gHalf) to yTo,
+                        (lateralM - gHalf) to yTo,
+                    ),
+                ) ?: continue
+                drawPath(
+                    dash.first,
+                    Color.White.copy(alpha = RangeScene.GUIDE_LINE_ALPHA * dash.second),
+                )
+            }
+        }
+
         labelPaint.apply {
             isAntiAlias = true
             textSize = 10.sp.toPx()
@@ -163,7 +201,7 @@ fun PovRangeCanvas(
         // Distance bands on the ground: screen-horizontal under pitch
         // (rotation is about the lateral axis). White for "Tour Broadcast"
         // crispness against the painted fairway.
-        val bandDistances = listOf(50f, 100f, 150f, 200f)
+        val bandDistances = listOf(50f, 100f, 150f, 200f, 250f, 300f, 350f)
         for (d in bandDistances) {
             if (groundDepth(d.toDouble()) <= 0.0) continue // behind the camera
             val y = v0Px + PovProjector.bandV(camera, d.toDouble()) * focalPx

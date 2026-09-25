@@ -9,6 +9,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
@@ -34,14 +35,15 @@ fun TopDownCanvas(shots: List<DisplayShot>, modifier: Modifier = Modifier) {
             color = GolfColors.TextMuted.toArgb()
         }
 
-        // World mapping: origin bottom-centre, x lateral ±60 m, y 0..250 m.
-        val pxPerM = h / 260f
+        // World mapping: origin bottom-centre, x lateral, y 0..GROUND_END_Y.
+        // Vertically fit the full painted ground extent.
+        val pxPerM = h / RangeScene.GROUND_END_Y.toFloat()
         val originX = w / 2f
         val originY = h - 8.sp.toPx()
 
-        // Distance bands every 50 m across the full width.
+        // Distance bands every 50 m across the full width, out to the ground end.
         var distM = 50f
-        while (distM <= 250f) {
+        while (distM <= RangeScene.GROUND_END_Y.toFloat()) {
             val y = originY - distM * pxPerM
             drawLine(
                 GolfColors.Line.copy(alpha = 0.8f),
@@ -63,6 +65,26 @@ fun TopDownCanvas(shots: List<DisplayShot>, modifier: Modifier = Modifier) {
                 )
             }
             lateralM += 20f
+        }
+
+        // Practice grid identity matching the POV view: a solid centre line
+        // at x = 0 and light dashed guide lines at x = +/-10/+/-20, from the
+        // tee to the ground end.
+        val teeTop = originY - RangeScene.FAIRWAY_TEE_Y.toFloat() * pxPerM
+        val groundTop = originY - RangeScene.GROUND_END_Y.toFloat() * pxPerM
+        drawLine(
+            Color.White.copy(alpha = RangeScene.CENTER_LINE_ALPHA),
+            Offset(originX, teeTop), Offset(originX, groundTop), 1.5f,
+        )
+        val dashPx = RangeScene.GUIDE_DASH_ON_M.toFloat() * pxPerM
+        val gapPx = RangeScene.GUIDE_DASH_OFF_M.toFloat() * pxPerM
+        for (guideM in RangeScene.GUIDE_LINE_LATERALS_M) {
+            val x = originX + guideM.toFloat() * pxPerM
+            drawLine(
+                Color.White.copy(alpha = RangeScene.GUIDE_LINE_ALPHA),
+                Offset(x, teeTop), Offset(x, groundTop), 1f,
+                pathEffect = PathEffect.dashPathEffect(floatArrayOf(dashPx, gapPx)),
+            )
         }
 
         // Range mat quad at the origin (orientation cue; ball at (0, 0)
