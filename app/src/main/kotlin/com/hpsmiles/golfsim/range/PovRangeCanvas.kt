@@ -19,7 +19,6 @@ import com.hpsmiles.golfsim.core.physics.ShotResult
 import com.hpsmiles.golfsim.core.physics.TrajectorySample
 import kotlin.math.cos
 import kotlin.math.max
-import kotlin.math.min
 import kotlin.math.sin
 import kotlin.math.tan
 
@@ -302,8 +301,12 @@ fun PovRangeCanvas(
         // ground roll (empty when there is no rollout). Shared by the tracer
         // and the head ball so the head rolls through the same curve the
         // tracing line draws.
+        fun pathSamples(s: ShotResult): List<TrajectorySample> =
+            if (s.flightTimeSec <= 0.0) scaledSamples(s)
+            else scaledSamples(s) + RangeRollout.samples(s)
+
         fun drawTracer(s: ShotResult, timeSec: Double, color: Color, width: Float) {
-            val samples = scaledSamples(s)
+            val samples = pathSamples(s)
             if (samples.size < 2) return
             // Screen-space clip: collect only in-frame projections, keeping
             // sample indices so we can break the path across frame-exit gaps.
@@ -385,16 +388,19 @@ fun PovRangeCanvas(
             val s = currentShot
 
             // Current tracer: full line persists after landing (fraction = 1).
+            // The extended path covers time beyond T, so the tracer grows
+            // through the ground roll during the hold.
             if (showTracer) {
-                drawTracer(s, min(playFraction, 1f) * s.flightTimeSec, GolfColors.Amber, 2.5f)
+                drawTracer(s, playFraction * s.flightTimeSec, GolfColors.Amber, 2.5f)
             }
 
             // Ball at the tracer head — the sample nearest the animation time —
             // clamped to the anchor until it clears the bottom edge, so the
-            // ball is visible leaving the club.
+            // ball is visible leaving the club. The extended list keeps the
+            // head on the ground roll after landing, parking at totalM.
             if (showTracer) {
-                val timeSec = min(playFraction, 1f) * s.flightTimeSec
-                val samples = scaledSamples(s)
+                val timeSec = playFraction * s.flightTimeSec
+                val samples = pathSamples(s)
                 val head = samples.lastOrNull { it.tSec <= timeSec } ?: samples.firstOrNull()
                 var headPos = head?.let { worldToScreen(camera, v0Px, focalPx, centerX, it.px, it.py, it.pz) }
                 if (headPos == null || headPos.y > h - 8f) headPos = launchAnchor
