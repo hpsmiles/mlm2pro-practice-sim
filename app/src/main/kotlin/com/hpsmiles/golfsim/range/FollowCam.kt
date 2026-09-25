@@ -37,7 +37,7 @@ object FollowCam {
     /** Landing overlook: distance from the landing point to the camera. */
     const val OVERLOOK_DIST_M = 25.0
 
-    /** Landing overlook pitch (deg). Tuning knob â€” user: "45 may not be right but it is a starting value". */
+    /** Landing overlook pitch (deg). Tuning knob — user: "45 may not be right but it is a starting value". */
     const val LAND_PITCH_DEG = 45.0
 
     /** How long the overlook holds before cutting back to STATIC. */
@@ -74,7 +74,7 @@ object FollowCam {
 
         val overlook = overlookRig(shot)
 
-        // Short shots: the flight ends before delay/blend ever would â€”
+        // Short shots: the flight ends before delay/blend ever would —
         // never point the camera at empty sky; park at the overlook.
         if (t <= FOLLOW_DELAY_SEC + BLEND_SEC) return overlook
 
