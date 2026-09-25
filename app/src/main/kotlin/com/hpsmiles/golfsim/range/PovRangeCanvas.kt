@@ -16,8 +16,10 @@ import androidx.compose.ui.unit.sp
 import com.hpsmiles.golfsim.core.designsystem.GolfColors
 import com.hpsmiles.golfsim.core.physics.ShotResult
 import com.hpsmiles.golfsim.core.physics.TrajectorySample
+import kotlin.math.cos
 import kotlin.math.max
 import kotlin.math.min
+import kotlin.math.sin
 import kotlin.math.tan
 
 // Painted-ground palette A — "Tour Broadcast" (approved spec palette).
@@ -35,6 +37,9 @@ private val HAZE = Color.White.copy(alpha = 0.22f)
 // Previous-shot tracer lines: faded teal per the M3 design language
 // (history = teal, live moment = amber).
 private val HISTORY_LINE = GolfColors.Teal.copy(alpha = 0.35f)
+
+/** The mat is skipped once the camera is this close to it (chase sweep). */
+private const val MAT_MIN_DRAW_DEPTH_M = 6.0
 
 /**
  * Player-perspective range view. Painted "Tour Broadcast" scene (rough base,
@@ -207,6 +212,67 @@ fun PovRangeCanvas(
         } ?: 1f
         val waiting = currentShot == null || playFraction <= 0f || playFraction >= endF
         val ballRadiusM = 0.02135
+
+        // Range mat (spec 2026-09-25): rubber base + turf strip under the
+        // ball, projected through the per-frame camera — it sweeps past
+        // during the chase. Unlike groundPath there is no near-vertex
+        // filter (the near edge must be allowed to fall below the frame
+        // bottom); instead the mat is skipped entirely once the camera is
+        // within MAT_MIN_DRAW_DEPTH_M of any corner, so it never blows up
+        // across the frame mid-sweep.
+        val cosPitch = cos(camera.pitchRad)
+        val sinPitch = sin(camera.pitchRad)
+        fun matPath(vertices: List<Pair<Double, Double>>): Path? {
+            val clear = vertices.all { (x, y) ->
+                val dy = y - camera.y
+                val dz = RangeScene.groundHeight(x, y) - camera.z
+                (dy * cosPitch - dz * sinPitch) > MAT_MIN_DRAW_DEPTH_M
+            }
+            if (!clear) return null
+            val path = Path()
+            var first = true
+            for ((x, y) in vertices) {
+                val p = worldToScreen(camera, v0Px, focalPx, centerX, x, y, RangeScene.groundHeight(x, y))
+                    ?: return null
+                if (first) { path.moveTo(p.x, p.y); first = false } else path.lineTo(p.x, p.y)
+            }
+            path.close()
+            return path
+        }
+
+        val matBase = matPath(
+            listOf(
+                RangeMat.BASE_X_MIN to RangeMat.BASE_Y_MIN,
+                RangeMat.BASE_X_MAX to RangeMat.BASE_Y_MIN,
+                RangeMat.BASE_X_MAX to RangeMat.BASE_Y_MAX,
+                RangeMat.BASE_X_MIN to RangeMat.BASE_Y_MAX,
+            ),
+        )
+        if (matBase != null) {
+            drawPath(matBase, RangeMat.BASE)
+            drawPath(matBase, RangeMat.BASE_EDGE, style = Stroke(width = 2f))
+        }
+        val matStrip = matPath(
+            listOf(
+                RangeMat.STRIP_X_MIN to RangeMat.STRIP_Y_MIN,
+                RangeMat.STRIP_X_MAX to RangeMat.STRIP_Y_MIN,
+                RangeMat.STRIP_X_MAX to RangeMat.STRIP_Y_MAX,
+                RangeMat.STRIP_X_MIN to RangeMat.STRIP_Y_MAX,
+            ),
+        )
+        if (matStrip != null) {
+            drawPath(matStrip, RangeMat.STRIP)
+            drawPath(matStrip, RangeMat.STRIP_EDGE, style = Stroke(width = 1.5f))
+        }
+        val matLine = matPath(
+            listOf(
+                -RangeMat.LINE_HALF_WIDTH_M to RangeMat.STRIP_Y_MIN,
+                RangeMat.LINE_HALF_WIDTH_M to RangeMat.STRIP_Y_MIN,
+                RangeMat.LINE_HALF_WIDTH_M to RangeMat.STRIP_Y_MAX,
+                -RangeMat.LINE_HALF_WIDTH_M to RangeMat.STRIP_Y_MAX,
+            ),
+        )
+        if (matLine != null) drawPath(matLine, RangeMat.HITTING_LINE)
 
         // The launch anchor: the tracer attaches here while the ball is too
         // close to project inside the frame, so the ball is visible leaving.

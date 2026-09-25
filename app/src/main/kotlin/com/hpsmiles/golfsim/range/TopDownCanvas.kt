@@ -5,7 +5,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
@@ -59,6 +61,29 @@ fun TopDownCanvas(shots: List<DisplayShot>, modifier: Modifier = Modifier) {
             }
             lateralM += 20f
         }
+
+        // Range mat quad at the origin (orientation cue; ball at (0, 0)
+        // right of center — right-handed golfer). Spec 2026-09-25.
+        val matLeft = originX + (RangeMat.BASE_X_MIN * pxPerM)
+        val matRight = originX + (RangeMat.BASE_X_MAX * pxPerM)
+        val matTop = originY - (RangeMat.BASE_Y_MAX * pxPerM)
+        val matBottom = originY - (RangeMat.BASE_Y_MIN * pxPerM)
+        drawRect(
+            color = RangeMat.BASE,
+            topLeft = Offset(matLeft.toFloat(), matTop.toFloat()),
+            size = Size((matRight - matLeft).toFloat(), (matBottom - matTop).toFloat()),
+        )
+        val stripLeft = originX + (RangeMat.STRIP_X_MIN * pxPerM)
+        val stripRight = originX + (RangeMat.STRIP_X_MAX * pxPerM)
+        val stripTop = originY - (RangeMat.STRIP_Y_MAX * pxPerM)
+        val stripBottom = originY - (RangeMat.STRIP_Y_MIN * pxPerM)
+        drawRect(
+            color = RangeMat.STRIP,
+            topLeft = Offset(stripLeft.toFloat(), stripTop.toFloat()),
+            size = Size((stripRight - stripLeft).toFloat(), (stripBottom - stripTop).toFloat()),
+        )
+        // Ball dot at the origin (same world point as the POV tee ball).
+        drawCircle(Color.White, radius = 2.sp.toPx(), center = Offset(originX, originY))
 
         val history = shots.dropLast(1)
         for (shot in history) {
