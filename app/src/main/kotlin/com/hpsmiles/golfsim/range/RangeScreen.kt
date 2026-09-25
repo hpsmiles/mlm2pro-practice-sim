@@ -5,6 +5,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -98,11 +99,9 @@ fun RangeScreen(
     val currentShot = session.shots.lastOrNull()
 
     // Follow cam (spec 2026-09-25): the per-frame camera from the pure
-    // phase machine; STATIC whenever there is nothing in flight.
-    val camera = when (val shot = currentShot) {
-        null -> RangeCamera.STATIC
-        else -> FollowCam.cameraAt(shot.shotResult, playFraction)
-    }
+    // phase machine; computed inside the canvas slot below because the
+    // chase follows the apex-clamped drawn flight, which needs the slot's
+    // live geometry.
 
     // M4d: live BLE connection state lives in AppRoot (which now also owns
     // DEMO toggle, FIRE and CONNECT).
@@ -141,14 +140,26 @@ fun RangeScreen(
         // Range canvas with overlays. Left of the range there is exactly one
         // column: AppRoot's NavRail (2026-09-24 user request).
         Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
-            if (viewMode == ViewMode.POV) {
-                PovRangeCanvas(
-                    currentShot?.shotResult, previousShots, playFraction, showTracer, showHistory,
-                    camera = camera,
-                    modifier = Modifier.fillMaxSize(),
-                )
-            } else {
-                TopDownCanvas(session.shots, Modifier.fillMaxSize())
+            BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+                // Same top-8% line the canvas derives (v0 = 0.30h, focal =
+                // 1.10w), so the follow cam chases the exact drawn
+                // (apex-clamped) flight on this geometry.
+                val wPx = constraints.maxWidth.toFloat()
+                val hPx = constraints.maxHeight.toFloat()
+                val apexVMin = ((0.08f * hPx - 0.30f * hPx) / (1.10f * wPx)).toDouble()
+                val camera = when (val shot = currentShot) {
+                    null -> RangeCamera.STATIC
+                    else -> FollowCam.cameraAt(shot.shotResult, playFraction, apexVMin)
+                }
+                if (viewMode == ViewMode.POV) {
+                    PovRangeCanvas(
+                        currentShot?.shotResult, previousShots, playFraction, showTracer, showHistory,
+                        camera = camera,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                } else {
+                    TopDownCanvas(session.shots, Modifier.fillMaxSize())
+                }
             }
             // M4d no-read pill: live misreads coalesced in RangeSession.
             if (session.misreadCount.intValue > 0) {

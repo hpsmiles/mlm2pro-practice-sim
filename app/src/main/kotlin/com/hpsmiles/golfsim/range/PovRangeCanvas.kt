@@ -292,22 +292,11 @@ fun PovRangeCanvas(
         val vMin = (h * 0.08f - v0Px) / focalPx
 
         // Real-trajectory polyline: project the modelled flight samples.
-        // apexScale (single scalar, top-8% rule) keeps big apexes in frame;
-        // it is computed against the STATIC rig only so the drawn geometry
-        // does not breathe while the follow cam moves.
-        fun scaledSamples(s: ShotResult): List<TrajectorySample> {
-            if (s.samples.isEmpty()) return emptyList()
-            val yApex = s.carryM / 2.0
-            val depthApex = yApex + PovProjector.CAM_BACK_M
-            val vApex = (PovProjector.CAM_HEIGHT_M - s.apexM) / depthApex
-            val apexScale = if (vApex < vMin) {
-                ((PovProjector.CAM_HEIGHT_M - vMin * depthApex) / s.apexM).coerceIn(0.1, 1.0)
-            } else {
-                1.0
-            }
-            if (apexScale >= 1.0) return s.samples
-            return s.samples.map { it.copy(pz = it.pz * apexScale) }
-        }
+        // The apex clamp (single scalar, top-8% rule) lives in FollowCam
+        // so the follow cam chases exactly the path drawn here — pass the
+        // same [vMin] that shapes this frame.
+        fun scaledSamples(s: ShotResult): List<TrajectorySample> =
+            FollowCam.scaledSamples(s, vMin.toDouble())
 
         fun drawTracer(s: ShotResult, timeSec: Double, color: Color, width: Float) {
             val samples = scaledSamples(s)

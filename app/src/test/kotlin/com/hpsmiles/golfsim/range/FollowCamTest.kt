@@ -5,6 +5,7 @@ import com.hpsmiles.golfsim.core.physics.ShotResult
 import com.hpsmiles.golfsim.core.physics.TrajectorySample
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -13,10 +14,10 @@ import org.junit.Test
  * blend -> chase -> descent pitch-in -> landing hold -> snap back.
  *
  * Synthetic shots: straight-line lateral drift, py proportional to t, a
- * pz parabola peaking at t = T/2, samples every 50 ms. The default shot
- * (carry 180, apex 30, T = 6) early-engages right around the 1.0 s timer;
- * the low wedge (apex 10, carry 60, T = 3.5) never does, so it engages
- * on the 1.0 s timer.
+ * pz parabola peaking at t = T/2, samples every 50 ms. The apex clamp
+ * keeps every shot inside the static frame on the reference geometry, so
+ * all of these engage on the 1.0 s timer (early engage only fires on
+ * squarer canvases where the clamp line sits above the top of frame).
  */
 class FollowCamTest {
 
@@ -58,7 +59,8 @@ class FollowCamTest {
     @Test
     fun staticBeforeTheDelay() {
         val shot = parabolicShot()
-        // t = 0.7 s is inside the static window (early engage ~1.0 s here).
+        // t = 0.7 s is inside the 1.0 s static timer window (the apex
+        // clamp keeps this flight framed, so no early engage either).
         assertEquals(RangeCamera.STATIC, FollowCam.cameraAt(shot, frac(shot, 0.7)))
     }
 
@@ -71,21 +73,67 @@ class FollowCamTest {
     @Test
     fun highApexEngagesBeforeTheTimer() {
         val driver = parabolicShot(carryM = 240.0, apexM = 45.0)
-        // t = 0.7 s is inside the 1.0 s static window, but a big apex has
-        // already pushed the ball near the top of the frame -> early engage (~0.6 s).
-        assertNotEquals(RangeCamera.STATIC, FollowCam.cameraAt(driver, frac(driver, 0.7)))
+        // On the reference-wide geometry the apex clamp keeps even this
+        // monster inside the static frame (timer-only engage). On a
+        // squarer canvas (apexVMin = -0.20) the drawn flight still
+        // breaches the top of frame at ~0.8 s and early engage must
+        // fire BEFORE the 1.0 s timer.
+        assertEquals(RangeCamera.STATIC, FollowCam.cameraAt(driver, frac(driver, 0.7), apexVMin = -0.20))
+        assertNotEquals(RangeCamera.STATIC, FollowCam.cameraAt(driver, frac(driver, 0.9), apexVMin = -0.20))
     }
 
     @Test
-    fun chaseTracksBehindAndAboveTheBall() {
+    fun chaseTracksBehindAndAboveTheDrawnBall() {
         val shot = parabolicShot()
         // t = 2.8 s: past blend end (~2.4 s), before apex (3.0 s) -> chase.
-        val head = shot.samples.last { it.tSec <= 2.8 }
+        // The rig follows the DRAWN flight, and this shot's 30 m apex IS
+        // clamped on the reference geometry (drawn z < raw z).
+        val drawn = FollowCam.scaledSamples(shot)
+        assertTrue(drawn.last { it.tSec <= 2.8 }.pz < shot.samples.last { it.tSec <= 2.8 }.pz)
+        val head = drawn.last { it.tSec <= 2.8 }
         val cam = FollowCam.cameraAt(shot, frac(shot, 2.8))
         assertEquals(0.0, cam.pitchRad, 1e-12)
         assertEquals(head.px, cam.x, 1e-9)
         assertEquals(head.py - FollowCam.CHASE_BACK_M, cam.y, 1e-9)
         assertEquals(head.pz + FollowCam.CHASE_UP_M, cam.z, 1e-9)
+    }
+
+    @Test
+    fun chaseKeepsTheDrawnBallInsideTheFrame() {
+        // A monster drive: the clamp pulls its 45 m apex down to ~26 m on
+        // the reference geometry. Chasing the DRAWN flight pins the ball
+        // exactly CHASE_UP_M / CHASE_BACK_M below camera level (v =
+        // +0.125 on screen) — centered, never out of frame (user gate
+        // 2026-09-25: long shots lost the ball over the frame bottom).
+        val driver = parabolicShot(carryM = 240.0, apexM = 45.0)
+        val drawn = FollowCam.scaledSamples(driver)
+        val head = drawn.last { it.tSec <= 3.0 } // apex
+        val cam = FollowCam.cameraAt(driver, frac(driver, 3.0))
+        val p = PovProjector.project(cam, head.px, head.py, head.pz)
+        assertNotNull(p)
+        assertEquals(FollowCam.CHASE_UP_M / FollowCam.CHASE_BACK_M, p!!.v, 1e-9)
+    }
+
+    @Test
+    fun descentStartsSmoothlyFromTheChase() {
+        // At the apex the camera must NOT halt: it keeps riding the
+        // moving chase rig while easing toward the overlook, so forward
+        // displacement right after the apex stays on par with just
+        // before it (the old frozen-rig lerp dropped it to ~zero — the
+        // user felt it as an abrupt pan-down, gate 2026-09-25).
+        // Windows are 0.2 s wide: the frac() float roundtrip quantizes
+        // the head to the 0.05 s sample grid, so a narrow window would
+        // measure unequal spans even with smooth motion.
+        val shot = parabolicShot() // apex at 3.0 s
+        fun camAt(tSec: Double) = FollowCam.cameraAt(shot, frac(shot, tSec))
+        val before = camAt(2.8)
+        val at = camAt(3.0)
+        val after = camAt(3.2)
+        fun dist(a: RangeCamera, b: RangeCamera): Double {
+            val dxy = Math.hypot(a.x - b.x, a.y - b.y)
+            return Math.hypot(dxy, a.z - b.z)
+        }
+        assertTrue("descent start halted the camera", dist(at, after) >= 0.5 * dist(before, at))
     }
 
     @Test
@@ -159,13 +207,13 @@ class FollowCamTest {
     }
 
     @Test
-    fun lateEarlyEngageStillRespectsTheTimer() {
-        // Crossing that happens AFTER the 1.0 s timer (apex just over the
-        // EARLY_ENGAGE_V threshold, so the ball only reaches the top of
-        // frame near its peak ~1.7 s). Whichever-comes-first semantics: the
-        // cam must already be blending at 1.6 s, not still STATIC.
-        val late = parabolicShot(carryM = 180.0, apexM = 25.0, flightTimeSec = 6.0)
-        val cam = FollowCam.cameraAt(late, frac(late, 1.6))
+    fun timerEngagesWhenTheClampKeepsTheBallFramed() {
+        // The apex clamp keeps this shot's 25 m apex inside the static
+        // frame on the reference geometry, so no early-engage crossing
+        // exists: engage must come from the 1.0 s timer, and the cam
+        // must already be blending at 1.6 s, not still STATIC.
+        val shot = parabolicShot(carryM = 180.0, apexM = 25.0, flightTimeSec = 6.0)
+        val cam = FollowCam.cameraAt(shot, frac(shot, 1.6))
         assertNotEquals(RangeCamera.STATIC, cam)
         assertTrue(cam.y > RangeCamera.STATIC.y) // left the crane position
     }

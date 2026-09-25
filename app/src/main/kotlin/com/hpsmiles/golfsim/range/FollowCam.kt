@@ -14,11 +14,16 @@ import kotlin.math.sin
  * Timeline (t = seconds since impact, T = flightTimeSec):
  *   static   t < engageT        STATIC rig (or early engage, whichever first)
  *   blend    1.4 s              quintic smoothstep STATIC -> chase rig (target moves)
- *   chase    -> apex            ball + (0, -CHASE_BACK_M, +CHASE_UP_M), pitch 0
- *   descent  apex -> touchdown  ease chase rig -> overlook rig; pitch eases
+ *   chase    -> apex            drawn ball + (0, -CHASE_BACK_M, +CHASE_UP_M), pitch 0
+ *   descent  apex -> touchdown  lerp the MOVING chase rig -> overlook rig
+ *                              (no halt at the apex); pitch eases
  *                              0 -> LAND_PITCH_DEG on the same progress
  *   hold     LAND_HOLD_SEC      overlook rig parked
  *   snap back after hold        cut to STATIC (tracer + landing marker persist)
+ *
+ * The rig follows the DRAWN flight ([scaledSamples]: big apexes clamped to
+ * the top 8% of the frame), not the raw samples — the camera must ride the
+ * trajectory the player actually sees (user gate 2026-09-25).
  */
 object FollowCam {
 
@@ -52,6 +57,14 @@ object FollowCam {
     const val EARLY_ENGAGE_V = -0.17
 
     /**
+     * Default top-8%-of-frame clamp line for [scaledSamples]: the value for
+     * the reference tablet geometry. The canvas passes its live
+     * geometry-derived apexVMin (and passes the same to [cameraAt]) so the
+     * camera and the drawn flight always agree.
+     */
+    const val REFERENCE_APEX_VMIN = -0.125
+
+    /**
      * Float playback fractions arrive at endFraction a few ULPs below the
      * hold boundary (the caller computes endFraction(shot).toFloat(), and
      * the roundtrip maps below the Double guard time by up to ~1e-6 s).
@@ -64,8 +77,45 @@ object FollowCam {
     /** The playback fraction runs 0..endFraction; values > 1 cover the hold. */
     fun endFraction(shot: ShotResult): Double = 1.0 + LAND_HOLD_SEC / shot.flightTimeSec
 
-    /** The camera for a shot at [playFraction] (0 = impact, 1 = touchdown). */
-    fun cameraAt(shot: ShotResult, playFraction: Float): RangeCamera {
+    /**
+     * Frame-adjusted trajectory the canvas draws: big apexes are scaled
+     * down so the flight stays inside the top 8% of the STATIC frame
+     * (moved here from the canvas so the follow camera can chase the same
+     * path the player sees — chasing the raw samples let big drives dive
+     * out the bottom of the chase frame, user report 2026-09-25).
+     *
+     * The scale is a single scalar computed against the STATIC rig, so
+     * the drawn geometry does not breathe while the follow cam moves.
+     * [apexVMin] is the frame's clamp line (v of the apex as seen from
+     * the STATIC rig); the canvas derives it from its live geometry.
+     */
+    fun scaledSamples(
+        shot: ShotResult,
+        apexVMin: Double = REFERENCE_APEX_VMIN,
+    ): List<TrajectorySample> {
+        if (shot.samples.isEmpty()) return emptyList()
+        val yApex = shot.carryM / 2.0
+        val depthApex = yApex + PovProjector.CAM_BACK_M
+        val vApex = (PovProjector.CAM_HEIGHT_M - shot.apexM) / depthApex
+        val apexScale = if (vApex < apexVMin) {
+            ((PovProjector.CAM_HEIGHT_M - apexVMin * depthApex) / shot.apexM).coerceIn(0.1, 1.0)
+        } else {
+            1.0
+        }
+        if (apexScale >= 1.0) return shot.samples
+        return shot.samples.map { it.copy(pz = it.pz * apexScale) }
+    }
+
+    /**
+     * The camera for a shot at [playFraction] (0 = impact, 1 = touchdown).
+     * [apexVMin] is the frame's top-8% clamp line — pass the same value
+     * the canvas uses so the chase follows the exact drawn flight.
+     */
+    fun cameraAt(
+        shot: ShotResult,
+        playFraction: Float,
+        apexVMin: Double = REFERENCE_APEX_VMIN,
+    ): RangeCamera {
         val t = shot.flightTimeSec
         if (t <= 0.0 || shot.samples.isEmpty()) return RangeCamera.STATIC
 
@@ -74,13 +124,17 @@ object FollowCam {
 
         val overlook = overlookRig(shot)
 
+        // The drawn flight: the chase must follow the frame-scaled path
+        // the player sees, or big apexes leave the chase frame.
+        val drawn = scaledSamples(shot, apexVMin)
+
         // Short shots: the flight ends before delay/blend ever would —
         // never point the camera at empty sky; park at the overlook.
         if (t <= FOLLOW_DELAY_SEC + BLEND_SEC) return overlook
 
-        val engageT = earlyEngageT(shot)?.coerceAtMost(FOLLOW_DELAY_SEC) ?: FOLLOW_DELAY_SEC
+        val engageT = earlyEngageT(drawn)?.coerceAtMost(FOLLOW_DELAY_SEC) ?: FOLLOW_DELAY_SEC
         val blendEnd = engageT + BLEND_SEC
-        val apexT = shot.samples.maxByOrNull { it.pz }?.tSec ?: (t / 2.0)
+        val apexT = drawn.maxByOrNull { it.pz }?.tSec ?: (t / 2.0)
         val descentT = maxOf(apexT, blendEnd)
 
         return when {
@@ -88,12 +142,12 @@ object FollowCam {
             timeSec < blendEnd ->
                 lerpCam(
                     RangeCamera.STATIC,
-                    chaseRig(sampleAt(shot, timeSec)),
+                    chaseRig(sampleAt(drawn, timeSec)),
                     smoothstep((timeSec - engageT) / BLEND_SEC),
                 )
-            timeSec < descentT -> chaseRig(sampleAt(shot, timeSec))
+            timeSec < descentT -> chaseRig(sampleAt(drawn, timeSec))
             timeSec < t -> lerpCam(
-                chaseRig(sampleAt(shot, descentT)),
+                chaseRig(sampleAt(drawn, timeSec)), // moving: no halt at the apex
                 overlook,
                 smoothstep(((timeSec - descentT) / (t - descentT)).coerceIn(0.0, 1.0)),
             )
@@ -118,12 +172,12 @@ object FollowCam {
     private fun chaseRig(head: TrajectorySample): RangeCamera =
         RangeCamera(head.px, head.py - CHASE_BACK_M, head.pz + CHASE_UP_M, 0.0)
 
-    private fun sampleAt(shot: ShotResult, t: Double): TrajectorySample =
-        shot.samples.lastOrNull { it.tSec <= t } ?: shot.samples.first()
+    private fun sampleAt(samples: List<TrajectorySample>, t: Double): TrajectorySample =
+        samples.lastOrNull { it.tSec <= t } ?: samples.first()
 
-    /** First time the ball's STATIC projection reaches the top of frame. */
-    private fun earlyEngageT(shot: ShotResult): Double? {
-        for (s in shot.samples) {
+    /** First time the drawn flight's STATIC projection reaches the top of frame. */
+    private fun earlyEngageT(samples: List<TrajectorySample>): Double? {
+        for (s in samples) {
             val p = PovProjector.project(RangeCamera.STATIC, s.px, s.py, s.pz) ?: continue
             if (p.v <= EARLY_ENGAGE_V) return s.tSec
         }
