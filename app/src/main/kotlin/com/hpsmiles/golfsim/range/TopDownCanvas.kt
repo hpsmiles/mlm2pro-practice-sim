@@ -3,6 +3,7 @@ package com.hpsmiles.golfsim.range
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -20,12 +21,14 @@ import com.hpsmiles.golfsim.core.designsystem.GolfColors
  */
 @Composable
 fun TopDownCanvas(shots: List<DisplayShot>, modifier: Modifier = Modifier) {
+    // Allocated once; only per-frame properties are set in the draw lambda.
+    val labelPaint = remember { android.graphics.Paint() }
     Canvas(modifier = modifier.fillMaxSize()) {
         val w = size.width
         val h = size.height
         drawRect(GolfColors.Base)
 
-        val labelPaint = android.graphics.Paint().apply {
+        labelPaint.apply {
             isAntiAlias = true
             textSize = 10.sp.toPx()
             color = GolfColors.TextMuted.toArgb()

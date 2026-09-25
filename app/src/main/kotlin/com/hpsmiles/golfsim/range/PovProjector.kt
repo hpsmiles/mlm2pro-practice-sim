@@ -81,9 +81,10 @@ object PovProjector {
     /**
      * The `v` of the ground at a given down-range distance (a horizontal
      * distance band line on the POV canvas — rotation is about the lateral
-     * axis, so bands stay screen-horizontal under pitch). Requires
-     * `cam.x == 0.0` (bands span the full width). The [distanceM] argument
-     * is a world y.
+     * axis, so bands stay screen-horizontal under pitch). `v` and depth are
+     * invariant in `dx`, so this holds for any `cam.x` — which the chase
+     * camera relies on (`cam.x` follows the ball laterally). The
+     * [distanceM] argument is a world y.
      */
     fun bandV(cam: RangeCamera, distanceM: Double): Double {
         val dy = distanceM - cam.y
