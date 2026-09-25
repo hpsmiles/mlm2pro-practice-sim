@@ -38,7 +38,7 @@
   - `PovProjector.bandV(cam: RangeCamera, distanceM: Double): Double`
   - Temporary `@Deprecated` compat overloads `project(x, y, z)` / `bandV(distanceM)` (deleted in Task 3) so `PovRangeCanvas` keeps compiling between tasks.
 
-- [ ] **Step 1: Rewrite the failing tests**
+- [x] **Step 1: Rewrite the failing tests**
 
 Replace the whole of `app/src/test/kotlin/com/hpsmiles/golfsim/range/PovProjectorTest.kt`:
 
@@ -189,7 +189,7 @@ class PovProjectorTest {
 }
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 ```powershell
 $env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"; .\gradlew.bat :app:testDebugUnitTest --tests "com.hpsmiles.golfsim.range.PovProjectorTest"
@@ -197,7 +197,7 @@ $env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"; .\gradlew.bat :a
 
 Expected: compile FAIL — `RangeCamera` unresolved (the new API does not exist yet).
 
-- [ ] **Step 3: Rewrite `PovProjector.kt`**
+- [x] **Step 3: Rewrite `PovProjector.kt`**
 
 Replace the whole file:
 
@@ -314,7 +314,7 @@ object PovProjector {
 
 Note: the compat overloads keep `PovRangeCanvas` compiling with the old `y + CAM_BACK_M` depth semantics — identical to the new pitch-0 static rig, so this task changes framing (8 m / 21.2 m) but no math.
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 ```powershell
 $env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"; .\gradlew.bat :app:testDebugUnitTest --tests "com.hpsmiles.golfsim.range.PovProjectorTest"
@@ -322,7 +322,7 @@ $env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"; .\gradlew.bat :a
 
 Expected: PASS (all 13 tests). Also run `.\gradlew.bat :app:compileDebugKotlin` — expected SUCCESS (compat overloads keep the canvas green).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```powershell
 git add app/src/main/kotlin/com/hpsmiles/golfsim/range/PovProjector.kt app/src/test/kotlin/com/hpsmiles/golfsim/range/PovProjectorTest.kt
@@ -344,7 +344,7 @@ git commit -m "feat(range): generalize PovProjector with RangeCamera pitch suppo
   - `FollowCam.endFraction(shot: ShotResult): Double` — playback runs `0..endFraction`, where `>1` covers the hold.
   - Tunable constants `FOLLOW_DELAY_SEC`, `BLEND_SEC`, `CHASE_BACK_M`, `CHASE_UP_M`, `OVERLOOK_DIST_M`, `LAND_PITCH_DEG`, `LAND_HOLD_SEC`, `EARLY_ENGAGE_V`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Create `app/src/test/kotlin/com/hpsmiles/golfsim/range/FollowCamTest.kt`:
 
@@ -540,7 +540,7 @@ class FollowCamTest {
 }
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 ```powershell
 $env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"; .\gradlew.bat :app:testDebugUnitTest --tests "com.hpsmiles.golfsim.range.FollowCamTest"
@@ -548,7 +548,7 @@ $env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"; .\gradlew.bat :a
 
 Expected: compile FAIL — `FollowCam` unresolved.
 
-- [ ] **Step 3: Implement `FollowCam.kt`**
+- [x] **Step 3: Implement `FollowCam.kt`**
 
 Create `app/src/main/kotlin/com/hpsmiles/golfsim/range/FollowCam.kt`:
 
@@ -690,7 +690,7 @@ object FollowCam {
 }
 ```
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 ```powershell
 $env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"; .\gradlew.bat :app:testDebugUnitTest --tests "com.hpsmiles.golfsim.range.FollowCamTest"
@@ -698,7 +698,7 @@ $env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"; .\gradlew.bat :a
 
 Expected: PASS (all 14 tests).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```powershell
 git add app/src/main/kotlin/com/hpsmiles/golfsim/range/FollowCam.kt app/src/test/kotlin/com/hpsmiles/golfsim/range/FollowCamTest.kt
@@ -719,7 +719,7 @@ git commit -m "feat(range): add pure FollowCam phase machine"
 
 No behavior change is visible in this task beyond the Task-1 rig constants: the default camera is `STATIC` (pitch 0 → identical horizon math). Type-checked by compile + all unit tests green.
 
-- [ ] **Step 1: Rewrite `PovRangeCanvas.kt`**
+- [x] **Step 1: Rewrite `PovRangeCanvas.kt`**
 
 Replace the whole file (changes vs. old: `camera` param; `v0Px` anchor + pitch-derived `horizonPx`; every projection goes through `camera`; target ovals use `centre.scale`; apex clamp computed against the STATIC rig; tee ball gets a 4 px minimum radius):
 
@@ -1074,7 +1074,7 @@ private fun worldToScreen(
 }
 ```
 
-- [ ] **Step 2: Delete the compat overloads from `PovProjector.kt`**
+- [x] **Step 2: Delete the compat overloads from `PovProjector.kt`**
 
 Remove this entire block (added in Task 1):
 
@@ -1092,7 +1092,7 @@ Remove this entire block (added in Task 1):
     fun bandV(distanceM: Double): Double = bandV(RangeCamera.STATIC, distanceM)
 ```
 
-- [ ] **Step 3: Compile and run all app unit tests**
+- [x] **Step 3: Compile and run all app unit tests**
 
 ```powershell
 $env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"; .\gradlew.bat :app:testDebugUnitTest
@@ -1100,7 +1100,7 @@ $env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"; .\gradlew.bat :a
 
 Expected: PASS (PovProjectorTest, FollowCamTest, RangeSessionTest, RangeSceneTest, ScaffoldSmokeTest — the canvas now uses the new API, overloads gone).
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```powershell
 git add app/src/main/kotlin/com/hpsmiles/golfsim/range/PovRangeCanvas.kt app/src/main/kotlin/com/hpsmiles/golfsim/range/PovProjector.kt
@@ -1119,7 +1119,7 @@ git commit -m "feat(range): plumb per-frame camera through PovRangeCanvas"
 - Consumes: `FollowCam.cameraAt(shot, playFraction)`, `FollowCam.endFraction(shot)` (Task 2), `PovRangeCanvas(…, camera = …)` (Task 3).
 - Produces: none (leaf). The POV view now follows the ball: static 1.5 s → blend → chase → 45° overlook at touchdown → 2.5 s hold → cut back to the crane view.
 
-- [ ] **Step 1: Wire the camera + extended animation in `RangeScreen.kt`**
+- [x] **Step 1: Wire the camera + extended animation in `RangeScreen.kt`**
 
 Edit 1 — after `val currentShot = session.shots.lastOrNull()` (line 98), add the per-frame camera:
 
@@ -1166,7 +1166,7 @@ Edit 3 — pass the camera to the canvas call site (around line 134):
                 )
 ```
 
-- [ ] **Step 2: Cap the flight drawing and extend the waiting-ball condition in `PovRangeCanvas.kt`**
+- [x] **Step 2: Cap the flight drawing and extend the waiting-ball condition in `PovRangeCanvas.kt`**
 
 Edit 1 — add the import (top of file, with the other `kotlin.math` imports):
 
@@ -1210,7 +1210,7 @@ Edit 3 — cap the current tracer and head at the flight (they must not move dur
                 val timeSec = min(playFraction, 1f) * s.flightTimeSec
 ```
 
-- [ ] **Step 3: Compile and run all app unit tests**
+- [x] **Step 3: Compile and run all app unit tests**
 
 ```powershell
 $env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"; .\gradlew.bat :app:testDebugUnitTest
@@ -1218,7 +1218,7 @@ $env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"; .\gradlew.bat :a
 
 Expected: PASS (all green — the FollowCam driver math is pinned by FollowCamTest; this task is glue).
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```powershell
 git add app/src/main/kotlin/com/hpsmiles/golfsim/range/RangeScreen.kt app/src/main/kotlin/com/hpsmiles/golfsim/range/PovRangeCanvas.kt
@@ -1238,7 +1238,7 @@ git commit -m "feat(range): drive follow cam + landing hold from RangeScreen"
 - Consumes: `RangeCamera` + `PovProjector.project(cam, …)` (Task 1), `groundPath` shape conventions (Task 3 canvas), `RangeScene.groundHeight`.
 - Produces: `RangeMat` object — geometry constants only (`BASE_X_MIN = -2.15`, `BASE_X_MAX = 0.35`, `BASE_Y_MIN = -1.25`, `BASE_Y_MAX = 1.25`, `STRIP_X_MIN = -1.75`, `STRIP_X_MAX = 0.05`, `STRIP_Y_MIN = -0.95`, `STRIP_Y_MAX = 0.95`, `LINE_HALF_WIDTH_M = 0.01`) plus the five B2 palette colors as `Color` vals.
 
-- [ ] **Step 1: Create `RangeMat.kt`**
+- [x] **Step 1: Create `RangeMat.kt`**
 
 ```kotlin
 // app/src/main/kotlin/com/hpsmiles/golfsim/range/RangeMat.kt
@@ -1283,7 +1283,7 @@ object RangeMat {
 
 Note: `Color` is a plain Compose value class (no Android framework types) — the geometry constants themselves stay plain Doubles/Ints, so this remains JVM-test-safe. No unit test: constants only, nothing to pin.
 
-- [ ] **Step 2: Draw the mat in `PovRangeCanvas.kt`**
+- [x] **Step 2: Draw the mat in `PovRangeCanvas.kt`**
 
 Add imports at the top of `PovRangeCanvas.kt`:
 
@@ -1366,7 +1366,7 @@ Insert this block AFTER the horizon-haze `drawRect` and BEFORE the `// The launc
 
 (The waiting tee ball already draws at world (0, 0, ballRadius) from Task 3 — that amber ball IS the ball on the mat; no extra dot needed.)
 
-- [ ] **Step 3: Add the mat quad to `TopDownCanvas.kt`**
+- [x] **Step 3: Add the mat quad to `TopDownCanvas.kt`**
 
 Insert after the lateral-gridlines `while` loop and BEFORE the `val history = shots.dropLast(1)` line:
 
@@ -1404,7 +1404,7 @@ import androidx.compose.ui.graphics.Color
 
 (`Offset`, `Path`, `Stroke`, `nativeCanvas`, `toArgb`, `sp`, `GolfColors` are already imported.)
 
-- [ ] **Step 4: Compile and run all app unit tests**
+- [x] **Step 4: Compile and run all app unit tests**
 
 ```powershell
 $env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"; .\gradlew.bat :app:testDebugUnitTest
@@ -1412,7 +1412,7 @@ $env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"; .\gradlew.bat :a
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```powershell
 git add app/src/main/kotlin/com/hpsmiles/golfsim/range/RangeMat.kt app/src/main/kotlin/com/hpsmiles/golfsim/range/PovRangeCanvas.kt app/src/main/kotlin/com/hpsmiles/golfsim/range/TopDownCanvas.kt
@@ -1428,7 +1428,7 @@ git commit -m "feat(range): add range mat to POV and top-down views"
 **Interfaces:**
 - Consumes: everything above.
 
-- [ ] **Step 1: Full build (assemble + all tests)**
+- [x] **Step 1: Full build (assemble + all tests)**
 
 ```powershell
 $env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"; .\gradlew.bat build
@@ -1436,7 +1436,7 @@ $env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"; .\gradlew.bat bu
 
 Expected: BUILD SUCCESSFUL — physics goldens untouched and green.
 
-- [ ] **Step 2: Install on the tablet**
+- [x] **Step 2: Install on the tablet**
 
 ```powershell
 $env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"; .\gradlew.bat :app:installDebug
