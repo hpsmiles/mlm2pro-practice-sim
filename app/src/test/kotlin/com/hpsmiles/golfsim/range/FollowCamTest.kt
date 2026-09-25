@@ -159,6 +159,18 @@ class FollowCamTest {
     }
 
     @Test
+    fun lateEarlyEngageStillRespectsTheTimer() {
+        // Crossing that happens AFTER the 1.5 s timer (apex just over the
+        // EARLY_ENGAGE_V threshold, so the ball only reaches the top of
+        // frame near its peak ~1.9 s). Whichever-comes-first semantics: the
+        // cam must already be blending at 1.6 s, not still STATIC.
+        val late = parabolicShot(carryM = 180.0, apexM = 25.0, flightTimeSec = 6.0)
+        val cam = FollowCam.cameraAt(late, frac(late, 1.6))
+        assertNotEquals(RangeCamera.STATIC, cam)
+        assertTrue(cam.y > RangeCamera.STATIC.y) // left the crane position
+    }
+
+    @Test
     fun shortShotSkipsStraightToTheOverlook() {
         val chip = parabolicShot(carryM = 15.0, apexM = 6.0, flightTimeSec = 1.6)
         val cam = FollowCam.cameraAt(chip, 0.2f)

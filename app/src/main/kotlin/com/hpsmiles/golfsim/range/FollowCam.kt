@@ -78,7 +78,7 @@ object FollowCam {
         // never point the camera at empty sky; park at the overlook.
         if (t <= FOLLOW_DELAY_SEC + BLEND_SEC) return overlook
 
-        val engageT = earlyEngageT(shot) ?: FOLLOW_DELAY_SEC
+        val engageT = earlyEngageT(shot)?.coerceAtMost(FOLLOW_DELAY_SEC) ?: FOLLOW_DELAY_SEC
         val blendEnd = engageT + BLEND_SEC
         val apexT = shot.samples.maxByOrNull { it.pz }?.tSec ?: (t / 2.0)
         val descentT = maxOf(apexT, blendEnd)

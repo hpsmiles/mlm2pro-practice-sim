@@ -3,6 +3,7 @@ package com.hpsmiles.golfsim.range
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -45,8 +46,8 @@ private const val MAT_MIN_DRAW_DEPTH_M = 6.0
  * Player-perspective range view. Painted "Tour Broadcast" scene (rough base,
  * fairway, mow stripes, greens with fringes, horizon haze; bands and target
  * ovals stay on top) plus the current shot's tracer and landing pulse, driven
- * by [playFraction] in 0..1 (1 = flight complete), and faded tracer lines for
- * [previousShots].
+ * by [playFraction] in 0..endFraction (1 = flight complete; values past 1 are
+ * the follow-cam landing hold), and faded tracer lines for [previousShots].
  *
  * Everything is projected through [camera] (spec 2026-09-25: the FollowCam
  * moves the rig per frame, and the static rig is the 8 m crane position).
@@ -68,6 +69,10 @@ fun PovRangeCanvas(
     modifier: Modifier = Modifier,
     camera: RangeCamera = RangeCamera.STATIC,
 ) {
+    // Plan-verbatim correction: use android.graphics.Paint directly for
+    // native text (androidx Paint.asFrameworkPaint() was wrong in the draft).
+    // Allocated once; only per-frame properties are set in the draw lambda.
+    val labelPaint = remember { android.graphics.Paint() }
     Canvas(modifier = modifier.fillMaxSize()) {
         val w = size.width
         val h = size.height
@@ -77,6 +82,12 @@ fun PovRangeCanvas(
         // v = -tan(pitch) — it moves up the frame as the camera noses down.
         val v0Px = h * 0.30f
         val horizonPx = v0Px - tan(camera.pitchRad).toFloat() * focalPx
+        // Pitch rotation, shared by the band/target cull and the mat path.
+        val cosPitch = cos(camera.pitchRad)
+        val sinPitch = sin(camera.pitchRad)
+        // Depth of a world point at ground level, in front of the camera
+        // plane (depth <= 0 means behind the camera; do not draw).
+        fun groundDepth(distM: Double) = (distM - camera.y) * cosPitch - (-camera.z) * sinPitch
 
         // Sky, then painted ground back-to-front: rough base (full bleed),
         // fairway, mow stripes, greens with fringes. All layers are flat
@@ -140,9 +151,7 @@ fun PovRangeCanvas(
             drawPath(surface, GREEN_SURFACE)
         }
 
-        // Plan-verbatim correction: use android.graphics.Paint directly for
-        // native text (androidx Paint.asFrameworkPaint() was wrong in the draft).
-        val labelPaint = android.graphics.Paint().apply {
+        labelPaint.apply {
             isAntiAlias = true
             textSize = 10.sp.toPx()
             color = Color.White.toArgb()
@@ -153,6 +162,7 @@ fun PovRangeCanvas(
         // crispness against the painted fairway.
         val bandDistances = listOf(50f, 100f, 150f, 200f)
         for (d in bandDistances) {
+            if (groundDepth(d.toDouble()) <= 0.0) continue // behind the camera
             val y = v0Px + PovProjector.bandV(camera, d.toDouble()) * focalPx
             drawLine(
                 color = Color.White.copy(alpha = 0.45f),
@@ -169,6 +179,9 @@ fun PovRangeCanvas(
         val targets = listOf(-12f to 75f, 0f to 100f, 12f to 150f)
         val targetRadiusM = 5f
         for ((lateralM, distM) in targets) {
+            // Cull when the near edge is behind the camera plane; distances
+            // are monotonic, so the far edge is behind too.
+            if (groundDepth((distM - targetRadiusM).toDouble()) <= 0.0) continue
             val centre = PovProjector.project(camera, lateralM.toDouble(), distM.toDouble(), 0.0) ?: continue
             val cx = centerX + centre.u * focalPx
             val cy = v0Px + centre.v * focalPx
@@ -220,8 +233,6 @@ fun PovRangeCanvas(
         // bottom); instead the mat is skipped entirely once the camera is
         // within MAT_MIN_DRAW_DEPTH_M of any corner, so it never blows up
         // across the frame mid-sweep.
-        val cosPitch = cos(camera.pitchRad)
-        val sinPitch = sin(camera.pitchRad)
         fun matPath(vertices: List<Pair<Double, Double>>): Path? {
             val clear = vertices.all { (x, y) ->
                 val dy = y - camera.y
