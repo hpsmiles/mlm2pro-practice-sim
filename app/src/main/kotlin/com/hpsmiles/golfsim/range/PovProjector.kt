@@ -1,58 +1,108 @@
 // app/src/main/kotlin/com/hpsmiles/golfsim/range/PovProjector.kt
 package com.hpsmiles.golfsim.range
 
+import kotlin.math.cos
+import kotlin.math.sin
+
+/**
+ * A range camera: world position (metres) + pitch (nose-down radians,
+ * 0 = level). No yaw, no roll — one rotation axis only (spec 2026-09-25).
+ */
+data class RangeCamera(
+    val x: Double,
+    val y: Double,
+    val z: Double,
+    val pitchRad: Double,
+) {
+    companion object {
+        /**
+         * The raised static rig behind the tee: an 8 m crane position
+         * ("mockup C", 2026-09-25 brainstorm). The tee stays at
+         * v = 8 / 21.2 = 0.377 — just above the bottom edge.
+         */
+        val STATIC = RangeCamera(0.0, -PovProjector.CAM_BACK_M, PovProjector.CAM_HEIGHT_M, 0.0)
+    }
+}
+
 /**
  * Pinhole projection from range world coordinates to normalized screen
- * coordinates. Pure Kotlin (no Android types) so it is unit-testable on the
- * JVM. The canvas layer converts these normalized values to pixels.
+ * coordinates. Pure Kotlin (no Android types) so it is unit-testable on
+ * the JVM. The canvas layer converts these normalized values to pixels.
  *
  * World axes (metres): x lateral (+right), y down-range (+away from the
- * hitter), z up. Camera: [CAM_BACK_M] BEHIND the ball (shed decision
- * 2026-09-24: the launch must be visible, so the eye sits back from the tee),
- * [CAM_HEIGHT_M] above the ground, looking straight down +y with no tilt —
- * the horizon is exactly at v = 0. All distances inside the projection are
- * measured from the camera plane: depth = y + CAM_BACK_M.
+ * hitter), z up. The camera ([RangeCamera]) carries its own world
+ * position and nose-down pitch; all distances inside the projection are
+ * measured relative to the camera.
+ *
+ * With camera pitch theta and relative point (dx, dy, dz), dz = z - camZ:
+ *   depth = dy*cos(theta) - dz*sin(theta)
+ *   u     = dx / depth
+ *   v     = -(dy*sin(theta) + dz*cos(theta)) / depth
+ * At pitch = 0 this collapses exactly to the old level pinhole:
+ *   u = x / (y + CAM_BACK_M), v = (CAM_HEIGHT_M - z) / (y + CAM_BACK_M).
  */
 object PovProjector {
 
-    /** Eye height of the camera above the hitting mat, in metres. */
-    const val CAM_HEIGHT_M = 1.7
+    /** Camera height above the hitting mat in the static rig, in metres. */
+    const val CAM_HEIGHT_M = 8.0
 
-    /**
-     * Camera distance behind the ball (y = 0), in metres. 4.5 puts the tee at
-     * v = 1.7/4.5 = 0.378 — ~95% of the way down the 0.7h ground area on the
-     * landscape tablet (focal 1.1w), i.e. the launch point is visible just
-     * above the bottom edge (user request 2026-09-24).
-     */
-    const val CAM_BACK_M = 4.5
+    /** Camera distance behind the ball (y = 0) in the static rig, in metres. */
+    const val CAM_BACK_M = 21.2
 
     /**
      * Normalized projection of a world point. `u` is lateral position (0 =
-     * dead ahead, +right), `v` is vertical position (0 = horizon, +toward the
-     * viewer's feet), `scale` is the relative on-screen size of a 1 m object
-     * at that depth. All values are independent of viewport size.
+     * dead ahead, +right), `v` is vertical position (0 = camera level,
+     * +toward the viewer's feet), `scale` is the relative on-screen size
+     * of a 1 m object at that depth. All values are independent of
+     * viewport size.
      */
     data class ProjectedPoint(val u: Double, val v: Double, val scale: Double)
 
     /**
-     * Projects a world point to the screen, or returns null when the point is
-     * at or behind the camera plane (y <= -CAM_BACK_M) — such points must not
+     * Projects a world point through [cam], or returns null when the point
+     * is at or behind the camera plane (depth <= 0) — such points must not
      * be drawn.
      */
-    fun project(x: Double, y: Double, z: Double): ProjectedPoint? {
-        val depth = y + CAM_BACK_M
+    fun project(cam: RangeCamera, x: Double, y: Double, z: Double): ProjectedPoint? {
+        val dx = x - cam.x
+        val dy = y - cam.y
+        val dz = z - cam.z
+        val cosPitch = cos(cam.pitchRad)
+        val sinPitch = sin(cam.pitchRad)
+        val depth = dy * cosPitch - dz * sinPitch
         if (depth <= 0.0) return null
         return ProjectedPoint(
-            u = x / depth,
-            v = (CAM_HEIGHT_M - z) / depth,
+            u = dx / depth,
+            v = -(dy * sinPitch + dz * cosPitch) / depth,
             scale = 1.0 / depth,
         )
     }
 
     /**
      * The `v` of the ground at a given down-range distance (a horizontal
-     * distance band line on the POV canvas). The [distanceM] argument is a
-     * world y; band lines sit at depth y + [CAM_BACK_M] from the camera.
+     * distance band line on the POV canvas — rotation is about the lateral
+     * axis, so bands stay screen-horizontal under pitch). Requires
+     * `cam.x == 0.0` (bands span the full width). The [distanceM] argument
+     * is a world y.
      */
-    fun bandV(distanceM: Double): Double = CAM_HEIGHT_M / (distanceM + CAM_BACK_M)
+    fun bandV(cam: RangeCamera, distanceM: Double): Double {
+        val dy = distanceM - cam.y
+        val dz = -cam.z
+        val cosPitch = cos(cam.pitchRad)
+        val sinPitch = sin(cam.pitchRad)
+        val depth = dy * cosPitch - dz * sinPitch
+        return -(dy * sinPitch + dz * cosPitch) / depth
+    }
+
+    // ------------------------------------------------------------------
+    // Temporary compat overloads (old call sites in PovRangeCanvas).
+    // DELETED in the canvas task — do not use in new code.
+    // ------------------------------------------------------------------
+
+    @Deprecated("Use project(cam, x, y, z)")
+    fun project(x: Double, y: Double, z: Double): ProjectedPoint? =
+        project(RangeCamera.STATIC, x, y, z)
+
+    @Deprecated("Use bandV(cam, distanceM)")
+    fun bandV(distanceM: Double): Double = bandV(RangeCamera.STATIC, distanceM)
 }
