@@ -56,6 +56,49 @@ class FollowCamTest {
     private fun frac(shot: ShotResult, tSec: Double): Float =
         (tSec / shot.flightTimeSec).toFloat()
 
+    /**
+     * Descent must keep the drawn ball inside the frame the whole way
+     * down (user report 2026-09-25 round 3: "long shots always go out
+     * of screen above; short shots are ok"). Short shots never enter the
+     * descent branch, which is why they were unaffected: the old descent
+     * lerped in WORLD space between the chase rig (behind the moving
+     * ball) and the overlook (a fixed point at the landing), so on long
+     * shots the camera flew PAST the ball mid-flight — the ball ended up
+     * behind the camera plane (drawn at the launch anchor) or above the
+     * frame top on tall slots.
+     *
+     * The ball-relative morph keeps the ball between dead center and the
+     * chase lock line (+CHASE_UP_M / CHASE_BACK_M = +0.125) for every
+     * descent frame, on any slot geometry.
+     */
+    @Test
+    fun descentKeepsTheDrawnBallInsideTheFrame() {
+        val shot = parabolicShot(carryM = 240.0, apexM = 45.0, flightTimeSec = 6.0)
+        for (vMin in listOf(-0.125, -0.20)) {
+            val drawn = FollowCam.scaledSamples(shot, vMin)
+            val descentT = drawn.maxByOrNull { it.pz }!!.tSec
+            var f = (descentT / shot.flightTimeSec).toFloat()
+            val frameBottomV = 0.125f + 0.20f // generous: any real slot is deeper than this
+            while (f < 1.0f) {
+                val cam = FollowCam.cameraAt(shot, f, vMin)
+                val timeSec = f.toDouble() * shot.flightTimeSec
+                val head = drawn.lastOrNull { it.tSec <= timeSec } ?: drawn.first()
+                val p = PovProjector.project(cam, head.px, head.py, head.pz)
+                assertNotNull("ball behind camera plane at f=$f (vMin=$vMin); descent rig left the ball behind", p)
+                val v = p!!.v
+                assertTrue(
+                    "ball above frame at f=$f (vMin=$vMin): v=$v",
+                    v >= -0.15,
+                )
+                assertTrue(
+                    "ball below frame at f=$f (vMin=$vMin): v=$v",
+                    v <= frameBottomV,
+                )
+                f += 0.004f
+            }
+        }
+    }
+
     @Test
     fun staticBeforeTheDelay() {
         val shot = parabolicShot()

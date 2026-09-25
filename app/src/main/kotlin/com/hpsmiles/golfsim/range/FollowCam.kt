@@ -15,9 +15,12 @@ import kotlin.math.sin
  *   static   t < engageT        STATIC rig (or early engage, whichever first)
  *   blend    1.4 s              quintic smoothstep STATIC -> chase rig (target moves)
  *   chase    -> apex            drawn ball + (0, -CHASE_BACK_M, +CHASE_UP_M), pitch 0
- *   descent  apex -> touchdown  lerp the MOVING chase rig -> overlook rig
- *                              (no halt at the apex); pitch eases
- *                              0 -> LAND_PITCH_DEG on the same progress
+ *   descent  apex -> touchdown  ball-relative rig morphing its shape
+ *                              (behind / above / pitch) toward the overlook,
+ *                              anchored to the live drawn sample — the ball
+ *                              stays between dead center and the chase lock
+ *                              line the whole way down (2026-09-25 round 3),
+ *                              ending exactly on the overlook at touchdown
  *   hold     LAND_HOLD_SEC      overlook rig parked
  *   snap back after hold        cut to STATIC (tracer + landing marker persist)
  *
@@ -146,8 +149,8 @@ object FollowCam {
                     smoothstep((timeSec - engageT) / BLEND_SEC),
                 )
             timeSec < descentT -> chaseRig(sampleAt(drawn, timeSec))
-            timeSec < t -> lerpCam(
-                chaseRig(sampleAt(drawn, timeSec)), // moving: no halt at the apex
+            timeSec < t -> descentRig(
+                sampleAt(drawn, timeSec),
                 overlook,
                 smoothstep(((timeSec - descentT) / (t - descentT)).coerceIn(0.0, 1.0)),
             )
@@ -171,6 +174,34 @@ object FollowCam {
 
     private fun chaseRig(head: TrajectorySample): RangeCamera =
         RangeCamera(head.px, head.py - CHASE_BACK_M, head.pz + CHASE_UP_M, 0.0)
+
+    /**
+     * Descent rig: BALL-RELATIVE, morphing its shape — behind-distance
+     * (CHASE_BACK_M -> overlook behind-distance), height above the ball
+     * (CHASE_UP_M -> overlook height), pitch (0 -> overlook pitch) — as
+     * [s] runs 0 -> 1, always anchored to the live [head] sample.
+     *
+     * The previous design lerped world positions between chaseRig(head)
+     * and the fixed overlook, which flew the camera PAST the ball
+     * mid-descent on long shots (the overlook sits at the landing, far
+     * ahead of the ball mid-flight): the ball left the frame — behind
+     * the camera plane or above the frame top on tall slots (user
+     * report 2026-09-25, round 3). The shape morph keeps the ball
+     * between dead center and the chase lock line (+CHASE_UP_M /
+     * CHASE_BACK_M) for the whole descent, and at s = 1 it equals the
+     * overlook rig exactly (the hold takes over with no cut).
+     */
+    private fun descentRig(head: TrajectorySample, overlook: RangeCamera, s: Double): RangeCamera {
+        val pitch = Math.toRadians(LAND_PITCH_DEG)
+        val endBack = OVERLOOK_DIST_M * cos(pitch)
+        val endUp = OVERLOOK_DIST_M * sin(pitch)
+        return RangeCamera(
+            x = head.px,
+            y = head.py - (CHASE_BACK_M + (endBack - CHASE_BACK_M) * s),
+            z = head.pz + (CHASE_UP_M + (endUp - CHASE_UP_M) * s),
+            pitchRad = overlook.pitchRad * s,
+        )
+    }
 
     private fun sampleAt(samples: List<TrajectorySample>, t: Double): TrajectorySample =
         samples.lastOrNull { it.tSec <= t } ?: samples.first()
