@@ -128,12 +128,24 @@ object FollowCam {
         val overlook = overlookRig(shot)
 
         // The drawn flight: the chase must follow the frame-scaled path
-        // the player sees, or big apexes leave the chase frame.
-        val drawn = scaledSamples(shot, apexVMin)
+        // the player sees, or big apexes leave the chase frame. Extend it
+        // with the synthetic ground roll so the hold can track the ball to
+        // its rest position: with the old fixed overlook the visible ground
+        // band ends ~14 m past carry, so a 200+ shot's 15-25 m rollout
+        // sailed out the frame top (user report 2026-09-25). Rollout
+        // samples are pz = 0 (unaffected by the apex clamp) and the list is
+        // empty when rolloutM <= 0, so appending is safe for every shot.
+        val drawn = scaledSamples(shot, apexVMin) + RangeRollout.samples(shot)
 
         // Short shots: the flight ends before delay/blend ever would —
-        // never point the camera at empty sky; park at the overlook.
-        if (t <= FOLLOW_DELAY_SEC + BLEND_SEC) return overlook
+        // never point the camera at empty sky; park at the overlook for the
+        // flight, then track the ball-relative hold rig through any rollout
+        // (at touchdown head = last flight sample, so descentRig(..., 1.0)
+        // equals the fixed overlook exactly — continuity preserved).
+        if (t <= FOLLOW_DELAY_SEC + BLEND_SEC) {
+            return if (timeSec < t) overlook
+            else descentRig(sampleAt(drawn, timeSec), overlook, 1.0)
+        }
 
         val engageT = earlyEngageT(drawn)?.coerceAtMost(FOLLOW_DELAY_SEC) ?: FOLLOW_DELAY_SEC
         val blendEnd = engageT + BLEND_SEC
@@ -154,7 +166,14 @@ object FollowCam {
                 overlook,
                 smoothstep(((timeSec - descentT) / (t - descentT)).coerceIn(0.0, 1.0)),
             )
-            else -> overlook // landing hold
+            // Landing hold: dolly the ball-relative overlook rig along the
+            // rollout. descentRig(head, overlook, 1.0) is
+            // (head.px, head.py - endBack, head.pz + endUp) at LAND pitch,
+            // so the ball's screen position is identical to its touchdown
+            // frame the whole roll and cannot leave the frame. Once the
+            // head reaches the final rest sample the rig parks for the
+            // rest of the hold; the snap-back guard above is unchanged.
+            else -> descentRig(sampleAt(drawn, timeSec), overlook, 1.0)
         }
     }
 

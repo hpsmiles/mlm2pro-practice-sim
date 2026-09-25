@@ -26,6 +26,7 @@ class FollowCamTest {
         apexM: Double = 30.0,
         flightTimeSec: Double = 6.0,
         sideM: Double = 5.0,
+        rolloutM: Double = 5.0,
     ): ShotResult {
         val samples = ArrayList<TrajectorySample>()
         var t = 0.0
@@ -44,8 +45,8 @@ class FollowCamTest {
         samples.add(TrajectorySample(sideM, carryM, 0.0, flightTimeSec))
         return ShotResult(
             carryM = carryM,
-            rolloutM = 5.0,
-            totalM = carryM + 5.0,
+            rolloutM = rolloutM,
+            totalM = carryM + rolloutM,
             sideM = sideM,
             apexM = apexM,
             flightTimeSec = flightTimeSec,
@@ -96,6 +97,38 @@ class FollowCamTest {
                 )
                 f += 0.004f
             }
+        }
+    }
+
+    /**
+     * During the landing hold the camera must track the rolling ball, not
+     * park at a fixed overlook aimed at the carry point: a 200+ shot rolls
+     * 15-25 m, and with the 45 deg overlook the visible ground band ends
+     * only ~14 m past carry, so the ball sailed out the frame TOP mid-roll
+     * (user report 2026-09-25: "when the ball hits the ground it can go
+     * out of frame, especially on long 200+ shots").
+     *
+     * The extended drawn path is the apex-clamped flight plus the synthetic
+     * ground roll; the hold uses the ball-relative overlook (descentRig at
+     * s = 1.0 anchored to the live head), so the ball's screen position is
+     * identical to its touchdown-frame position the whole roll.
+     */
+    @Test
+    fun rolloutKeepsTheBallInsideTheFrame() {
+        val shot = parabolicShot(carryM = 230.0, apexM = 42.0, flightTimeSec = 6.5, rolloutM = 25.0)
+        val drawn = FollowCam.scaledSamples(shot) + RangeRollout.samples(shot)
+        val frameBottomV = 0.125 + 0.20 // generous: any real slot is deeper than this
+        var f = 1.0f
+        val endF = (1.0 + 1.8 / shot.flightTimeSec).toFloat()
+        while (f <= endF) {
+            val timeSec = f.toDouble() * shot.flightTimeSec
+            val head = drawn.lastOrNull { it.tSec <= timeSec } ?: drawn.first()
+            val p = PovProjector.project(FollowCam.cameraAt(shot, f), head.px, head.py, head.pz)
+            assertNotNull("ball behind camera plane during rollout at f=$f", p)
+            val v = p!!.v
+            assertTrue("ball above frame during rollout at f=$f: v=$v", v >= -0.15)
+            assertTrue("ball below frame during rollout at f=$f: v=$v", v <= frameBottomV)
+            f += 0.004f
         }
     }
 
@@ -234,7 +267,11 @@ class FollowCamTest {
 
     @Test
     fun holdParksAtTheOverlookUntilTheEnd() {
-        val shot = parabolicShot()
+        // rolloutM = 0: with no ground roll the ball-relative hold rig
+        // collapses to the fixed overlook for the whole hold, so this
+        // pins the stationary behaviour. A rolling shot is covered by
+        // rolloutKeepsTheBallInsideTheFrame.
+        val shot = parabolicShot(rolloutM = 0.0)
         val touchdown = FollowCam.cameraAt(shot, 1f)
         val midHold = FollowCam.cameraAt(shot, frac(shot, 6.0 + 1.25))
         val beforeEnd = FollowCam.cameraAt(shot, (FollowCam.endFraction(shot) - 0.01).toFloat())
