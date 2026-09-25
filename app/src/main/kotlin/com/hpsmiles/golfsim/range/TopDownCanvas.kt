@@ -91,7 +91,7 @@ fun TopDownCanvas(shots: List<DisplayShot>, modifier: Modifier = Modifier) {
         val history = shots.dropLast(1)
         for (shot in history) {
             val x = originX + shot.shotResult.sideM * pxPerM
-            val y = originY - shot.shotResult.carryM * pxPerM
+            val y = originY - shot.shotResult.totalM * pxPerM
             drawCircle(GolfColors.Teal.copy(alpha = 0.55f), radius = 3.sp.toPx(), center = Offset(x.toFloat(), y.toFloat()))
         }
         shots.lastOrNull()?.let { last ->

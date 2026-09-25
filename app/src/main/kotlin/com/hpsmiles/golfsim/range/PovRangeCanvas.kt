@@ -298,6 +298,10 @@ fun PovRangeCanvas(
         fun scaledSamples(s: ShotResult): List<TrajectorySample> =
             FollowCam.scaledSamples(s, vMin.toDouble())
 
+        // The full drawn path: the apex-clamped flight plus the synthetic
+        // ground roll (empty when there is no rollout). Shared by the tracer
+        // and the head ball so the head rolls through the same curve the
+        // tracing line draws.
         fun drawTracer(s: ShotResult, timeSec: Double, color: Color, width: Float) {
             val samples = scaledSamples(s)
             if (samples.size < 2) return
@@ -347,6 +351,15 @@ fun PovRangeCanvas(
         if (showHistory) {
             for (prev in previousShots.asReversed()) {
                 drawTracer(prev, Double.POSITIVE_INFINITY, HISTORY_LINE, 2f)
+            }
+            // Persistent resting balls for previous shots (user request
+            // 2026-09-25): a faded teal dot at each shot's REST position
+            // (totalM), on top of the history tracer lines.
+            val restRadius = 4.sp.toPx()
+            for (prev in previousShots) {
+                val rest = worldToScreen(camera, v0Px, focalPx, centerX, prev.sideM, prev.totalM, 0.0)
+                    ?: continue
+                drawCircle(GolfColors.Teal.copy(alpha = 0.7f), radius = restRadius, center = rest)
             }
         }
 
@@ -400,6 +413,17 @@ fun PovRangeCanvas(
                         style = Stroke(width = 2f),
                     )
                     drawCircle(GolfColors.Amber, radius = 4.sp.toPx(), center = landing)
+                }
+            }
+
+            // Resting ball after snap-back (user request 2026-09-25): once
+            // the hold is over the animated head parks, so draw a static
+            // amber dot at the shot's REST position (totalM) next to the
+            // landing SPOT marker at carryM.
+            if (playFraction >= endF) {
+                val rest = worldToScreen(camera, v0Px, focalPx, centerX, s.sideM, s.totalM, 0.0)
+                if (rest != null) {
+                    drawCircle(GolfColors.Amber.copy(alpha = 0.9f), radius = 5.sp.toPx(), center = rest)
                 }
             }
         }
