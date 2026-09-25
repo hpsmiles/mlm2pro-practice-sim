@@ -14,9 +14,9 @@ import org.junit.Test
  *
  * Synthetic shots: straight-line lateral drift, py proportional to t, a
  * pz parabola peaking at t = T/2, samples every 50 ms. The default shot
- * (carry 180, apex 30, T = 6) early-engages at ~1.0 s (apex heads for the
- * top of frame); the low wedge (apex 10, carry 60, T = 3.5) never does,
- * so it engages on the 1.5 s timer.
+ * (carry 180, apex 30, T = 6) early-engages right around the 1.0 s timer;
+ * the low wedge (apex 10, carry 60, T = 3.5) never does, so it engages
+ * on the 1.0 s timer.
  */
 class FollowCamTest {
 
@@ -71,15 +71,15 @@ class FollowCamTest {
     @Test
     fun highApexEngagesBeforeTheTimer() {
         val driver = parabolicShot(carryM = 240.0, apexM = 45.0)
-        // t = 1.0 s is inside the 1.5 s static window, but a big apex has
-        // already pushed the ball near the top of the frame -> early engage.
-        assertNotEquals(RangeCamera.STATIC, FollowCam.cameraAt(driver, frac(driver, 1.0)))
+        // t = 0.7 s is inside the 1.0 s static window, but a big apex has
+        // already pushed the ball near the top of the frame -> early engage (~0.6 s).
+        assertNotEquals(RangeCamera.STATIC, FollowCam.cameraAt(driver, frac(driver, 0.7)))
     }
 
     @Test
     fun chaseTracksBehindAndAboveTheBall() {
         val shot = parabolicShot()
-        // t = 2.8 s: past blend end (~1.8 s), before apex (3.0 s) -> chase.
+        // t = 2.8 s: past blend end (~2.4 s), before apex (3.0 s) -> chase.
         val head = shot.samples.last { it.tSec <= 2.8 }
         val cam = FollowCam.cameraAt(shot, frac(shot, 2.8))
         assertEquals(0.0, cam.pitchRad, 1e-12)
@@ -91,8 +91,8 @@ class FollowCamTest {
     @Test
     fun blendCrossFadesFromStaticToChase() {
         val wedge = parabolicShot(carryM = 60.0, apexM = 10.0, flightTimeSec = 3.5)
-        // Low apex never leaves the frame -> engages on the 1.5 s timer,
-        // blend spans 1.5-2.3 s. t = 1.9 s is mid-blend.
+        // Low apex never leaves the frame -> engages on the 1.0 s timer,
+        // blend spans 1.0-2.4 s. t = 1.9 s is mid-blend.
         val cam = FollowCam.cameraAt(wedge, frac(wedge, 1.9))
         val head = wedge.samples.last { it.tSec <= 1.9 }
         assertEquals(0.0, cam.pitchRad, 1e-12)
@@ -104,7 +104,7 @@ class FollowCamTest {
     @Test
     fun blendIsMonotonicTowardTheChaseRig() {
         // A shot that is still RISING through the whole blend window
-        // (apex at 4.0 s > blend end 2.3 s), so both the smoothstep factor
+        // (apex at 4.0 s > blend end 2.4 s), so both the smoothstep factor
         // and the chase rig move monotonically — the camera must too.
         val rising = parabolicShot(carryM = 80.0, apexM = 12.0, flightTimeSec = 8.0)
         var lastY = RangeCamera.STATIC.y
@@ -160,9 +160,9 @@ class FollowCamTest {
 
     @Test
     fun lateEarlyEngageStillRespectsTheTimer() {
-        // Crossing that happens AFTER the 1.5 s timer (apex just over the
+        // Crossing that happens AFTER the 1.0 s timer (apex just over the
         // EARLY_ENGAGE_V threshold, so the ball only reaches the top of
-        // frame near its peak ~1.9 s). Whichever-comes-first semantics: the
+        // frame near its peak ~1.7 s). Whichever-comes-first semantics: the
         // cam must already be blending at 1.6 s, not still STATIC.
         val late = parabolicShot(carryM = 180.0, apexM = 25.0, flightTimeSec = 6.0)
         val cam = FollowCam.cameraAt(late, frac(late, 1.6))

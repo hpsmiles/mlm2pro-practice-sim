@@ -13,7 +13,7 @@ import kotlin.math.sin
  *
  * Timeline (t = seconds since impact, T = flightTimeSec):
  *   static   t < engageT        STATIC rig (or early engage, whichever first)
- *   blend    0.8 s              smoothstep STATIC -> chase rig (target moves)
+ *   blend    1.4 s              quintic smoothstep STATIC -> chase rig (target moves)
  *   chase    -> apex            ball + (0, -CHASE_BACK_M, +CHASE_UP_M), pitch 0
  *   descent  apex -> touchdown  ease chase rig -> overlook rig; pitch eases
  *                              0 -> LAND_PITCH_DEG on the same progress
@@ -23,10 +23,10 @@ import kotlin.math.sin
 object FollowCam {
 
     /** Static window before the follow cam engages. */
-    const val FOLLOW_DELAY_SEC = 1.5
+    const val FOLLOW_DELAY_SEC = 1.0
 
     /** Cross-fade from the static rig to the chase rig. */
-    const val BLEND_SEC = 0.8
+    const val BLEND_SEC = 1.4
 
     /** Chase position: this far behind the ball. */
     const val CHASE_BACK_M = 20.0
@@ -138,8 +138,13 @@ object FollowCam {
             pitchRad = a.pitchRad + (b.pitchRad - a.pitchRad) * s,
         )
 
+    /**
+     * Quintic smoothstep (6s^5 - 15s^4 + 10s^3): zero camera velocity at
+     * both ends like the classic cubic, but a softer, longer-feeling ramp
+     * through the middle of the blend.
+     */
     private fun smoothstep(x: Double): Double {
         val c = x.coerceIn(0.0, 1.0)
-        return c * c * (3.0 - 2.0 * c)
+        return c * c * c * (c * (c * 6.0 - 15.0) + 10.0)
     }
 }
