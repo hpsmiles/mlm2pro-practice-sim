@@ -271,6 +271,18 @@ fun RangeScreen(
                         accent = GolfColors.Amber,
                     )
                     Spacer(Modifier.size(GolfSpacing.Xs))
+                    // Club head speed is the only club metric the MLM2PRO transmits (MEASUREMENT 0-1);
+                    // smash factor is derived client-side as ball speed / club speed (both m/s).
+                    MetricChip("club", String.format(Locale.US, "%.1f", shot.ballData.clubHeadSpeed * MPH_PER_MS), "MPH")
+                    Spacer(Modifier.size(GolfSpacing.Xs))
+                    MetricChip(
+                        "smash",
+                        if (shot.ballData.clubHeadSpeed > 0.0) {
+                            String.format(Locale.US, "%.2f", shot.ballData.ballSpeed / shot.ballData.clubHeadSpeed)
+                        } else "-",
+                        "",
+                    )
+                    Spacer(Modifier.size(GolfSpacing.Xs))
                     // totalSpin is an Int (M1 BallData) — %d, not %.0f (IllegalFormatConversionException).
                     MetricChip("spin", String.format(Locale.US, "%d", shot.ballData.totalSpin), "RPM")
                     Spacer(Modifier.size(GolfSpacing.Xs))
