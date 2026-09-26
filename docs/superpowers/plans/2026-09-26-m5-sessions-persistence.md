@@ -2552,6 +2552,112 @@ git commit -m "feat(app): active club pill and picker overlay on range"
 
 ---
 
+### Task 7a: Picker overlay hardening - bounded grid + hint gating
+
+> Follow-up to the Task 7 quality review: the tile grid grows one row (72 dp + `Md` gap) per 4 clubs with no cap and no scroll — a bag with M6/M7 A/B duplicates (7i-A, 7i-B, …) outgrows the tablet's usable landscape height, leaving unreachable tiles. Also, the rejection hint is not gated on the ADD form being open, so a rapid double-tap on ADD (first submit succeeds and closes the form, the second reports the now-duplicate name) ghosts the hint under the closed form. Both are plan-authored defects; this task fixes them mechanically. Nothing outside `ClubPickerOverlay` changes.
+
+**Files:**
+- Modify: `app/src/main/kotlin/com/hpsmiles/golfsim/range/ClubPickerOverlay.kt`
+- Test: none (Compose UI only — device-verified by the Task 10 step 4 checklist items marked "Task 7a")
+
+**Interfaces:**
+- Consumes: Task 7's `ClubPickerOverlay` exactly as shipped in `f06962f`.
+- Produces: unchanged public signature; internal layout only.
+
+**Conscious deferrals (reviewers: do NOT re-flag these):** `FocusRequester`/IME action on the ADD field (two-tap-to-focus is a device-feel question, Task 10), ripple indication on the scrim, promoting `OverlayScrim` to a `GolfColors` token (no second consumer exists until one is designed), disabling ADD while a submission is in flight (the hint gating below already removes the visible symptom).
+
+- [ ] **Step 1: Bounded, scrollable tile grid**
+
+Replace the rows block directly under the `ACTIVE CLUB` title:
+
+```kotlin
+                Text("ACTIVE CLUB", style = GolfTypography.ScreenTitle, color = GolfColors.TextPrimary)
+                // "—" (untagged) tile first, then the bag, 4 per row.
+                (listOf<String?>(null) + clubNames).chunked(4).forEach { row ->
+                    Row(horizontalArrangement = Arrangement.spacedBy(GolfSpacing.Sm)) {
+                        row.forEach { name ->
+                            ClubTile(
+                                label = name ?: "—",
+                                active = name == activeClubName,
+                                onClick = {
+                                    onSelectClub(name)
+                                    onDismiss()
+                                },
+                            )
+                        }
+                    }
+                }
+```
+
+with the same block wrapped in a scrollable column capped at exactly four visible rows (72 dp tiles + 3 × 12 dp `Md` gaps = 324 dp):
+
+```kotlin
+                Text("ACTIVE CLUB", style = GolfTypography.ScreenTitle, color = GolfColors.TextPrimary)
+                // "—" (untagged) tile first, then the bag, 4 per row. Capped
+                // at four visible rows (72dp tiles + Md gaps = 324dp) and
+                // scrollable beyond, so the panel never outgrows the
+                // tablet's usable landscape height however large the bag
+                // grows (Task 7 quality review; M6/M7 A/B duplicates).
+                Column(
+                    modifier = Modifier
+                        .heightIn(max = 324.dp)
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(GolfSpacing.Md),
+                ) {
+                    (listOf<String?>(null) + clubNames).chunked(4).forEach { row ->
+                        Row(horizontalArrangement = Arrangement.spacedBy(GolfSpacing.Sm)) {
+                            row.forEach { name ->
+                                ClubTile(
+                                    label = name ?: "—",
+                                    active = name == activeClubName,
+                                    onClick = {
+                                        onSelectClub(name)
+                                        onDismiss()
+                                    },
+                                )
+                            }
+                        }
+                    }
+                }
+```
+
+Add three imports to the existing alphabetized block (`heightIn` in the `layout` group; `rememberScrollState` and `verticalScroll` after it, bracketing `shape.RoundedCornerShape`):
+
+```kotlin
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+```
+
+- [ ] **Step 2: Gate the rejection hint on the form being open**
+
+```kotlin
+                if (addRejected) {
+```
+
+becomes
+
+```kotlin
+                // Gated on `adding`: a double-tap on ADD races two submits —
+                // the first can succeed and close the form while the second
+                // reports a now-duplicate name. Without the gate that late
+                // rejection ghosts the hint under the closed form (Task 7
+                // quality review).
+                if (adding && addRejected) {
+```
+
+- [ ] **Step 3: Suite + build**
+
+Run: `$env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"; .\gradlew.bat :app:test :app:assembleDebug`
+Expected: `BUILD SUCCESSFUL`; `:app:test` = 55 tests, 0 failures (no test files touched); debug APK assembles.
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add app/src
+git commit -m "fix(app): bound club picker grid height and gate its rejection hint"
+```
+
 ### Task 8: BAG editor in Settings
 
 **Files:**
@@ -3546,6 +3652,8 @@ adb helper for force-stops: `& "$env:LOCALAPPDATA\Android\Sdk\platform-tools\adb
 - [ ] Tap the pill → picker overlay opens; tap `7i` → overlay closes, pill reads `7i ▾` with Teal border.
 - [ ] FIRE 2 more shots → 5 total (3 untagged, 2 × 7i).
 - [ ] In the picker's ＋ ADD form: type `7i` → ADD → `ALREADY IN BAG` (repository rule, not a local guess); then type `7i-A` → ADD → new tile appears (M7 duplicate-name pattern works); then type `7i,` → ADD → `NO COMMAS` (repository comma rule).
+- [ ] Picker overlay mechanics (Task 7a): tap the scrim (anywhere outside the panel) → overlay dismisses; tap the panel body → it does NOT. Add clubs until a fifth tile row would exist → the grid scrolls inside the capped four-row panel and nothing overflows the screen.
+- [ ] ADD-flow race (Task 7a): type a brand-new club name and double-tap ADD rapidly → exactly one club is added and NO hint text lingers after the form closes.
 - [ ] HISTORY tab: newest session (auto-title "EEE d MMM · HH:mm" format, DEMO + OPEN badges) is selected by default; stat chips show the right shot count; `LIVE ONLY` is on and the list is EMPTY (demo-only) — toggle `ALL` → the session appears (spec D4).
 - [ ] Long-press one untagged row → Teal selection + retag bar; tap two more rows; choose `8i`; APPLY → those rows' CLUB column reads `8i`, list club summary updates.
 - [ ] Tap the session title → rename dialog pre-filled → type `Demo tag test` → CONFIRM → list row + detail title update. Rename again with only spaces → CONFIRM → title returns to the auto-title (repo blank ⇒ null).
