@@ -1904,6 +1904,85 @@ git add app/src
 git commit -m "feat(app): count restore skips and never replay restored shots"
 ```
 
+### Task 5c: Park restored shots in the completed state
+
+Follow-up to the Task 5b quality review — two Minor plan-level findings folded in while the seam is fresh:
+
+1. **Incomplete render at relaunch:** the tick gate leaves a restored current shot at `playFraction = 0f`, which renders an amber head-ball near its CARRY point with no landing dot and no rest dot — inconsistent with previous shots' teal rest dots. Fix: park at `FollowCam.endFraction(...)` instead — the existing completed-shot draw paths then render (landing dot at carry, ball at rest) with zero animation.
+2. **Gate robustness:** `tick == 0` is only a valid restored-shot proxy while restore is startup-only. A samples-based gate (`shot.shotResult.samples.isEmpty()`) is robust by construction — live shots always carry `BallFlightEngine` flight samples, restored shots never do.
+
+Supersedes Task 5b's tick gate; `RangeSession` behavior is unchanged.
+
+**Files:**
+- Modify: `app/src/main/kotlin/com/hpsmiles/golfsim/range/RangeScreen.kt`
+- Modify: `app/src/main/kotlin/com/hpsmiles/golfsim/range/RangeSession.kt` (KDoc truth-telling only)
+
+**Interfaces:**
+- Produces: playback gate is samples-based and parks restored shots at their completed end state. No signature changes.
+
+- [ ] **Step 1: Replace the playback gate**
+
+In `RangeScreen.kt`, replace the Task 5b tick-gate block at the top of the playback effect:
+
+```kotlin
+    LaunchedEffect(currentShot, speedMult) {
+        // M5 restore: tick 0 means no live-accepted shot this process, so
+        // the current shot is a restored (pre-animated) one — never replay
+        // its rollout, at relaunch or on a speed-mult change.
+        if (session.tick.intValue == 0) return@LaunchedEffect
+        val shot = currentShot ?: return@LaunchedEffect
+        if (shot.shotResult.flightTimeSec <= 0.0) return@LaunchedEffect
+```
+
+with:
+
+```kotlin
+    LaunchedEffect(currentShot, speedMult) {
+        val shot = currentShot ?: return@LaunchedEffect
+        // M5 restore: a shot with no trajectory samples is a restored
+        // (pre-animated) one — park it in the COMPLETED state (landing dot
+        // and resting ball render, nothing animates), at relaunch or on a
+        // speed-mult change. Robust by construction: live shots always
+        // carry flight samples, restored shots never do.
+        if (shot.shotResult.samples.isEmpty()) {
+            playFraction = FollowCam.endFraction(shot.shotResult).toFloat()
+            return@LaunchedEffect
+        }
+        if (shot.shotResult.flightTimeSec <= 0.0) return@LaunchedEffect
+```
+
+(Keep the rest of the effect unchanged. `FollowCam.endFraction` is already imported/used two lines below in the live path.)
+
+- [ ] **Step 2: Truth-name the restore KDoc**
+
+In `RangeSession.kt`, replace the entire KDoc block above `restore` (currently beginning `M5 restart resume: rebuilds scalar-backed resting shots…` and mentioning gating `on tick > 0`) with:
+
+```kotlin
+    /**
+     * M5 restart resume: rebuilds scalar-backed resting shots from the open
+     * session. No trajectories (nothing replays — RangeScreen parks restored
+     * shots in their completed state), no tick bump.
+     * Returns the count of rows skipped because they no longer pass the
+     * launch guards (AppRoot logs it — silent data loss is undebuggable).
+     * Also resets the misread coalesce window, so even a hypothetical
+     * mid-session restore cannot inherit a stale [lastMisreadMs].
+     */
+```
+
+- [ ] **Step 3: Verify**
+
+Run: `$env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"; .\gradlew.bat :app:test`
+Expected: BUILD SUCCESSFUL — 55 tests 0 failures (no test changes; RangeSessionTest 8/8).
+Then: `.\gradlew.bat :app:assembleDebug` → BUILD SUCCESSFUL (compiles the Compose change).
+Then: `.\gradlew.bat :core:data:test` → 25 tests 0 failures (untouched).
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add app/src
+git commit -m "feat(app): park restored shots at their completed end state"
+```
+
 ### Task 6: AppRoot persistence wiring + END SESSION chip + `ActiveClubStore`
 
 **Files:**
@@ -3352,7 +3431,7 @@ adb helper for force-stops: `& "$env:LOCALAPPDATA\Android\Sdk\platform-tools\adb
 - [ ] From the open 1-shot session: FIRE 3 more (4 open-session shots on the mat as resting balls).
 - [ ] Force-stop WITHOUT ending the session; relaunch.
 - [ ] RANGE: the 4 previous shots render as resting balls at their landing spots (scalar-backed restore — no replay animation for restored shots is expected); SESSION panel shows `shots 4`; HISTORY shows the same single session, still OPEN.
-- [ ] At relaunch the last restored shot is already at rest — no tracer redraw or rollout animation plays (playback is gated on `tick > 0`); changing the speed multiplier before the first new FIRE must also not replay it.
+- [ ] At relaunch the last restored shot renders in the COMPLETED state — landing dot at carry, ball at rest (same convention as previous shots' resting dots) — with NO tracer redraw or rollout animation; changing the speed multiplier before the first new FIRE must also not animate it.
 - [ ] FIRE 1 more → count goes to 5 on the SAME session (no second session row in HISTORY).
 
 - [ ] **Step 5b: On-device DB-corruption recovery (the real-throw path the JVM cannot simulate)**
