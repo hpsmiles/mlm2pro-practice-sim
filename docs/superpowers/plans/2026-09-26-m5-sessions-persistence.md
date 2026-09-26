@@ -1036,14 +1036,17 @@ class SessionRepositoryTest {
     @Test
     fun `corrupt database falls back to a fresh one`() = runTest {
         val context = RuntimeEnvironment.getApplication()
-        // Write a syntactically valid SQLite file whose schema is NOT Room's.
-        // (Raw garbage bytes are silently treated as an empty DB by Robolectric's
-        // SQLite — verified empirically — but a real file with foreign tables
-        // makes Room's schema/identity check throw, on Robolectric AND device.)
+        // Write a file Room genuinely rejects: a valid SQLite file whose
+        // room_master_table carries a WRONG identity hash. (Anything less —
+        // raw garbage bytes, or foreign tables with no room_master_table —
+        // is silently treated as an empty/legacy DB by Robolectric's SQLite,
+        // verified empirically. A mismatched identity hash makes Room's own
+        // checkIdentity throw, deterministically on JVM and device alike.)
         val dbFile = context.getDatabasePath("golfsim.db")
         dbFile.parentFile!!.mkdirs()
         val raw = android.database.sqlite.SQLiteDatabase.openOrCreateDatabase(dbFile, null)
-        raw.execSQL("CREATE TABLE wrong_table (id INTEGER PRIMARY KEY)")
+        raw.execSQL("CREATE TABLE room_master_table (id INTEGER PRIMARY KEY, identity_hash TEXT)")
+        raw.execSQL("INSERT INTO room_master_table (id, identity_hash) VALUES (0, '00000000000000000000000000000000')")
         raw.close()
         val repo = SessionRepository.open(context)
         assertNull(repo.initializeAndRestore())
