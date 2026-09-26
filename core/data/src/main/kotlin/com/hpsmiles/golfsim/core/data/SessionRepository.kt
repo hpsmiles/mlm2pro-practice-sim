@@ -65,7 +65,10 @@ class SessionRepository private constructor(private val context: Context) {
 
     val clubs: Flow<List<ClubRecord>>
         get() = clubDao.observeClubs().map { list ->
-            list.map { ClubRecord(it.id, it.name, ClubType.fromName(it.type), it.isTemp) }
+            // M5x E3: one sort site — bag order is TYPE first (enum
+            // declaration: Driver…Putter), then insertion order within type.
+            list.sortedWith(compareBy({ ClubType.fromName(it.type).ordinal }, { it.sortOrder }))
+                .map { ClubRecord(it.id, it.name, ClubType.fromName(it.type), it.isTemp) }
         }
 
     fun observeShots(sessionId: Long): Flow<List<ShotRecord>> =
@@ -96,8 +99,8 @@ class SessionRepository private constructor(private val context: Context) {
 
     private suspend fun seedClubsIfEmpty() {
         if (clubDao.count() == 0) {
-            DEFAULT_CLUBS.forEachIndexed { i, name ->
-                clubDao.insert(ClubEntity(name = name, sortOrder = i))
+            DEFAULT_CLUBS.forEachIndexed { i, (name, type) ->
+                clubDao.insert(ClubEntity(name = name, sortOrder = i, type = type.name))
             }
         }
     }
@@ -105,7 +108,9 @@ class SessionRepository private constructor(private val context: Context) {
     /**
      * Appends one accepted shot; auto-creates the open session if none.
      * Never throws — persistence trouble surfaces via [persistError] so the
-     * live UI keeps rendering from memory (spec §8).
+     * live UI keeps rendering from memory (spec §8). [clubWasTemp] snapshots
+     * the TEST-club flag at capture so the history badge survives the
+     * session-end purge.
      */
     suspend fun appendShot(
         ballData: BallData,
@@ -113,13 +118,16 @@ class SessionRepository private constructor(private val context: Context) {
         source: ShotSource,
         clubName: String?,
         timestampMs: Long,
+        clubWasTemp: Boolean = false,
     ) {
         try {
             db.withTransaction {
                 val sessionId = sessionDao.findOpen()?.id
                     ?: sessionDao.insert(SessionEntity(startedAtEpochMs = timestampMs))
                 val seq = shotDao.countForSession(sessionId)
-                shotDao.insert(makeShotEntity(sessionId, seq, timestampMs, source, clubName, ballData, result))
+                shotDao.insert(
+                    makeShotEntity(sessionId, seq, timestampMs, source, clubName, ballData, result, clubWasTemp),
+                )
             }
             persistError.value = false
         } catch (t: Throwable) {
@@ -145,11 +153,13 @@ class SessionRepository private constructor(private val context: Context) {
         }
     }
 
-    /** Never throws — same contract as [appendShot] (spec §8). */
+    /** Never throws. M5x E3: every END SESSION also purges TEST clubs. */
     suspend fun endSession() {
         try {
-            val open = sessionDao.findOpen() ?: return
-            sessionDao.end(open.id, System.currentTimeMillis())
+            db.withTransaction {
+                sessionDao.findOpen()?.let { sessionDao.end(it.id, System.currentTimeMillis()) }
+                clubDao.deleteTempClubs()
+            }
             persistError.value = false
         } catch (t: Throwable) {
             if (t is CancellationException) throw t
@@ -191,13 +201,20 @@ class SessionRepository private constructor(private val context: Context) {
      * returns false like a sequential duplicate; a real I/O failure flags
      * [persistError], clears on success.
      */
-    suspend fun addClub(name: String): Boolean {
+    suspend fun addClub(name: String, type: ClubType = ClubType.IRON, isTest: Boolean = false): Boolean {
         val trimmed = name.trim()
         if (trimmed.isBlank() || trimmed.length > MAX_CLUB) return false
         if (trimmed.contains(',')) return false
         return try {
             if (clubDao.findByName(trimmed) != null) return false
-            clubDao.insert(ClubEntity(name = trimmed, sortOrder = clubDao.maxSortOrder() + 1))
+            clubDao.insert(
+                ClubEntity(
+                    name = trimmed,
+                    sortOrder = clubDao.maxSortOrder() + 1,
+                    type = type.name,
+                    isTemp = isTest,
+                ),
+            )
             persistError.value = false
             true
         } catch (t: Throwable) {
@@ -294,8 +311,13 @@ class SessionRepository private constructor(private val context: Context) {
         private const val MAX_TITLE = 40
         private const val MAX_CLUB = 20
         val DEFAULT_CLUBS = listOf(
-            "D", "3W", "5W", "4H", "4i", "5i", "6i", "7i", "8i", "9i",
-            "PW", "GW", "SW", "LW",
+            "D" to ClubType.DRIVER,
+            "3W" to ClubType.WOOD, "5W" to ClubType.WOOD,
+            "4H" to ClubType.HYBRID,
+            "4i" to ClubType.IRON, "5i" to ClubType.IRON, "6i" to ClubType.IRON,
+            "7i" to ClubType.IRON, "8i" to ClubType.IRON, "9i" to ClubType.IRON,
+            "PW" to ClubType.WEDGE, "GW" to ClubType.WEDGE, "SW" to ClubType.WEDGE,
+            "LW" to ClubType.WEDGE,
         )
 
         fun open(context: Context): SessionRepository = SessionRepository(context.applicationContext)

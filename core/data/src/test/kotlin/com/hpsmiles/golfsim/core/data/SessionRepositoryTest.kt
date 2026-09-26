@@ -1,6 +1,7 @@
 package com.hpsmiles.golfsim.core.data
 
 import com.hpsmiles.golfsim.core.ble.BallData
+import com.hpsmiles.golfsim.core.data.record.ClubType
 import com.hpsmiles.golfsim.core.data.record.ShotSource
 import com.hpsmiles.golfsim.core.physics.ShotResult
 import kotlinx.coroutines.flow.first
@@ -225,6 +226,78 @@ class SessionRepositoryTest {
         repo.retagShots(ids, "x".repeat(30))
         val tagged = repo.observeShots(session.id).first()
         assertTrue(tagged.all { it.clubName!!.length == 20 }) // MAX_CLUB
+    }
+
+    @Test
+    fun `bag orders type-first then sortOrder`() = runTest {
+        val repo = newRepo()
+        repo.initializeAndRestore()
+        val names = repo.clubs.first().map { it.name }
+        assertEquals(
+            listOf("D", "3W", "5W", "4H", "4i", "5i", "6i", "7i", "8i", "9i", "PW", "GW", "SW", "LW"),
+            names,
+        )
+    }
+
+    @Test
+    fun `addClub keeps type and appends within its type group`() = runTest {
+        val repo = newRepo()
+        repo.initializeAndRestore()
+        assertTrue(repo.addClub("7i-A", ClubType.IRON))
+        assertTrue(repo.addClub("9i-X", ClubType.IRON, isTest = true))
+        val clubs = repo.clubs.first()
+        // New clubs get max sortOrder → land at the end of their type group
+        // (9i-X was added after 7i-A, so it is the final IRON).
+        val irons = clubs.filter { it.type == ClubType.IRON }.map { it.name }
+        assertEquals(listOf("4i", "5i", "6i", "7i", "8i", "9i", "7i-A", "9i-X"), irons)
+        assertEquals(ClubType.IRON, clubs.first { it.name == "7i-A" }.type)
+        assertTrue(clubs.first { it.name == "9i-X" }.isTemp)
+    }
+
+    @Test
+    fun `TEST club purges on endSession - shots keep name and temp snapshot`() = runTest {
+        val repo = newRepo()
+        repo.initializeAndRestore()
+        assertTrue(repo.addClub("7i-A", ClubType.IRON, isTest = true))
+        repo.appendShot(ball, result, ShotSource.LIVE, "7i-A", 1L, clubWasTemp = true)
+        assertTrue(repo.addClub("7i-B")) // defaults: IRON, non-TEST
+        repo.endSession()
+        val bagNames = repo.clubs.first().map { it.name }
+        assertTrue("7i-B" in bagNames)  // non-TEST user-added club survives purge
+        assertEquals(15, bagNames.size) // 14 seeds + 7i-B; 7i-A purged
+        assertFalse("7i-A" in bagNames)
+        val shots = repo.observeShots(repo.summaries.first().single().id).first()
+        assertEquals("7i-A", shots.single().clubName)  // label survives forever
+        assertTrue(shots.single().clubWasTemp)        // snapshot survives too
+    }
+
+    @Test
+    fun `endSession without an open session still purges TEST clubs`() = runTest {
+        val repo = newRepo()
+        repo.initializeAndRestore()
+        repo.endSession() // no shots fired: nothing open
+        assertTrue(repo.addClub("X1", ClubType.WOOD, isTest = true))
+        repo.endSession() // single rule: EVERY endSession purges isTemp
+        assertFalse("X1" in repo.clubs.first().map { it.name })
+    }
+
+    @Test
+    fun `typed seed names exactly cover the migration UPDATE name set`() = runTest {
+        val repo = newRepo()
+        repo.initializeAndRestore()
+        // Hand-maintained mirror of MIGRATION_1_2's UPDATE name→type mapping.
+        // If either side drifts (name OR type), the seed bag and the v1→v2
+        // migration stop agreeing — this guard fails loudly instead.
+        // (Review carry-in.)
+        val expected = mapOf(
+            "D" to ClubType.DRIVER, "3W" to ClubType.WOOD, "5W" to ClubType.WOOD,
+            "4H" to ClubType.HYBRID,
+            "4i" to ClubType.IRON, "5i" to ClubType.IRON, "6i" to ClubType.IRON,
+            "7i" to ClubType.IRON, "8i" to ClubType.IRON, "9i" to ClubType.IRON,
+            "PW" to ClubType.WEDGE, "GW" to ClubType.WEDGE, "SW" to ClubType.WEDGE,
+            "LW" to ClubType.WEDGE,
+        )
+        assertEquals(expected, repo.clubs.first().associate { it.name to it.type })
     }
 
     @Test

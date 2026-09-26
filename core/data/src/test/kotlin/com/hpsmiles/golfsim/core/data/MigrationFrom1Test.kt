@@ -86,6 +86,7 @@ class MigrationFrom1Test {
         assertEquals(ClubType.IRON, types["7i"])
         assertEquals(ClubType.WEDGE, types["PW"])
         assertEquals(ClubType.IRON, types["MyWedge"])
+        assertEquals(ClubType.IRON, ClubType.fromName("zgarbage")) // safe fallback
         assertFalse(repo.persistError.value)
     }
 }

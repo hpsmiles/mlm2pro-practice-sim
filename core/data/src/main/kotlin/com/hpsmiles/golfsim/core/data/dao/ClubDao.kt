@@ -30,6 +30,10 @@ interface ClubDao {
     @Query("DELETE FROM clubs WHERE id = :id")
     suspend fun delete(id: Long)
 
+    /** M5x E3: single purge rule — every END SESSION deletes TEST clubs. */
+    @Query("DELETE FROM clubs WHERE isTemp = 1")
+    suspend fun deleteTempClubs()
+
     @Query("DELETE FROM clubs")
     suspend fun deleteAll()
 }
