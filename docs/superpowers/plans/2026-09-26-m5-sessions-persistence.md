@@ -1069,12 +1069,15 @@ class SessionRepositoryTest {
         val repo = SessionRepository.open(context)
         repo.recoverFromCorruptFile() // internal — mechanism under test
         assertTrue(repo.persistError.value)
-        // The bad file was archived aside (with sidecars removed):
+        // The bad file was archived aside. Of the stale sidecars' removal,
+        // only `-journal` is observable after the method returns: the reseed
+        // step opens the fresh DB in WAL mode, legitimately recreating new
+        // `-wal`/`-shm` files, so asserting their absence would be wrong.
+        // (If stale WAL content had leaked into the fresh DB, the reseed
+        // and fire assertions below would fail.)
         val archives = parent.listFiles { f -> f.name.startsWith("corrupt-") }
         assertEquals(1, archives!!.size)
         assertFalse(parent.resolve("golfsim.db-journal").exists())
-        assertFalse(parent.resolve("golfsim.db-wal").exists())
-        assertFalse(parent.resolve("golfsim.db-shm").exists())
         // ...and the recovered repository is functional again (reseeded):
         assertEquals(14, repo.clubs.first().size)
         fire(repo)
