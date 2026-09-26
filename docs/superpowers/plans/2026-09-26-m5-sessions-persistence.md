@@ -1457,13 +1457,105 @@ Rename `retag updates rows and re-emits the flow` → `retag updates rows and cl
 
 Run: `$env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"; .\gradlew.bat :core:data:test`
 (If Gradle reports up-to-date, force with `.\gradlew.bat :core:data:testDebugUnitTest --rerun`.)
-Expected: `BUILD SUCCESSFUL` — 6 RecordsTest + 8 Mlm2proDatabaseTest, 0 failures.
+Expected: `BUILD SUCCESSFUL` — 23 tests, 0 failures (6 RecordsTest + 8 Mlm2proDatabaseTest + 9 SessionRepositoryTest).
 
 - [ ] **Step 7: Commit**
 
 ```bash
 git add core/data/src
 git commit -m "test(data): DAO regression pack and deterministic ordering tiebreakers"
+```
+
+---
+### Task 4b: Repository follow-up — cancellation discipline + rename/retag pins
+
+Origin: Task 4 quality-review findings (ora-8). Two code changes with no API impact: (1) `recoverFromCorruptFile`'s reseed catch swallows `CancellationException` on a suspend path — the discipline bug Task 4 already fixed at `appendShot`/`initializeAndRestore`; (2) `renameSession`'s trim/truncate/blank-reset and `retagShots`' trim/truncate mapping have no repo-level tests, and Tasks 7-9 build directly on them. The same amendment also adds `remember(repo)` capture of the property-getter flows at their five consumption sites in Tasks 6-9 wiring (plan text only — no code until those tasks run).
+
+Conscious deferrals (review'd, deliberately NOT done — do not re-flag in later reviews): `persistError` clearing only on shot writes (spec §8 as written), `renameTo` result logging / same-ms collision handling, `checkNotNull(parent)`, exposing `persistError` as `StateFlow` rather than `MutableStateFlow`.
+
+**Files:**
+- Modify: `core/data/src/main/kotlin/com/hpsmiles/golfsim/core/data/SessionRepository.kt`
+- Modify: `core/data/src/test/kotlin/com/hpsmiles/golfsim/core/data/SessionRepositoryTest.kt`
+
+**Interfaces:**
+- Consumes: Task 4 API — no signature changes.
+- Produces: unchanged public API; `:core:data` suite grows 23 → 25 tests (SessionRepositoryTest 9 → 11).
+
+- [ ] **Step 1: Append the two regression tests.** These pin existing correct behavior — they are expected to PASS immediately; a failure means a real defect, not a TDD red bar. Insert after the `recoverFromCorruptFile archives, reseeds and flags persistError` test, before the class's closing brace:
+
+```kotlin
+    @Test
+    fun `renameSession trims, truncates to 40 and blanks reset to auto`() = runTest {
+        val repo = newRepo()
+        repeat(2) { fire(repo, it) }
+        repo.endSession()
+        val id = repo.summaries.first().single().id
+
+        repo.renameSession(id, "  My Session  ")
+        assertEquals("My Session", repo.summaries.first().single().title)
+
+        repo.renameSession(id, "x".repeat(50))
+        assertEquals(40, repo.summaries.first().single().title!!.length) // MAX_TITLE
+
+        repo.renameSession(id, "   ")
+        assertEquals(null, repo.summaries.first().single().title) // blank → auto-title
+    }
+
+    @Test
+    fun `retagShots trims and truncates club names`() = runTest {
+        val repo = newRepo()
+        repeat(2) { fire(repo, it) }
+        val session = repo.summaries.first().single()
+        val ids = repo.observeShots(session.id).first().map { it.id }
+
+        repo.retagShots(ids, "  8i  ")
+        assertEquals(listOf("8i", "8i"), repo.observeShots(session.id).first().map { it.clubName })
+
+        repo.retagShots(ids, "x".repeat(30))
+        val tagged = repo.observeShots(session.id).first()
+        assertTrue(tagged.all { it.clubName!!.length == 20 }) // MAX_CLUB
+    }
+```
+
+- [ ] **Step 2: Run the class — expect 11 green (pin, not red)**
+
+Run: `$env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"; .\gradlew.bat :core:data:testDebugUnitTest --tests "com.hpsmiles.golfsim.core.data.SessionRepositoryTest"`
+Expected: `BUILD SUCCESSFUL` — 11 tests, 0 failures.
+
+- [ ] **Step 3: Fix the CancellationException swallow in `recoverFromCorruptFile`.** In `core/data/src/main/kotlin/com/hpsmiles/golfsim/core/data/SessionRepository.kt`, find (end of `recoverFromCorruptFile`):
+
+```kotlin
+        try {
+            seedClubsIfEmpty()
+        } catch (_: Exception) {
+        }
+```
+
+Replace with:
+
+```kotlin
+        try {
+            seedClubsIfEmpty()
+        } catch (t: Exception) {
+            // Same cancellation discipline as appendShot / initializeAndRestore:
+            // a cancelled caller must not have its CancellationException eaten
+            // on this suspend path (Task 4b, review finding).
+            if (t is CancellationException) throw t
+        }
+```
+
+(`CancellationException` is already imported.)
+
+- [ ] **Step 4: Full module suite**
+
+Run: `$env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"; .\gradlew.bat :core:data:test`
+Expected: `BUILD SUCCESSFUL` — 25 tests, 0 failures (6 RecordsTest + 8 Mlm2proDatabaseTest + 11 SessionRepositoryTest).
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add core/data/src
+git commit -m "fix(data): rethrow cancellation in recovery reseed, pin rename/retag mapping"
 ```
 
 ---
@@ -1811,7 +1903,12 @@ import com.hpsmiles.golfsim.core.data.record.ShotSource
 ```kotlin
                     // M5: explicit session end (spec D1). Non-destructive — the
                     // session stays fully browsable in HISTORY (Task 9).
-                    val hasOpenSession by sessionRepository.hasOpenSession.collectAsState(false)
+                    // Getter flow (new Flow per access) — remember-capture it
+                    // so collectAsState doesn't restart collection on every
+                    // recomposition (Task 4b review finding).
+                    val hasOpenSession by remember(sessionRepository) {
+                        sessionRepository.hasOpenSession
+                    }.collectAsState(false)
                     if (hasOpenSession) {
                         Spacer(Modifier.height(4.dp))
                         RailChip(
@@ -2090,7 +2187,10 @@ Replace `RangeTab.RANGE -> RangeScreen(Modifier.weight(1f), session = session)` 
 ```kotlin
                 when (tab) {
                     RangeTab.RANGE -> {
-                        val clubRecords by sessionRepository.clubs.collectAsState(initial = emptyList())
+                        // Getter flow — remember-capture once (Task 4b).
+                        val clubRecords by remember(sessionRepository) {
+                            sessionRepository.clubs
+                        }.collectAsState(initial = emptyList())
                         RangeScreen(
                             Modifier.weight(1f),
                             session = session,
@@ -2429,7 +2529,10 @@ Replace `RangeTab.SETTINGS -> SettingsScreen(captureLog = captureLog)` (inside t
 
 ```kotlin
                     RangeTab.SETTINGS -> {
-                        val clubRecords by sessionRepository.clubs.collectAsState(initial = emptyList())
+                        // Getter flow — remember-capture once (Task 4b).
+                        val clubRecords by remember(sessionRepository) {
+                            sessionRepository.clubs
+                        }.collectAsState(initial = emptyList())
                         SettingsScreen(
                             captureLog = captureLog,
                             clubs = clubRecords,
@@ -3009,7 +3112,9 @@ import kotlinx.coroutines.flow.flowOf
 
 ```kotlin
     // M5 Task 9: history tab state.
-    val summaries by sessionRepository.summaries.collectAsState(initial = emptyList())
+    // summaries is a getter flow — remember-capture once (Task 4b).
+    val summaries by remember(sessionRepository) { sessionRepository.summaries }
+        .collectAsState(initial = emptyList())
     val liveOnly by sessionRepository.liveOnly.collectAsState()
     var historySelectedId by remember { mutableStateOf<Long?>(null) }
     val historyShots by remember(historySelectedId) {
@@ -3036,7 +3141,10 @@ import kotlinx.coroutines.flow.flowOf
 
 ```kotlin
                     RangeTab.HISTORY -> {
-                        val clubRecords by sessionRepository.clubs.collectAsState(initial = emptyList())
+                        // Getter flow — remember-capture once (Task 4b).
+                        val clubRecords by remember(sessionRepository) {
+                            sessionRepository.clubs
+                        }.collectAsState(initial = emptyList())
                         HistoryScreen(
                             Modifier.weight(1f),
                             summaries = summaries,
