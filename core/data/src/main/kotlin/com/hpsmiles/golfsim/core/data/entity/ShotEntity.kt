@@ -1,5 +1,6 @@
 package com.hpsmiles.golfsim.core.data.entity
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Index
@@ -42,4 +43,8 @@ data class ShotEntity(
     val sideM: Double,
     val apexM: Double,
     val flightTimeSec: Double,
+    // v2: exclusion (mishit flag — drops from averages/aggregates) and the
+    // TEST-club snapshot at capture (keeps the badge truthful after purge).
+    @ColumnInfo(defaultValue = "0") val excluded: Boolean = false,
+    @ColumnInfo(defaultValue = "0") val clubWasTemp: Boolean = false,
 )

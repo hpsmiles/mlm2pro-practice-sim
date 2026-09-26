@@ -8,6 +8,7 @@ import com.hpsmiles.golfsim.core.ble.BallData
 import com.hpsmiles.golfsim.core.data.entity.ClubEntity
 import com.hpsmiles.golfsim.core.data.entity.SessionEntity
 import com.hpsmiles.golfsim.core.data.record.ClubRecord
+import com.hpsmiles.golfsim.core.data.record.ClubType
 import com.hpsmiles.golfsim.core.data.record.RestoredSession
 import com.hpsmiles.golfsim.core.data.record.SessionSummary
 import com.hpsmiles.golfsim.core.data.record.ShotRecord
@@ -63,7 +64,9 @@ class SessionRepository private constructor(private val context: Context) {
         get() = sessionDao.observeOpen().map { it != null }
 
     val clubs: Flow<List<ClubRecord>>
-        get() = clubDao.observeClubs().map { list -> list.map { ClubRecord(it.id, it.name) } }
+        get() = clubDao.observeClubs().map { list ->
+            list.map { ClubRecord(it.id, it.name, ClubType.fromName(it.type), it.isTemp) }
+        }
 
     fun observeShots(sessionId: Long): Flow<List<ShotRecord>> =
         shotDao.observeShots(sessionId).map { list -> list.map { it.toRecord() } }
@@ -248,7 +251,9 @@ class SessionRepository private constructor(private val context: Context) {
     }
 
     private fun build(): Mlm2proDatabase =
-        Room.databaseBuilder(context, Mlm2proDatabase::class.java, DB_NAME).build()
+        Room.databaseBuilder(context, Mlm2proDatabase::class.java, DB_NAME)
+            .addMigrations(Mlm2proDatabase.MIGRATION_1_2)
+            .build()
 
     /**
      * Spec §8: archive the broken file (with SQLite sidecars), start fresh.

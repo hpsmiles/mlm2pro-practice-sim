@@ -22,6 +22,7 @@ fun ShotEntity.toRecord(): ShotRecord = ShotRecord(
     clubName = clubName, ballData = toBallData(),
     carryM = carryM, totalM = totalM, sideM = sideM,
     apexM = apexM, flightTimeSec = flightTimeSec,
+    excluded = excluded, clubWasTemp = clubWasTemp,
 )
 
 /**
@@ -37,6 +38,7 @@ fun makeShotEntity(
     clubName: String?,
     ballData: BallData,
     result: ShotResult,
+    clubWasTemp: Boolean = false,
 ): ShotEntity = ShotEntity(
     sessionId = sessionId, seq = seq, timestampMs = timestampMs,
     source = source.code, clubName = clubName,
@@ -46,4 +48,5 @@ fun makeShotEntity(
     unknown1 = ballData.unknown1, unknown2 = ballData.unknown2,
     carryM = result.carryM, totalM = result.totalM, sideM = result.sideM,
     apexM = result.apexM, flightTimeSec = result.flightTimeSec,
+    excluded = false, clubWasTemp = clubWasTemp,
 )
