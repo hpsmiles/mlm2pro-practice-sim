@@ -2709,7 +2709,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.hpsmiles.golfsim.core.connect.CaptureLog
-import com.hpsmiles.golfsim.core.data.ClubRecord
+import com.hpsmiles.golfsim.core.data.record.ClubRecord
 import com.hpsmiles.golfsim.core.designsystem.GolfColors
 import com.hpsmiles.golfsim.core.designsystem.GolfSpacing
 import com.hpsmiles.golfsim.core.designsystem.GolfTypography
@@ -2729,7 +2729,7 @@ fun SettingsScreen(
     captureLog: CaptureLog = CaptureLog(),
     clubs: List<ClubRecord> = emptyList(),
     onAddClub: suspend (String) -> Boolean = { false },
-    onRenameClub: suspend (Long, String) -> Boolean = { false },
+    onRenameClub: suspend (Long, String) -> Boolean = { _, _ -> false },
     onDeleteClub: (Long) -> Unit = {},
 ) {
     val context = LocalContext.current
