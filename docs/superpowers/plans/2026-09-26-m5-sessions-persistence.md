@@ -3796,6 +3796,125 @@ git commit -m "feat(app): history screen with retag and rename"
 
 ---
 
+### Task 9a: LIVE ONLY session filter + never-throw retag/rename
+
+**Why:** Task 9's quality review traced two gaps live on the History screen. (1) `LIVE ONLY` never removes demo-only sessions from the list — they render as "0 shots" rows, contradicting spec decision D4 ("review filters live-only by default") and the Task 10 checklist (which expects the demo-only list to be EMPTY under LIVE ONLY). (2) `retagShots` and `renameSession` are the only mutators without the never-throw contract (Task 6a/8a house pattern) — a degraded DB crashes the app from History's APPLY and CONFIRM buttons. Also folds in the one-line retag-bar reset (a stale `retagIndex` resurfaces the remembered club on a later long-press).
+
+**Conscious deferrals (do NOT re-flag in reviews):** the shot table inside a SELECTED session still shows all rows under LIVE ONLY (master-detail: the list filters, the detail shows the full record — needed to retag demo rows); the chip-vs-table count difference in mixed sessions under LIVE ONLY (chips show the live slice — deliberate); LazyColumn/`key()` conversion (only matters at hundreds of shots); rename-dialog state keying; the "−0.0 m" cosmetic.
+
+**Files:**
+- Modify: `core/data/src/main/kotlin/com/hpsmiles/golfsim/core/data/SessionRepository.kt` (summaries getter, renameSession, retagShots)
+- Modify: `core/data/src/test/kotlin/com/hpsmiles/golfsim/core/data/SessionRepositoryTest.kt` (new pin test)
+- Modify: `app/src/main/kotlin/com/hpsmiles/golfsim/history/HistoryScreen.kt` (retagIndex reset)
+
+**Interfaces:**
+- Consumes: `SessionSummaryRow.liveCount` (Task 2); the Task 8a house never-throw pattern.
+- Produces: behavior change — `summaries` now FILTERS the list under liveOnly (demo-only sessions vanish; statistics slicing unchanged). `renameSession`/`retagShots` never throw (persistError set/clear contract). No signature changes.
+
+- [ ] **Step 1: Write the failing test** — append to `SessionRepositoryTest.kt`, directly after the existing `liveOnly filter re-shapes statistics` test:
+
+```kotlin
+    @Test
+    fun `liveOnly hides demo-only sessions from the list`() = runTest {
+        val repo = newRepo()
+        repo.initializeAndRestore()
+        repo.appendShot(ball, result, ShotSource.DEMO, "SW", 1L)
+        repo.appendShot(ball, result, ShotSource.DEMO, "SW", 2L)
+        repo.endSession()
+        // Default LIVE ONLY: a session with no live shots vanishes entirely.
+        assertTrue(repo.summaries.first().isEmpty())
+        repo.liveOnly.value = false
+        assertEquals(2, repo.summaries.first().single().shotCount)
+    }
+```
+
+- [ ] **Step 2: Run it to verify it fails**
+
+Run: `$env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"; .\gradlew.bat :core:data:testDebugUnitTest --tests "com.hpsmiles.golfsim.core.data.SessionRepositoryTest"`
+Expected: FAIL — `liveOnly hides demo-only sessions from the list` at the `assertTrue(repo.summaries.first().isEmpty())` line (today the demo-only row IS present with shotCount 0).
+
+- [ ] **Step 3: Implement the filter + wraps in `SessionRepository.kt`.** Three edits.
+
+Edit A — replace the `summaries` getter body (currently `rows.map { it.toSummary(onlyLive) }`):
+
+```kotlin
+    val summaries: Flow<List<SessionSummary>>
+        get() = combine(sessionDao.observeSummaries(), liveOnly) { rows, onlyLive ->
+            // D4: LIVE ONLY drops sessions with no live shots (demo-only)
+            // from the list entirely; toSummary() re-shapes the statistics
+            // slice. ALL shows everything. (Task 9a)
+            rows.filter { !onlyLive || it.liveCount > 0 }.map { it.toSummary(onlyLive) }
+        }
+```
+
+Edit B — replace `renameSession` (currently a bare DAO call):
+
+```kotlin
+    /** Never throws — same contract as [appendShot] (Task 9a). */
+    suspend fun renameSession(id: Long, title: String) {
+        val trimmed = title.trim().take(MAX_TITLE).ifBlank { null }
+        try {
+            sessionDao.rename(id, trimmed)
+            persistError.value = false
+        } catch (t: Throwable) {
+            if (t is CancellationException) throw t
+            Log.e(TAG, "renameSession failed", t)
+            persistError.value = true
+        }
+    }
+```
+
+Edit C — replace `retagShots` (empty ids stays a no-op BEFORE the try — a rejection is not DB-recovery evidence):
+
+```kotlin
+    /** Never throws — same contract as [appendShot] (Task 9a). */
+    suspend fun retagShots(ids: List<Long>, clubName: String?) {
+        if (ids.isEmpty()) return
+        val trimmed = clubName?.trim()?.take(MAX_CLUB)
+        try {
+            shotDao.retagShotIds(ids, trimmed)
+            persistError.value = false
+        } catch (t: Throwable) {
+            if (t is CancellationException) throw t
+            Log.e(TAG, "retagShots failed", t)
+            persistError.value = true
+        }
+    }
+```
+
+- [ ] **Step 4: Run the repo suite**
+
+Run: `$env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"; .\gradlew.bat :core:data:test`
+Expected: BUILD SUCCESSFUL — 27 tests, 0 failures (RecordsTest 6 + Mlm2proDatabaseTest 8 + SessionRepositoryTest 13).
+
+- [ ] **Step 5: Reset the retag bar when rows are toggled off to empty** — in `HistoryScreen.kt`, replace the `onSelectionChange` lambda passed to `SessionDetail` (currently `onSelectionChange = { selectedIds = it },`):
+
+```kotlin
+                        onSelectionChange = {
+                            selectedIds = it
+                            // Rows toggled off to empty: clear the remembered
+                            // club choice so the next long-press bar starts
+                            // fresh instead of resurrecting it. (Task 9a)
+                            if (it.isEmpty()) retagIndex = -1
+                        },
+```
+
+- [ ] **Step 6: Run the app suite + assemble**
+
+Run: `$env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"; .\gradlew.bat :app:test`
+Expected: BUILD SUCCESSFUL — 59 tests, 0 failures.
+Run: `$env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"; .\gradlew.bat :app:assembleDebug`
+Expected: BUILD SUCCESSFUL.
+
+- [ ] **Step 7: Commit**
+
+```bash
+git add core/data/src app/src/main/kotlin/com/hpsmiles/golfsim/history/HistoryScreen.kt
+git commit -m "fix(app): filter demo-only sessions under live only, never throw from retag rename"
+```
+
+---
+
 ### Task 10: Full verification + on-device exit checklist (M5 close-out)
 
 **Files:**
