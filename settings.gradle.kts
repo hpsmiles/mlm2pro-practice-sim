@@ -32,4 +32,6 @@ include(":app")
 
 include(":core:designsystem")
 
+include(":core:data")
+
 include(":core:connect")
