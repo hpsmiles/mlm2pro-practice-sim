@@ -5,6 +5,7 @@ import com.hpsmiles.golfsim.core.data.record.RestoredSession
 import com.hpsmiles.golfsim.core.data.record.ShotRecord
 import com.hpsmiles.golfsim.core.data.record.ShotSource
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -93,14 +94,14 @@ class RangeSessionTest {
     }
 
     @Test
-    fun `misreads coalesce inside 500 ms window`() {
+    fun `misreads coalesce inside 500 ms window and report the coalesce owner`() {
         val session = RangeSession()
         var now = 1_000L
         session.clockMs = { now }
-        session.markMisread(atMs = now)
-        session.markMisread(atMs = now + 200)   // EVENTS + MEASUREMENT pair
+        assertTrue(session.markMisread(atMs = now))
+        assertFalse(session.markMisread(atMs = now + 200)) // EVENTS + MEASUREMENT pair
         assertEquals(1, session.misreadCount.intValue)
-        session.markMisread(atMs = now + 1_000) // genuinely new misread
+        assertTrue(session.markMisread(atMs = now + 1_000)) // genuinely new misread
         assertEquals(2, session.misreadCount.intValue)
     }
 

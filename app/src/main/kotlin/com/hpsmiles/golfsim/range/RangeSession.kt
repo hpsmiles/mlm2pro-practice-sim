@@ -95,12 +95,15 @@ class RangeSession {
     /**
      * One real mishit emits BOTH the EVENTS MisreadAlert and the all-zero
      * MEASUREMENT sentinel ~200 ms apart (M4c, event-010 + event-027).
-     * Coalesce that pair into a single pill increment.
+     * Coalesce that pair into a single pill increment. Returns true when
+     * this call was counted (the coalesce owner) — AppRoot gates the DB
+     * increment on it so the persisted count matches the pill.
      */
-    fun markMisread(atMs: Long = clockMs()) {
-        if (atMs - lastMisreadMs < MISREAD_COALESCE_MS) return
+    fun markMisread(atMs: Long = clockMs()): Boolean {
+        if (atMs - lastMisreadMs < MISREAD_COALESCE_MS) return false
         lastMisreadMs = atMs
         misreadCount.intValue++
+        return true
     }
 
     fun dismissMisreads() {

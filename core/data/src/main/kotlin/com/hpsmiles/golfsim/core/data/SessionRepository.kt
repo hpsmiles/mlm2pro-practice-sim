@@ -123,15 +123,33 @@ class SessionRepository private constructor(private val context: Context) {
         }
     }
 
-    /** Coalesced misread (RangeSession already coalesces the 0x05 pair). */
+    /**
+     * Coalesced misread (RangeSession already coalesces the 0x05 pair).
+     * Never throws — same contract as [appendShot] (spec §8).
+     */
     suspend fun incrementMisread() {
-        val open = sessionDao.findOpen() ?: return
-        sessionDao.incrementMisread(open.id)
+        try {
+            val open = sessionDao.findOpen() ?: return
+            sessionDao.incrementMisread(open.id)
+            persistError.value = false
+        } catch (t: Throwable) {
+            if (t is CancellationException) throw t
+            Log.e(TAG, "incrementMisread failed", t)
+            persistError.value = true
+        }
     }
 
+    /** Never throws — same contract as [appendShot] (spec §8). */
     suspend fun endSession() {
-        val open = sessionDao.findOpen() ?: return
-        sessionDao.end(open.id, System.currentTimeMillis())
+        try {
+            val open = sessionDao.findOpen() ?: return
+            sessionDao.end(open.id, System.currentTimeMillis())
+            persistError.value = false
+        } catch (t: Throwable) {
+            if (t is CancellationException) throw t
+            Log.e(TAG, "endSession failed", t)
+            persistError.value = true
+        }
     }
 
     suspend fun renameSession(id: Long, title: String) {

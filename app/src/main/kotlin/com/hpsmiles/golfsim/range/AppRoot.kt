@@ -117,8 +117,9 @@ fun AppRoot() {
         }
         gattClient.onMisread = {
             scope.launch {
-                session.markMisread()
-                sessionRepository.incrementMisread()
+                // Only the coalesce owner persists, or each mishit would
+                // count twice in the DB (EVENTS + MEASUREMENT pair).
+                if (session.markMisread()) sessionRepository.incrementMisread()
             }
         }
         onDispose {
