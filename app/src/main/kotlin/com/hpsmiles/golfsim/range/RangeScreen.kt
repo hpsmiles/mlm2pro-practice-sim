@@ -34,6 +34,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.hpsmiles.golfsim.core.data.record.ClubRecord
@@ -200,20 +201,11 @@ fun RangeScreen(
                 }
             }
             // Tracer controls: back inside the range frame, top-left (2026-09-24).
+            // M5x E1: the active-club trigger moved to the top-right column below.
             Column(
                 modifier = Modifier.align(Alignment.TopStart).padding(GolfSpacing.Sm),
                 verticalArrangement = Arrangement.spacedBy(GolfSpacing.Xs),
             ) {
-                // M5 D7: active-club pill — first chip, above TRACER. "—" = untagged.
-                Text(
-                    text = "${activeClubName ?: "—"} ▾",
-                    color = if (activeClubName != null) GolfColors.Teal else GolfColors.TextSecondary,
-                    style = ChipFont,
-                    modifier = Modifier
-                        .clickable { showClubPicker = true }
-                        .border(1.dp, if (activeClubName != null) GolfColors.Teal else GolfColors.Line, RoundedCornerShape(50))
-                        .padding(horizontal = GolfSpacing.Sm, vertical = 2.dp),
-                )
                 Row(horizontalArrangement = Arrangement.spacedBy(GolfSpacing.Xs)) {
                     OverlayChip("TRACER: ${if (showTracer) "ON" else "OFF"}", active = showTracer) {
                         showTracer = !showTracer
@@ -244,17 +236,25 @@ fun RangeScreen(
                     )
                 }
             }
-            Text(
-                "VIEW: ${viewMode.label}",
-                color = GolfColors.TextSecondary,
-                style = ChipFont,
-                modifier = Modifier.align(Alignment.TopEnd).padding(GolfSpacing.Sm)
-                    .clickable {
-                        viewMode = if (viewMode == ViewMode.POV) ViewMode.TOP_DOWN else ViewMode.POV
-                    }
-                    .border(1.dp, GolfColors.Line, RoundedCornerShape(50))
-                    .padding(horizontal = GolfSpacing.Sm, vertical = 2.dp),
-            )
+            // M5x E1+E2: VIEW chip + the filled ACTIVE CLUB trigger, top-right.
+            Column(
+                modifier = Modifier.align(Alignment.TopEnd).padding(GolfSpacing.Sm),
+                horizontalAlignment = Alignment.End,
+                verticalArrangement = Arrangement.spacedBy(GolfSpacing.Xs),
+            ) {
+                Text(
+                    "VIEW: ${viewMode.label}",
+                    color = GolfColors.TextSecondary,
+                    style = ChipFont,
+                    modifier = Modifier
+                        .clickable {
+                            viewMode = if (viewMode == ViewMode.POV) ViewMode.TOP_DOWN else ViewMode.POV
+                        }
+                        .border(1.dp, GolfColors.Line, RoundedCornerShape(50))
+                        .padding(horizontal = GolfSpacing.Sm, vertical = 2.dp),
+                )
+                ActiveClubButton(activeClubName) { showClubPicker = true }
+            }
             Row(
                 modifier = Modifier.align(Alignment.TopCenter).padding(GolfSpacing.Sm),
                 horizontalArrangement = Arrangement.spacedBy(GolfSpacing.Xs),
@@ -343,5 +343,38 @@ fun RangeScreen(
                 MetricRow("sigma", if (count > 1) String.format(Locale.US, "%.1f", sigma) else "-", "M")
             }
         }
+    }
+}
+
+/**
+ * M5x E2: filled ACTIVE CLUB trigger — solid teal, ~170×58 dp, big club name
+ * with ▾, "ACTIVE CLUB" label beneath. The ONLY filled colored control on
+ * the range screen (everything else stays bordered/ghost style). "—" when
+ * no club is active.
+ */
+@Composable
+private fun ActiveClubButton(clubName: String?, onClick: () -> Unit) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Surface(
+            color = GolfColors.Teal,
+            shape = RoundedCornerShape(GolfSpacing.Sm),
+            modifier = Modifier.size(170.dp, 58.dp).clickable(onClick = onClick),
+        ) {
+            Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                Text(
+                    text = "${clubName ?: "—"} ▾",
+                    style = GolfTypography.Hero.copy(fontSize = 26.sp),
+                    color = GolfColors.Panel,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+        Text(
+            text = "ACTIVE CLUB",
+            style = GolfTypography.MetricLabel,
+            color = GolfColors.TextMuted,
+            modifier = Modifier.padding(top = 2.dp),
+        )
     }
 }
