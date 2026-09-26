@@ -1275,6 +1275,146 @@ git commit -m "feat(data): SessionRepository with auto-start sessions, retag and
 ```
 
 ---
+### Task 4a: DAO hardening — regression pack + deterministic ordering
+
+Small, self-contained follow-up to Task 3's quality review (runs AFTER Task 4 completes; does not touch repository code).
+
+**Files:**
+- Modify: `core/data/src/main/kotlin/com/hpsmiles/golfsim/core/data/dao/SessionDao.kt`
+- Modify: `core/data/src/main/kotlin/com/hpsmiles/golfsim/core/data/dao/ShotDao.kt`
+- Test: `core/data/src/test/kotlin/com/hpsmiles/golfsim/core/data/Mlm2proDatabaseTest.kt`
+
+**Interfaces:**
+- Consumes: Task 3 DAOs + entities as committed (`d197a78`); Task 4's `SessionRepository` untouched.
+- Produces: identical DAO public API (only ORDER BY clauses change internally); `Mlm2proDatabaseTest` grows from 6 to 8 tests with two sharpened fixtures.
+
+**Conscious deferrals (reviewed 2026-09-26 — do NOT add):** zero-shot-session aggregate test (impossible state — sessions auto-start on the first accepted shot); standalone `observeOpen` empty-DB test (covered by Task 4's restore-null repository test); `clubNames` bag-ordering (encounter order is deliberate); schema-level comma hardening of `clubs.name` (Task 4's repository comma rule + the single-writer design stand; revisit only if a schema v2 happens for other reasons).
+
+- [ ] **Step 1: Deterministic ordering tiebreakers (pure SQL refactor)**
+
+In `SessionDao.kt`:
+- `findOpen`: `ORDER BY startedAtEpochMs DESC LIMIT 1` → `ORDER BY startedAtEpochMs DESC, id DESC LIMIT 1`
+- `observeOpen`: same change as `findOpen`
+- `observeSummaries`: `ORDER BY s.startedAtEpochMs DESC` → `ORDER BY s.startedAtEpochMs DESC, s.id DESC`
+
+In `ShotDao.kt`:
+- `observeShots`: `ORDER BY seq` → `ORDER BY seq, id`
+- `shotsForSession`: `ORDER BY seq` → `ORDER BY seq, id`
+
+- [ ] **Step 2: Run module tests (tiebreaker refactor must stay green)**
+
+Run: `$env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"; .\gradlew.bat :core:data:test`
+Expected: `BUILD SUCCESSFUL` — 6 RecordsTest + 6 Mlm2proDatabaseTest, unchanged suite still green.
+
+- [ ] **Step 3: Add the FK CASCADE regression test**
+
+Append inside `Mlm2proDatabaseTest` (after `unique club name rejects duplicates`):
+
+```kotlin
+    @Test
+    fun `deleting a session cascades to its shots`() = runTest {
+        val id = db.sessionDao().insert(SessionEntity(startedAtEpochMs = 1_000L))
+        db.shotDao().insert(makeShotEntity(id, 0, 1L, ShotSource.LIVE, "7i", ball, result))
+        assertEquals(1, db.shotDao().countForSession(id))
+        db.sessionDao().deleteAll()
+        assertEquals(0, db.shotDao().countForSession(id))
+    }
+```
+
+- [ ] **Step 4: Add the flow re-emission smoke test**
+
+Add imports at the top of the test file (keep alphabetical order):
+
+```kotlin
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
+```
+
+Append inside `Mlm2proDatabaseTest`:
+
+```kotlin
+    @Test
+    fun `observeSummaries re-emits after a shot insert`() = runBlocking {
+        val totals = mutableListOf<Int>()
+        val collector = launch {
+            db.sessionDao().observeSummaries().collect { totals.add(it.sumOf { row -> row.shotCount }) }
+        }
+        try {
+            withTimeout(2_000L) { while (totals.isEmpty()) delay(20L) }
+            assertEquals(0, totals.first())
+            val id = db.sessionDao().insert(SessionEntity(startedAtEpochMs = 1_000L))
+            db.shotDao().insert(makeShotEntity(id, 0, 1L, ShotSource.LIVE, "7i", ball, result))
+            withTimeout(2_000L) { while (totals.none { it > 0 }) delay(20L) }
+            assertEquals(1, totals.last())
+        } finally {
+            collector.cancel()
+        }
+    }
+```
+
+**Why `runBlocking`, not `runTest`:** Room's InvalidationTracker fires on real background executors. Under `runTest` virtual time, a `withTimeout` + `delay` polling loop burns through virtual time instantly and would time out before Room's real threads ever emit. `runBlocking` uses real time so the poll loop genuinely waits for the re-emission. Do not "fix" this back to `runTest`.
+
+- [ ] **Step 5: Sharpen two fixtures and rename one test (same file)**
+
+Replace the body of `summaries aggregate live and demo slices` — distinct live carries and clubs; CSVs asserted as SETS because SQLite does not document GROUP_CONCAT ordering:
+
+```kotlin
+    @Test
+    fun `summaries aggregate live and demo slices`() = runTest {
+        val id = db.sessionDao().insert(SessionEntity(startedAtEpochMs = 1_000L))
+        db.shotDao().insert(
+            makeShotEntity(id, 0, 1_000L, ShotSource.LIVE, "7i", ball, result.copy(carryM = 130.0, totalM = 140.0))
+        )
+        db.shotDao().insert(
+            makeShotEntity(id, 1, 1_001L, ShotSource.LIVE, "SW", ball, result.copy(carryM = 150.0, totalM = 160.0))
+        )
+        db.shotDao().insert(
+            makeShotEntity(id, 2, 1_500L, ShotSource.DEMO, null, ball.copy(ballSpeed = 50.0),
+                result.copy(carryM = 160.0, totalM = 170.0, sideM = 1.0))
+        )
+        val row = db.sessionDao().observeSummaries().first().single()
+        assertEquals(3, row.shotCount)
+        assertEquals(2, row.liveCount)
+        assertEquals(1, row.demoCount)
+        assertEquals(140.0, row.liveAvgCarryM!!, 1e-9)
+        assertEquals(150.0, row.liveMaxCarryM!!, 1e-9)
+        assertEquals((130.0 + 150.0 + 160.0) / 3.0, row.allAvgCarryM!!, 1e-9)
+        assertEquals(160.0, row.allMaxCarryM!!, 1e-9)
+        assertEquals(setOf("7i", "SW"), row.liveClubsCsv!!.split(',').toSet())
+        assertEquals(setOf("7i", "SW"), row.allClubsCsv!!.split(',').toSet())
+    }
+```
+
+Replace the body of `shotsForSession returns rows ordered by seq` — insert seq 1 BEFORE seq 0 so rowid order no longer satisfies the assertion:
+
+```kotlin
+    @Test
+    fun `shotsForSession returns rows ordered by seq`() = runTest {
+        val id = db.sessionDao().insert(SessionEntity(startedAtEpochMs = 1_000L))
+        db.shotDao().insert(makeShotEntity(id, 1, 6L, ShotSource.LIVE, "7i", ball, result))
+        db.shotDao().insert(makeShotEntity(id, 0, 5L, ShotSource.LIVE, "7i", ball, result))
+        assertEquals(listOf(0, 1), db.shotDao().shotsForSession(id).map { it.seq })
+        assertEquals(2, db.shotDao().countForSession(id))
+    }
+```
+
+Rename `retag updates rows and re-emits the flow` → `retag updates rows and clears to null` (the two-`.first()` body never observed re-emission; the name overclaimed). Body unchanged.
+
+- [ ] **Step 6: Run full module suite**
+
+Run: `$env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"; .\gradlew.bat :core:data:test`
+(If Gradle reports up-to-date, force with `.\gradlew.bat :core:data:testDebugUnitTest --rerun`.)
+Expected: `BUILD SUCCESSFUL` — 6 RecordsTest + 8 Mlm2proDatabaseTest, 0 failures.
+
+- [ ] **Step 7: Commit**
+
+```bash
+git add core/data/src
+git commit -m "test(data): DAO regression pack and deterministic ordering tiebreakers"
+```
+
+---
 ### Task 5: `RangeSession` returns shots + restore support (JVM TDD in `:app`)
 
 **Files:**
