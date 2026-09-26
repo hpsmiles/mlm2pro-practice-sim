@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Path
@@ -13,6 +14,7 @@ import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.hpsmiles.golfsim.core.designsystem.GolfColors
 
@@ -41,18 +43,32 @@ fun TopDownCanvas(shots: List<DisplayShot>, modifier: Modifier = Modifier) {
         val originX = w / 2f
         val originY = h - 8.sp.toPx()
 
-        // Distance bands every 50 m across the full width, out to the ground end.
-        var distM = 50f
-        while (distM <= RangeScene.GROUND_END_Y.toFloat()) {
-            val y = originY - distM * pxPerM
+        // M5x E6: fixed-size sign icons replace the band lines — NOT
+        // world-scaled (readability at 300+ m).
+        for (sign in RangeSigns.signPlan()) {
+            val x = originX + (sign.xM * pxPerM).toFloat()
+            val y = originY - sign.distanceM * pxPerM
+            val wIcon = 26.dp.toPx()
+            val hIcon = 16.dp.toPx()
+            // Thin post down to the ground position.
+            drawLine(GolfColors.Line, Offset(x, y), Offset(x, y - hIcon), 1f)
+            // Board + teal top edge.
+            drawRoundRect(
+                color = GolfColors.Card,
+                topLeft = Offset(x - wIcon / 2f, y - hIcon),
+                size = Size(wIcon, hIcon),
+                cornerRadius = CornerRadius(2.dp.toPx()),
+            )
             drawLine(
-                GolfColors.Line.copy(alpha = 0.8f),
-                Offset(0f, y), Offset(w, y), 1f,
+                GolfColors.Teal,
+                Offset(x - wIcon / 2f, y - hIcon),
+                Offset(x + wIcon / 2f, y - hIcon),
+                strokeWidth = 2f,
             )
-            drawContext.canvas.nativeCanvas.drawText(
-                "${distM.toInt()} M", 8.sp.toPx(), y - 4.sp.toPx(), labelPaint,
-            )
-            distM += 50f
+            labelPaint.textSize = 10.sp.toPx()
+            labelPaint.color = GolfColors.TextPrimary.toArgb()
+            labelPaint.textAlign = android.graphics.Paint.Align.CENTER
+            drawContext.canvas.nativeCanvas.drawText("${sign.distanceM}", x, y - hIcon * 0.3f, labelPaint)
         }
         // Lateral gridlines every 20 m.
         var lateralM = -60f

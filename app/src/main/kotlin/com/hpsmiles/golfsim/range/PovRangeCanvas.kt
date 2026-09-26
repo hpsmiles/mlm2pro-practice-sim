@@ -192,28 +192,46 @@ fun PovRangeCanvas(
             }
         }
 
+        // M5x E6: standing distance signs replace the band lines. Dark-slate
+        // boards (Card bg, Line frame) with a teal top accent; the number
+        // scales with the projected board height. Cull a sign entirely once
+        // its ground point passes the camera plane (bands culled the same
+        // way). World-fixed, so the follow cam Just Works.
         labelPaint.apply {
             isAntiAlias = true
-            textSize = 10.sp.toPx()
-            color = Color.White.toArgb()
+            textAlign = android.graphics.Paint.Align.CENTER
         }
-
-        // Distance bands on the ground: screen-horizontal under pitch
-        // (rotation is about the lateral axis). White for "Tour Broadcast"
-        // crispness against the painted fairway.
-        val bandDistances = listOf(50f, 100f, 150f, 200f, 250f, 300f, 350f)
-        for (d in bandDistances) {
-            if (groundDepth(d.toDouble()) <= 0.0) continue // behind the camera
-            val y = v0Px + PovProjector.bandV(camera, d.toDouble()) * focalPx
-            drawLine(
-                color = Color.White.copy(alpha = 0.45f),
-                start = Offset(0f, y.toFloat()),
-                end = Offset(w, y.toFloat()),
-                strokeWidth = 1f,
-            )
-            drawContext.canvas.nativeCanvas.drawText(
-                "${d.toInt()} M", w - 8.sp.toPx() * 3, y.toFloat() - 4.sp.toPx(), labelPaint,
-            )
+        for (sign in RangeSigns.signPlan()) {
+            val d = sign.distanceM.toDouble()
+            if (groundDepth(d) <= 0.0) continue // behind the camera plane
+            val xL = sign.xM - RangeSigns.BOARD_HALF_W_M
+            val xR = sign.xM + RangeSigns.BOARD_HALF_W_M
+            val bl = worldToScreen(camera, v0Px, focalPx, centerX, xL, d, RangeSigns.POST_H_M) ?: continue
+            val br = worldToScreen(camera, v0Px, focalPx, centerX, xR, d, RangeSigns.POST_H_M) ?: continue
+            val tl = worldToScreen(camera, v0Px, focalPx, centerX, xL, d, RangeSigns.BOARD_TOP_Z_M) ?: continue
+            val tr = worldToScreen(camera, v0Px, focalPx, centerX, xR, d, RangeSigns.BOARD_TOP_Z_M) ?: continue
+            // Posts
+            drawLine(GolfColors.Line, bl, tl, strokeWidth = 1f)
+            drawLine(GolfColors.Line, br, tr, strokeWidth = 1f)
+            // Board quad + frame + teal top-edge accent
+            val board = Path().apply {
+                moveTo(bl.x, bl.y); lineTo(br.x, br.y); lineTo(tr.x, tr.y); lineTo(tl.x, tl.y); close()
+            }
+            drawPath(board, GolfColors.Card)
+            drawPath(board, GolfColors.Line, style = Stroke(width = 1f))
+            drawLine(GolfColors.Teal, tl, tr, strokeWidth = 2f)
+            // Number — white, no unit, sized by the projected board height.
+            val boardHpx = ((bl.y + br.y) / 2f - (tl.y + tr.y) / 2f)
+            if (boardHpx > 3f) {
+                labelPaint.textSize = boardHpx * 0.55f
+                labelPaint.color = GolfColors.TextPrimary.toArgb()
+                drawContext.canvas.nativeCanvas.drawText(
+                    "${sign.distanceM}",
+                    (tl.x + tr.x) / 2f,
+                    (bl.y + br.y + tl.y + tr.y) / 4f + boardHpx * 0.18f,
+                    labelPaint,
+                )
+            }
         }
 
         // Teal target ovals at (lateral, distance) metres.
