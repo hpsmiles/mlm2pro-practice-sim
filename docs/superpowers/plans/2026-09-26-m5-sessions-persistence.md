@@ -788,6 +788,8 @@ interface SessionDao {
 }
 ```
 
+Note the invariant baked into this query: `GROUP_CONCAT` uses the default `,` separator, and **club names are guaranteed comma-free by the repository layer** (Task 4's `addClub`/`renameClub` reject commas), so `liveClubsCsv`/`allClubsCsv` parse cleanly in `toSummary`. Do not change the separator.
+
 `core/data/src/main/kotlin/com/hpsmiles/golfsim/core/data/dao/ShotDao.kt`:
 
 ```kotlin
@@ -892,7 +894,7 @@ git commit -m "feat(data): Room database, DAOs and aggregate summary query"
   - `suspend fun initializeAndRestore(): RestoredSession?` (seeds bag once, probes the DB — corrupt file ⇒ archive + fresh DB + `persistError=true`, returns null)
   - `suspend fun appendShot(ballData: BallData, result: ShotResult, source: ShotSource, clubName: String?, timestampMs: Long)` (auto-creates the open session; never throws — sets `persistError` on failure)
   - `suspend fun incrementMisread()` (no-op without open session) · `suspend fun endSession()` · `suspend fun renameSession(id: Long, title: String)` (blank ⇒ null) · `suspend fun retagShots(ids: List<Long>, clubName: String?)`
-  - `suspend fun addClub(name: String): Boolean` (false: blank/duplicate) · `suspend fun renameClub(id: Long, newName: String): Boolean` · `suspend fun deleteClub(id: Long)`
+     - `suspend fun addClub(name: String): Boolean` (false: blank/comma/duplicate) · `suspend fun renameClub(id: Long, newName: String): Boolean` · `suspend fun deleteClub(id: Long)`
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -1002,6 +1004,7 @@ class SessionRepositoryTest {
         assertTrue(repo.addClub("7i-A"))
         assertFalse(repo.addClub("7i-A")) // duplicate
         assertFalse(repo.addClub("   "))  // blank
+        assertFalse(repo.addClub("56, W")) // comma — summary CSV separator rule
         assertEquals(15, repo.clubs.first().size)
     }
 
@@ -1193,19 +1196,21 @@ class SessionRepository private constructor(private val context: Context) {
         shotDao.retagShotIds(ids, clubName?.trim()?.take(MAX_CLUB))
     }
 
-    /** False on blank or duplicate name. */
+    /** False on blank, comma-containing (summary CSV separator), or duplicate name. */
     suspend fun addClub(name: String): Boolean {
         val trimmed = name.trim()
         if (trimmed.isBlank() || trimmed.length > MAX_CLUB) return false
+        if (trimmed.contains(',')) return false
         if (clubDao.findByName(trimmed) != null) return false
         clubDao.insert(ClubEntity(name = trimmed, sortOrder = clubDao.maxSortOrder() + 1))
         return true
     }
 
-    /** False on blank or duplicate name. */
+    /** False on blank, comma-containing (summary CSV separator), or duplicate name. */
     suspend fun renameClub(id: Long, newName: String): Boolean {
         val trimmed = newName.trim()
         if (trimmed.isBlank() || trimmed.length > MAX_CLUB) return false
+        if (trimmed.contains(',')) return false
         if (clubDao.findByName(trimmed) != null) return false
         clubDao.rename(id, trimmed)
         return true
@@ -1803,7 +1808,7 @@ fun ClubPickerOverlay(
                 }
                 if (addRejected) {
                     Text(
-                        text = if (newName.isBlank()) "ENTER A NAME" else "ALREADY IN BAG",
+                        text = if (newName.isBlank()) "ENTER A NAME" else if (newName.contains(',')) "NO COMMAS" else "ALREADY IN BAG",
                         style = GolfTypography.Status,
                         color = GolfColors.AlertRed,
                     )
@@ -2121,7 +2126,7 @@ fun SettingsScreen(
             }
             if (addRejected) {
                 Text(
-                    text = if (newClubName.isBlank()) "ENTER A NAME" else "ALREADY IN BAG",
+                    text = if (newClubName.isBlank()) "ENTER A NAME" else if (newClubName.contains(',')) "NO COMMAS" else "ALREADY IN BAG",
                     style = GolfTypography.Status,
                     color = GolfColors.AlertRed,
                 )
@@ -2197,7 +2202,7 @@ fun SettingsScreen(
                     )
                     if (renameRejected) {
                         Text(
-                            text = if (renameText.isBlank()) "ENTER A NAME" else "ALREADY IN BAG",
+                            text = if (renameText.isBlank()) "ENTER A NAME" else if (renameText.contains(',')) "NO COMMAS" else "ALREADY IN BAG",
                             style = GolfTypography.Status,
                             color = GolfColors.AlertRed,
                         )
@@ -2908,7 +2913,7 @@ adb helper for force-stops: `& "$env:LOCALAPPDATA\Android\Sdk\platform-tools\adb
 - [ ] FIRE 3 demo shots untagged; right panel SESSION shows `shots 3`.
 - [ ] Tap the pill → picker overlay opens; tap `7i` → overlay closes, pill reads `7i ▾` with Teal border.
 - [ ] FIRE 2 more shots → 5 total (3 untagged, 2 × 7i).
-- [ ] In the picker's ＋ ADD form: type `7i` → ADD → `ALREADY IN BAG` (repository rule, not a local guess); then type `7i-A` → ADD → new tile appears (M7 duplicate-name pattern works).
+- [ ] In the picker's ＋ ADD form: type `7i` → ADD → `ALREADY IN BAG` (repository rule, not a local guess); then type `7i-A` → ADD → new tile appears (M7 duplicate-name pattern works); then type `7i,` → ADD → `NO COMMAS` (repository comma rule).
 - [ ] HISTORY tab: newest session (auto-title "EEE d MMM · HH:mm" format, DEMO + OPEN badges) is selected by default; stat chips show the right shot count; `LIVE ONLY` is on and the list is EMPTY (demo-only) — toggle `ALL` → the session appears (spec D4).
 - [ ] Long-press one untagged row → Teal selection + retag bar; tap two more rows; choose `8i`; APPLY → those rows' CLUB column reads `8i`, list club summary updates.
 - [ ] Tap the session title → rename dialog pre-filled → type `Demo tag test` → CONFIRM → list row + detail title update. Rename again with only spaces → CONFIRM → title returns to the auto-title (repo blank ⇒ null).
