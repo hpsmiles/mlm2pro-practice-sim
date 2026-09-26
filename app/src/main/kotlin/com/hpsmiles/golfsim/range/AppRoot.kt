@@ -55,6 +55,7 @@ import com.hpsmiles.golfsim.core.designsystem.NavRailButton
 import com.hpsmiles.golfsim.core.designsystem.StatusStrip
 import com.hpsmiles.golfsim.history.HistoryScreen
 import com.hpsmiles.golfsim.settings.SettingsScreen
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
@@ -91,13 +92,24 @@ fun AppRoot() {
         activeClubStore.set(name)
     }
 
+    // Post-merge fix (final-review follow-up): the Room-backed getter-flow
+    // captures below wait for this gate so they can never bind to a database
+    // that restore's corrupt-file recovery is about to swap out.
+    var repoReady by remember { mutableStateOf(false) }
+
     LaunchedEffect(sessionRepository) {
-        val restored = sessionRepository.initializeAndRestore()
-        if (restored != null) {
-            val skipped = session.restore(restored)
-            // Guard-skipped rows are persisted data we could not rebuild —
-            // surfaced in logcat rather than dropped silently (Task 5b).
-            if (skipped > 0) Log.w("AppRoot", "restore skipped $skipped invalid shot row(s)")
+        try {
+            val restored = sessionRepository.initializeAndRestore()
+            if (restored != null) {
+                val skipped = session.restore(restored)
+                // Guard-skipped rows are persisted data we could not rebuild —
+                // surfaced in logcat rather than dropped silently (Task 5b).
+                if (skipped > 0) Log.w("AppRoot", "restore skipped $skipped invalid shot row(s)")
+            }
+        } finally {
+            // Open the gate even if restore itself failed — a stuck-closed
+            // gate would freeze History / picker / END SESSION forever.
+            repoReady = true
         }
     }
 
@@ -203,9 +215,12 @@ fun AppRoot() {
     }
 
     // M5 Task 9: history tab state.
-    // summaries is a getter flow — remember-capture once (Task 4b).
-    val summaries by remember(sessionRepository) { sessionRepository.summaries }
-        .collectAsState(initial = emptyList())
+    // summaries is a getter flow — remember-capture once (Task 4b), and only
+    // after the restore gate opened (post-merge fix): captured earlier it
+    // races corrupt-DB recovery and can die with the closed old database.
+    val summaries by remember(sessionRepository, repoReady) {
+        gatedFlow(repoReady, { sessionRepository.summaries }, flowOf(emptyList()))
+    }.collectAsState(initial = emptyList())
     val liveOnly by sessionRepository.liveOnly.collectAsState()
     var historySelectedId by remember { mutableStateOf<Long?>(null) }
     val historyShots by remember(historySelectedId) {
@@ -276,9 +291,10 @@ fun AppRoot() {
                     // session stays fully browsable in HISTORY (Task 9).
                     // Getter flow (new Flow per access) — remember-capture it
                     // so collectAsState doesn't restart collection on every
-                    // recomposition (Task 4b review finding).
-                    val hasOpenSession by remember(sessionRepository) {
-                        sessionRepository.hasOpenSession
+                    // recomposition (Task 4b review finding). Gated behind the
+                    // restore flag like the other getter captures (post-merge fix).
+                    val hasOpenSession by remember(sessionRepository, repoReady) {
+                        gatedFlow(repoReady, { sessionRepository.hasOpenSession }, flowOf(false))
                     }.collectAsState(false)
                     if (hasOpenSession) {
                         Spacer(Modifier.height(4.dp))
@@ -292,9 +308,10 @@ fun AppRoot() {
                 }
                 when (tab) {
                     RangeTab.RANGE -> {
-                        // Getter flow — remember-capture once (Task 4b).
-                        val clubRecords by remember(sessionRepository) {
-                            sessionRepository.clubs
+                        // Getter flow — remember-capture once (Task 4b);
+                        // gated behind the restore flag (post-merge fix).
+                        val clubRecords by remember(sessionRepository, repoReady) {
+                            gatedFlow(repoReady, { sessionRepository.clubs }, flowOf(emptyList()))
                         }.collectAsState(initial = emptyList())
                         RangeScreen(
                             Modifier.weight(1f),
@@ -306,9 +323,10 @@ fun AppRoot() {
                         )
                     }
                     RangeTab.SETTINGS -> {
-                        // Getter flow — remember-capture once (Task 4b).
-                        val clubRecords by remember(sessionRepository) {
-                            sessionRepository.clubs
+                        // Getter flow — remember-capture once (Task 4b);
+                        // gated behind the restore flag (post-merge fix).
+                        val clubRecords by remember(sessionRepository, repoReady) {
+                            gatedFlow(repoReady, { sessionRepository.clubs }, flowOf(emptyList()))
                         }.collectAsState(initial = emptyList())
                         SettingsScreen(
                             captureLog = captureLog,
@@ -338,9 +356,10 @@ fun AppRoot() {
                         )
                     }
                     RangeTab.HISTORY -> {
-                        // Getter flow — remember-capture once (Task 4b).
-                        val clubRecords by remember(sessionRepository) {
-                            sessionRepository.clubs
+                        // Getter flow — remember-capture once (Task 4b);
+                        // gated behind the restore flag (post-merge fix).
+                        val clubRecords by remember(sessionRepository, repoReady) {
+                            gatedFlow(repoReady, { sessionRepository.clubs }, flowOf(emptyList()))
                         }.collectAsState(initial = emptyList())
                         HistoryScreen(
                             Modifier.weight(1f),
@@ -424,3 +443,15 @@ private fun describe(state: ConnectionState, demo: Boolean, scanning: Boolean): 
         is ConnectionState.Faulted -> "BLE FAULTED - SEE CAPTURE"
     }
 }
+
+/**
+ * Cold-start flow gate (post-M5 final-review follow-up): the Room-backed
+ * getter flows are captured from the first composition frame, racing the
+ * restore effect — a corrupt-DB recovery that swaps the database leaves
+ * captured flows bound to the closed old DB, so History / club picker /
+ * END SESSION stay empty until the next restart. The getter stays untouched
+ * ([live] is a deferred producer) until [ready]; the pre-restore window
+ * serves [fallback]. Internal so the unit test can pin the deferral.
+ */
+internal fun <T> gatedFlow(ready: Boolean, live: () -> Flow<T>, fallback: Flow<T>): Flow<T> =
+    if (ready) live() else fallback
