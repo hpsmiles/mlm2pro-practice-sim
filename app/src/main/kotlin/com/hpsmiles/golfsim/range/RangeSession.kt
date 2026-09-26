@@ -69,14 +69,28 @@ class RangeSession {
 
     /**
      * M5 restart resume: rebuilds scalar-backed resting shots from the open
-     * session. No trajectories (nothing replays), no tick bump.
+     * session. No trajectories (nothing replays — RangeScreen gates playback
+     * on tick > 0, so restored shots render pre-animated), no tick bump.
+     *
+     * Returns the count of rows skipped because they no longer pass the
+     * launch guards (AppRoot logs it — silent data loss is undebuggable).
+     * Also resets the misread coalesce window, so even a hypothetical
+     * mid-session restore cannot inherit a stale [lastMisreadMs].
      */
-    fun restore(restored: RestoredSession) {
+    fun restore(restored: RestoredSession): Int {
         shots.clear()
+        var skipped = 0
         restored.shots.forEach { record ->
-            record.toDisplayShot()?.let { shots.add(it) }
+            val shot = record.toDisplayShot()
+            if (shot == null) {
+                skipped++
+            } else {
+                shots.add(shot)
+            }
         }
         misreadCount.intValue = restored.misreadCount
+        lastMisreadMs = 0L
+        return skipped
     }
 
     /**

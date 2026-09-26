@@ -116,6 +116,10 @@ fun RangeScreen(
     // The speed multiplier scales the whole timeline, hold included —
     // consistent with slow-mo review.
     LaunchedEffect(currentShot, speedMult) {
+        // M5 restore: tick 0 means no live-accepted shot this process, so
+        // the current shot is a restored (pre-animated) one — never replay
+        // its rollout, at relaunch or on a speed-mult change.
+        if (session.tick.intValue == 0) return@LaunchedEffect
         val shot = currentShot ?: return@LaunchedEffect
         if (shot.shotResult.flightTimeSec <= 0.0) return@LaunchedEffect
         val durationMs = shot.shotResult.flightTimeSec * 1000.0 / speedMult.divisor

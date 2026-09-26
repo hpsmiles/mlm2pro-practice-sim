@@ -70,21 +70,26 @@ class RangeSessionTest {
     fun `restore skips rows that no longer pass launch guards`() {
         val session = RangeSession()
         val bad = shotRecord(2, "7i").copy(ballData = garbage())
-        session.restore(RestoredSession(5L, 0, listOf(bad)))
+        assertEquals(1, session.restore(RestoredSession(5L, 0, listOf(bad))))
         assertEquals(0, session.shots.size)
     }
 
     @Test
     fun `restore rebuilds resting shots and misreads without trajectories`() {
         val session = RangeSession()
-        session.restore(RestoredSession(5L, 3, listOf(shotRecord(0, "7i"), shotRecord(1, null))))
+        assertEquals(0, session.restore(RestoredSession(5L, 3, listOf(shotRecord(0, "7i"), shotRecord(1, null)))))
         assertEquals(2, session.shots.size)
         assertEquals(0L, session.shots[0].timestampMs)
+        assertEquals(1L, session.shots[1].timestampMs) // seq order survives the rebuild
         assertEquals(3, session.misreadCount.intValue)
+        assertEquals(0, session.tick.intValue)          // restore never bumps tick (playback gate)
         // Scalar-backed ShotResult carries no samples (nothing replays after restore)…
         assertEquals(0, session.shots[0].shotResult.samples.size)
         // …and rollout is derived on restore: total - carry.
         assertEquals(9.1, session.shots[0].shotResult.rolloutM, 1e-9)
+        // A second restore clears before refilling and reports zero skips.
+        assertEquals(0, session.restore(RestoredSession(6L, 0, listOf(shotRecord(0, "8i")))))
+        assertEquals(1, session.shots.size)
     }
 
     @Test
