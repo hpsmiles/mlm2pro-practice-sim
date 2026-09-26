@@ -948,7 +948,7 @@ class SessionRepositoryTest {
     }
 
     @Test
-    fun `endSession closes; misreads after end are ignored`() = runTest {
+    fun `endSession closes - misreads after end are ignored`() = runTest {
         val repo = newRepo()
         repo.initializeAndRestore()
         fire(repo)
@@ -1036,12 +1036,20 @@ class SessionRepositoryTest {
     @Test
     fun `corrupt database falls back to a fresh one`() = runTest {
         val context = RuntimeEnvironment.getApplication()
+        // Write a syntactically valid SQLite file whose schema is NOT Room's.
+        // (Raw garbage bytes are silently treated as an empty DB by Robolectric's
+        // SQLite — verified empirically — but a real file with foreign tables
+        // makes Room's schema/identity check throw, on Robolectric AND device.)
         val dbFile = context.getDatabasePath("golfsim.db")
         dbFile.parentFile!!.mkdirs()
-        dbFile.writeBytes(ByteArray(64) { it.toByte() }) // not a SQLite file
+        val raw = android.database.sqlite.SQLiteDatabase.openOrCreateDatabase(dbFile, null)
+        raw.execSQL("CREATE TABLE wrong_table (id INTEGER PRIMARY KEY)")
+        raw.close()
         val repo = SessionRepository.open(context)
         assertNull(repo.initializeAndRestore())
         assertTrue(repo.persistError.value)
+        // The bad file was archived aside, not deleted:
+        assertEquals(1, dbFile.parentFile!!.listFiles()!!.count { it.name.startsWith("corrupt-") })
         // ...and the recovered repository is functional again:
         fire(repo)
         assertEquals(1, repo.summaries.first().single().shotCount)
@@ -1052,7 +1060,7 @@ class SessionRepositoryTest {
 
 - [ ] **Step 2: Run tests to verify they fail**
 
-Run: `$env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"; .\gradlew.bat :core:data:test --tests "com.hpsmiles.golfsim.core.data.SessionRepositoryTest"`
+Run: `$env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"; .\gradlew.bat :core:data:testDebugUnitTest --tests "com.hpsmiles.golfsim.core.data.SessionRepositoryTest"`
 Expected: COMPILATION FAIL — `SessionRepository` unresolved.
 
 ---
