@@ -1624,7 +1624,7 @@ Update imports (`assertNull`, `assertNotNull`, `ShotRecord`, `ShotSource`, `Rest
         val shot = session.add(fade())
         assertEquals(123_456L, shot!!.timestampMs)
         now = 999L
-        assertEquals(123_456L, session.add(fade())!!.timestampMs) // each shot stamped at its own add
+        assertEquals(999L, session.add(fade())!!.timestampMs) // each shot stamped at its own add
     }
 
     @Test
