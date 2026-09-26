@@ -269,7 +269,20 @@ fun AppRoot() {
                     }
                 }
                 when (tab) {
-                    RangeTab.RANGE -> RangeScreen(Modifier.weight(1f), session = session)
+                    RangeTab.RANGE -> {
+                        // Getter flow — remember-capture once (Task 4b).
+                        val clubRecords by remember(sessionRepository) {
+                            sessionRepository.clubs
+                        }.collectAsState(initial = emptyList())
+                        RangeScreen(
+                            Modifier.weight(1f),
+                            session = session,
+                            activeClubName = activeClubName,
+                            clubNames = clubRecords.map { it.name },
+                            onSelectClub = ::selectClub,
+                            onAddClub = { sessionRepository.addClub(it) },
+                        )
+                    }
                     RangeTab.SETTINGS -> SettingsScreen(captureLog = captureLog)
                 }
             }

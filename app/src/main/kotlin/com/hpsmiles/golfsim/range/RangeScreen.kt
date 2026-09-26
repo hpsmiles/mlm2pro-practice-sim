@@ -89,6 +89,10 @@ private enum class ViewMode(val label: String) { POV("POV"), TOP_DOWN("TOP-DOWN"
 fun RangeScreen(
     modifier: Modifier = Modifier,
     session: RangeSession,
+    activeClubName: String? = null,
+    clubNames: List<String> = emptyList(),
+    onSelectClub: (String?) -> Unit = {},
+    onAddClub: suspend (String) -> Boolean = { false },
 ) {
     var playFraction by remember { mutableFloatStateOf(1f) }
     var speedMult by remember { mutableStateOf(SpeedMult.X15) }
@@ -97,6 +101,7 @@ fun RangeScreen(
     var showHistory by remember { mutableStateOf(true) }
     var historyLimit by remember { mutableFloatStateOf(8f) }
     val currentShot = session.shots.lastOrNull()
+    var showClubPicker by remember { mutableStateOf(false) }
 
     // Follow cam (spec 2026-09-25): the per-frame camera from the pure
     // phase machine; computed inside the canvas slot below because the
@@ -197,6 +202,16 @@ fun RangeScreen(
                 modifier = Modifier.align(Alignment.TopStart).padding(GolfSpacing.Sm),
                 verticalArrangement = Arrangement.spacedBy(GolfSpacing.Xs),
             ) {
+                // M5 D7: active-club pill — first chip, above TRACER. "—" = untagged.
+                Text(
+                    text = "${activeClubName ?: "—"} ▾",
+                    color = if (activeClubName != null) GolfColors.Teal else GolfColors.TextSecondary,
+                    style = ChipFont,
+                    modifier = Modifier
+                        .clickable { showClubPicker = true }
+                        .border(1.dp, if (activeClubName != null) GolfColors.Teal else GolfColors.Line, RoundedCornerShape(50))
+                        .padding(horizontal = GolfSpacing.Sm, vertical = 2.dp),
+                )
                 Row(horizontalArrangement = Arrangement.spacedBy(GolfSpacing.Xs)) {
                     OverlayChip("TRACER: ${if (showTracer) "ON" else "OFF"}", active = showTracer) {
                         showTracer = !showTracer
@@ -253,6 +268,16 @@ fun RangeScreen(
                             .padding(horizontal = GolfSpacing.Sm, vertical = 2.dp),
                     )
                 }
+            }
+            // M5: club picker overlay — scrim covers the whole range area.
+            if (showClubPicker) {
+                ClubPickerOverlay(
+                    activeClubName = activeClubName,
+                    clubNames = clubNames,
+                    onDismiss = { showClubPicker = false },
+                    onSelectClub = onSelectClub,
+                    onAddClub = onAddClub,
+                )
             }
             // FIRE / MODE / CONNECT moved to AppRoot's rail (2026-09-24).
         }
