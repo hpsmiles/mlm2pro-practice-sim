@@ -181,4 +181,36 @@ class SessionRepositoryTest {
         assertEquals(1, repo.summaries.first().single().shotCount)
         assertFalse(repo.persistError.value) // next successful write clears it
     }
+
+    @Test
+    fun `renameSession trims, truncates to 40 and blanks reset to auto`() = runTest {
+        val repo = newRepo()
+        repeat(2) { fire(repo, it) }
+        repo.endSession()
+        val id = repo.summaries.first().single().id
+
+        repo.renameSession(id, "  My Session  ")
+        assertEquals("My Session", repo.summaries.first().single().title)
+
+        repo.renameSession(id, "x".repeat(50))
+        assertEquals(40, repo.summaries.first().single().title!!.length) // MAX_TITLE
+
+        repo.renameSession(id, "   ")
+        assertEquals(null, repo.summaries.first().single().title) // blank → auto-title
+    }
+
+    @Test
+    fun `retagShots trims and truncates club names`() = runTest {
+        val repo = newRepo()
+        repeat(2) { fire(repo, it) }
+        val session = repo.summaries.first().single()
+        val ids = repo.observeShots(session.id).first().map { it.id }
+
+        repo.retagShots(ids, "  8i  ")
+        assertEquals(listOf("8i", "8i"), repo.observeShots(session.id).first().map { it.clubName })
+
+        repo.retagShots(ids, "x".repeat(30))
+        val tagged = repo.observeShots(session.id).first()
+        assertTrue(tagged.all { it.clubName!!.length == 20 }) // MAX_CLUB
+    }
 }

@@ -195,7 +195,11 @@ class SessionRepository private constructor(private val context: Context) {
         persistError.value = true
         try {
             seedClubsIfEmpty()
-        } catch (_: Exception) {
+        } catch (t: Exception) {
+            // Same cancellation discipline as appendShot / initializeAndRestore:
+            // a cancelled caller must not have its CancellationException eaten
+            // on this suspend path (Task 4b, review finding).
+            if (t is CancellationException) throw t
         }
     }
 
