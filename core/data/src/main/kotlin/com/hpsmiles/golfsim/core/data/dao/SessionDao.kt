@@ -13,10 +13,10 @@ interface SessionDao {
     @Insert
     suspend fun insert(session: SessionEntity): Long
 
-    @Query("SELECT * FROM sessions WHERE endedAtEpochMs IS NULL ORDER BY startedAtEpochMs DESC LIMIT 1")
+    @Query("SELECT * FROM sessions WHERE endedAtEpochMs IS NULL ORDER BY startedAtEpochMs DESC, id DESC LIMIT 1")
     suspend fun findOpen(): SessionEntity?
 
-    @Query("SELECT * FROM sessions WHERE endedAtEpochMs IS NULL ORDER BY startedAtEpochMs DESC LIMIT 1")
+    @Query("SELECT * FROM sessions WHERE endedAtEpochMs IS NULL ORDER BY startedAtEpochMs DESC, id DESC LIMIT 1")
     fun observeOpen(): Flow<SessionEntity?>
 
     @Query("UPDATE sessions SET endedAtEpochMs = :endedAtEpochMs WHERE id = :id")
@@ -45,7 +45,7 @@ interface SessionDao {
         FROM sessions s
         LEFT JOIN shots sh ON sh.sessionId = s.id
         GROUP BY s.id
-        ORDER BY s.startedAtEpochMs DESC
+        ORDER BY s.startedAtEpochMs DESC, s.id DESC
         """
     )
     fun observeSummaries(): Flow<List<SessionSummaryRow>>

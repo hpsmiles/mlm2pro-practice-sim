@@ -7,8 +7,12 @@ import com.hpsmiles.golfsim.core.data.entity.SessionEntity
 import com.hpsmiles.golfsim.core.data.record.ShotSource
 import com.hpsmiles.golfsim.core.data.record.makeShotEntity
 import com.hpsmiles.golfsim.core.physics.ShotResult
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withTimeout
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -43,9 +47,12 @@ class Mlm2proDatabaseTest {
     @Test
     fun `summaries aggregate live and demo slices`() = runTest {
         val id = db.sessionDao().insert(SessionEntity(startedAtEpochMs = 1_000L))
-        repeat(2) { i ->
-            db.shotDao().insert(makeShotEntity(id, i, 1_000L + i, ShotSource.LIVE, "7i", ball, result))
-        }
+        db.shotDao().insert(
+            makeShotEntity(id, 0, 1_000L, ShotSource.LIVE, "7i", ball, result.copy(carryM = 130.0, totalM = 140.0))
+        )
+        db.shotDao().insert(
+            makeShotEntity(id, 1, 1_001L, ShotSource.LIVE, "SW", ball, result.copy(carryM = 150.0, totalM = 160.0))
+        )
         db.shotDao().insert(
             makeShotEntity(id, 2, 1_500L, ShotSource.DEMO, null, ball.copy(ballSpeed = 50.0),
                 result.copy(carryM = 160.0, totalM = 170.0, sideM = 1.0))
@@ -55,8 +62,11 @@ class Mlm2proDatabaseTest {
         assertEquals(2, row.liveCount)
         assertEquals(1, row.demoCount)
         assertEquals(140.0, row.liveAvgCarryM!!, 1e-9)
+        assertEquals(150.0, row.liveMaxCarryM!!, 1e-9)
+        assertEquals((130.0 + 150.0 + 160.0) / 3.0, row.allAvgCarryM!!, 1e-9)
         assertEquals(160.0, row.allMaxCarryM!!, 1e-9)
-        assertEquals("7i", row.liveClubsCsv)
+        assertEquals(setOf("7i", "SW"), row.liveClubsCsv!!.split(',').toSet())
+        assertEquals(setOf("7i", "SW"), row.allClubsCsv!!.split(',').toSet())
     }
 
     @Test
@@ -69,7 +79,7 @@ class Mlm2proDatabaseTest {
     }
 
     @Test
-    fun `retag updates rows and re-emits the flow`() = runTest {
+    fun `retag updates rows and clears to null`() = runTest {
         val id = db.sessionDao().insert(SessionEntity(startedAtEpochMs = 1_000L))
         val a = db.shotDao().insert(makeShotEntity(id, 0, 1L, ShotSource.LIVE, null, ball, result))
         val b = db.shotDao().insert(makeShotEntity(id, 1, 2L, ShotSource.LIVE, null, ball, result))
@@ -83,8 +93,8 @@ class Mlm2proDatabaseTest {
     @Test
     fun `shotsForSession returns rows ordered by seq`() = runTest {
         val id = db.sessionDao().insert(SessionEntity(startedAtEpochMs = 1_000L))
-        db.shotDao().insert(makeShotEntity(id, 0, 5L, ShotSource.LIVE, "7i", ball, result))
         db.shotDao().insert(makeShotEntity(id, 1, 6L, ShotSource.LIVE, "7i", ball, result))
+        db.shotDao().insert(makeShotEntity(id, 0, 5L, ShotSource.LIVE, "7i", ball, result))
         assertEquals(listOf(0, 1), db.shotDao().shotsForSession(id).map { it.seq })
         assertEquals(2, db.shotDao().countForSession(id))
     }
@@ -106,5 +116,32 @@ class Mlm2proDatabaseTest {
         assertTrue(duplicate.isFailure)
         assertEquals(1, db.clubDao().count())
         assertEquals("7i", db.clubDao().findByName("7i")!!.name)
+    }
+
+    @Test
+    fun `deleting a session cascades to its shots`() = runTest {
+        val id = db.sessionDao().insert(SessionEntity(startedAtEpochMs = 1_000L))
+        db.shotDao().insert(makeShotEntity(id, 0, 1L, ShotSource.LIVE, "7i", ball, result))
+        assertEquals(1, db.shotDao().countForSession(id))
+        db.sessionDao().deleteAll()
+        assertEquals(0, db.shotDao().countForSession(id))
+    }
+
+    @Test
+    fun `observeSummaries re-emits after a shot insert`() = runBlocking {
+        val totals = mutableListOf<Int>()
+        val collector = launch {
+            db.sessionDao().observeSummaries().collect { totals.add(it.sumOf { row -> row.shotCount }) }
+        }
+        try {
+            withTimeout(2_000L) { while (totals.isEmpty()) delay(20L) }
+            assertEquals(0, totals.first())
+            val id = db.sessionDao().insert(SessionEntity(startedAtEpochMs = 1_000L))
+            db.shotDao().insert(makeShotEntity(id, 0, 1L, ShotSource.LIVE, "7i", ball, result))
+            withTimeout(2_000L) { while (totals.none { it > 0 }) delay(20L) }
+            assertEquals(1, totals.last())
+        } finally {
+            collector.cancel()
+        }
     }
 }

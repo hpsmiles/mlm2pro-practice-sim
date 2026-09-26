@@ -12,10 +12,10 @@ interface ShotDao {
     @Insert
     suspend fun insert(shot: ShotEntity): Long
 
-    @Query("SELECT * FROM shots WHERE sessionId = :sessionId ORDER BY seq")
+    @Query("SELECT * FROM shots WHERE sessionId = :sessionId ORDER BY seq, id")
     fun observeShots(sessionId: Long): Flow<List<ShotEntity>>
 
-    @Query("SELECT * FROM shots WHERE sessionId = :sessionId ORDER BY seq")
+    @Query("SELECT * FROM shots WHERE sessionId = :sessionId ORDER BY seq, id")
     suspend fun shotsForSession(sessionId: Long): List<ShotEntity>
 
     @Query("SELECT COUNT(*) FROM shots WHERE sessionId = :sessionId")
