@@ -9,10 +9,13 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -75,18 +78,29 @@ fun ClubPickerOverlay(
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 Text("ACTIVE CLUB", style = GolfTypography.ScreenTitle, color = GolfColors.TextPrimary)
-                // "—" (untagged) tile first, then the bag, 4 per row.
-                (listOf<String?>(null) + clubNames).chunked(4).forEach { row ->
-                    Row(horizontalArrangement = Arrangement.spacedBy(GolfSpacing.Sm)) {
-                        row.forEach { name ->
-                            ClubTile(
-                                label = name ?: "—",
-                                active = name == activeClubName,
-                                onClick = {
-                                    onSelectClub(name)
-                                    onDismiss()
-                                },
-                            )
+                // "—" (untagged) tile first, then the bag, 4 per row. Capped
+                // at four visible rows (72dp tiles + Md gaps = 324dp) and
+                // scrollable beyond, so the panel never outgrows the
+                // tablet's usable landscape height however large the bag
+                // grows (Task 7 quality review; M6/M7 A/B duplicates).
+                Column(
+                    modifier = Modifier
+                        .heightIn(max = 324.dp)
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(GolfSpacing.Md),
+                ) {
+                    (listOf<String?>(null) + clubNames).chunked(4).forEach { row ->
+                        Row(horizontalArrangement = Arrangement.spacedBy(GolfSpacing.Sm)) {
+                            row.forEach { name ->
+                                ClubTile(
+                                    label = name ?: "—",
+                                    active = name == activeClubName,
+                                    onClick = {
+                                        onSelectClub(name)
+                                        onDismiss()
+                                    },
+                                )
+                            }
                         }
                     }
                 }
@@ -133,7 +147,12 @@ fun ClubPickerOverlay(
                         )
                     }
                 }
-                if (addRejected) {
+                // Gated on `adding`: a double-tap on ADD races two submits —
+                // the first can succeed and close the form while the second
+                // reports a now-duplicate name. Without the gate that late
+                // rejection ghosts the hint under the closed form (Task 7
+                // quality review).
+                if (adding && addRejected) {
                     Text(
                         text = if (newName.isBlank()) "ENTER A NAME" else if (newName.contains(',')) "NO COMMAS" else "ALREADY IN BAG",
                         style = GolfTypography.Status,
