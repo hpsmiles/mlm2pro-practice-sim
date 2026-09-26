@@ -1644,7 +1644,7 @@ And add the restore test:
         val session = RangeSession()
         session.restore(RestoredSession(5L, 3, listOf(shotRecord(0, "7i"), shotRecord(1, null))))
         assertEquals(2, session.shots.size)
-        assertEquals(1L, session.shots[0].timestampMs)
+        assertEquals(0L, session.shots[0].timestampMs)
         assertEquals(3, session.misreadCount.intValue)
         // Scalar-backed ShotResult carries no samples (nothing replays after restore)…
         assertEquals(0, session.shots[0].shotResult.samples.size)
