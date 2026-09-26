@@ -1034,29 +1034,52 @@ class SessionRepositoryTest {
     }
 
     @Test
-    fun `corrupt database falls back to a fresh one`() = runTest {
+    fun `garbage database file is tolerated, not recovered`() = runTest {
+        // Three empirical rounds proved Robolectric's SQLite will not throw
+        // on ANY forged "corrupt" file: 64 garbage bytes open as an empty DB,
+        // foreign tables are treated as a legacy DB and migrated alongside,
+        // and even a room_master_table with a wrong identity hash is
+        // tolerated. Real-file corruption detection therefore cannot be
+        // simulated on the JVM — it is verified on-device in Task 10
+        // Step 5b. What this test pins down instead is the guarantee the
+        // repository makes for ANY unreadable-but-tolerated file: open()
+        // never throws, and the repository stays functional.
         val context = RuntimeEnvironment.getApplication()
-        // Write a file Room genuinely rejects: a valid SQLite file whose
-        // room_master_table carries a WRONG identity hash. (Anything less —
-        // raw garbage bytes, or foreign tables with no room_master_table —
-        // is silently treated as an empty/legacy DB by Robolectric's SQLite,
-        // verified empirically. A mismatched identity hash makes Room's own
-        // checkIdentity throw, deterministically on JVM and device alike.)
         val dbFile = context.getDatabasePath("golfsim.db")
         dbFile.parentFile!!.mkdirs()
-        val raw = android.database.sqlite.SQLiteDatabase.openOrCreateDatabase(dbFile, null)
-        raw.execSQL("CREATE TABLE room_master_table (id INTEGER PRIMARY KEY, identity_hash TEXT)")
-        raw.execSQL("INSERT INTO room_master_table (id, identity_hash) VALUES (0, '00000000000000000000000000000000')")
-        raw.close()
+        dbFile.writeBytes(ByteArray(64) { it.toByte() }) // not a SQLite file
         val repo = SessionRepository.open(context)
         assertNull(repo.initializeAndRestore())
-        assertTrue(repo.persistError.value)
-        // The bad file was archived aside, not deleted:
-        assertEquals(1, dbFile.parentFile!!.listFiles()!!.count { it.name.startsWith("corrupt-") })
-        // ...and the recovered repository is functional again:
+        assertFalse(repo.persistError.value) // tolerated — recovery never ran
         fire(repo)
         assertEquals(1, repo.summaries.first().single().shotCount)
         assertEquals(14, repo.clubs.first().size)
+    }
+
+    @Test
+    fun `recoverFromCorruptFile archives, reseeds and flags persistError`() = runTest {
+        val context = RuntimeEnvironment.getApplication()
+        val dbFile = context.getDatabasePath("golfsim.db")
+        dbFile.parentFile!!.mkdirs()
+        dbFile.writeBytes(ByteArray(64) { it.toByte() }) // broken main file
+        val parent = dbFile.parentFile!!
+        parent.resolve("golfsim.db-journal").writeBytes(ByteArray(16))
+        parent.resolve("golfsim.db-wal").writeBytes(ByteArray(16))
+        parent.resolve("golfsim.db-shm").writeBytes(ByteArray(16))
+        val repo = SessionRepository.open(context)
+        repo.recoverFromCorruptFile() // internal — mechanism under test
+        assertTrue(repo.persistError.value)
+        // The bad file was archived aside (with sidecars removed):
+        val archives = parent.listFiles { f -> f.name.startsWith("corrupt-") }
+        assertEquals(1, archives!!.size)
+        assertFalse(parent.resolve("golfsim.db-journal").exists())
+        assertFalse(parent.resolve("golfsim.db-wal").exists())
+        assertFalse(parent.resolve("golfsim.db-shm").exists())
+        // ...and the recovered repository is functional again (reseeded):
+        assertEquals(14, repo.clubs.first().size)
+        fire(repo)
+        assertEquals(1, repo.summaries.first().single().shotCount)
+        assertFalse(repo.persistError.value) // next successful write clears it
     }
 }
 ```
@@ -1234,8 +1257,13 @@ class SessionRepository private constructor(private val context: Context) {
     private fun build(): Mlm2proDatabase =
         Room.databaseBuilder(context, Mlm2proDatabase::class.java, DB_NAME).build()
 
-    /** Spec §8: archive the broken file (with SQLite sidecars), start fresh. */
-    private suspend fun recoverFromCorruptFile() {
+    /**
+     * Spec §8: archive the broken file (with SQLite sidecars), start fresh.
+     * internal (not private) so the corrupt-DB mechanism test can drive it
+     * directly — Robolectric's SQLite won't throw on forged files, so the
+     * real-throw detection path is verified on-device (Task 10, Step 5b).
+     */
+    internal suspend fun recoverFromCorruptFile() {
         Log.e(TAG, "database unreadable - recreating; old file archived")
         try {
             db.close()
@@ -1276,7 +1304,7 @@ class SessionRepository private constructor(private val context: Context) {
 - [ ] **Step 4: Run tests to verify they pass**
 
 Run: `$env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"; .\gradlew.bat :core:data:test`
-Expected: `BUILD SUCCESSFUL` — 8 repository tests green (20 total in `:core:data`).
+Expected: `BUILD SUCCESSFUL` — 9 repository tests green (21 total in `:core:data`).
 
 - [ ] **Step 5: Commit**
 
@@ -3077,6 +3105,14 @@ adb helper for force-stops: `& "$env:LOCALAPPDATA\Android\Sdk\platform-tools\adb
 - [ ] Force-stop WITHOUT ending the session; relaunch.
 - [ ] RANGE: the 4 previous shots render as resting balls at their landing spots (scalar-backed restore — no replay animation for restored shots is expected); SESSION panel shows `shots 4`; HISTORY shows the same single session, still OPEN.
 - [ ] FIRE 1 more → count goes to 5 on the SAME session (no second session row in HISTORY).
+
+- [ ] **Step 5b: On-device DB-corruption recovery (the real-throw path the JVM cannot simulate)**
+
+- [ ] With the app holding data from scenario B, force-stop it (command in Step 4).
+- [ ] Overwrite the live database with garbage (debug builds allow `run-as`): `& "$env:LOCALAPPDATA\Android\Sdk\platform-tools\adb.exe" shell run-as com.hpsmiles.golfsim dd if=/dev/urandom of=databases/golfsim.db bs=1024 count=64`
+- [ ] Relaunch: the app must NOT crash. SQLite on-device rejects the unreadable header, `initializeAndRestore()` catches it and runs the recovery path Robolectric could not reach: the corrupt file is archived, a fresh DB is created, and the StatusStrip shows `DB WRITE FAILING` (persistError set at recovery).
+- [ ] FIRE 1 demo shot → the error strip clears (next successful write resets persistError); HISTORY shows a fresh session list (the corrupt data is archived, not shown); the bag still has all 14 default clubs (reseeded).
+- [ ] Confirm the archive exists: `& "$env:LOCALAPPDATA\Android\Sdk\platform-tools\adb.exe" shell run-as com.hpsmiles.golfsim ls databases/` → `golfsim.db` plus a `corrupt-<timestamp>-golfsim.db` (and no stale `-journal`/`-wal`/`-shm` sidecars for the old file).
 
 - [ ] **Step 6: On-device scenario C — live shed session (user-gated; needs the MLM2PRO)**
 
