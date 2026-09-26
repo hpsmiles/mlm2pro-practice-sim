@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -33,10 +32,12 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.hpsmiles.golfsim.core.connect.CaptureLog
 import com.hpsmiles.golfsim.core.data.record.ClubRecord
+import com.hpsmiles.golfsim.core.data.record.ClubType
 import com.hpsmiles.golfsim.core.designsystem.GolfColors
 import com.hpsmiles.golfsim.core.designsystem.GolfSpacing
 import com.hpsmiles.golfsim.core.designsystem.GolfTypography
 import com.hpsmiles.golfsim.core.designsystem.SectionCard
+import com.hpsmiles.golfsim.range.AddClubForm
 import java.io.File
 import kotlinx.coroutines.launch
 
@@ -51,7 +52,7 @@ private fun chipStyle(enabled: Boolean) = if (enabled) GolfColors.Teal else Golf
 fun SettingsScreen(
     captureLog: CaptureLog = CaptureLog(),
     clubs: List<ClubRecord> = emptyList(),
-    onAddClub: suspend (String) -> Boolean = { false },
+    onAddClub: suspend (String, ClubType, Boolean) -> Boolean = { _, _, _ -> false },
     onRenameClub: suspend (Long, String) -> Boolean = { _, _ -> false },
     onDeleteClub: (Long) -> Unit = {},
 ) {
@@ -68,8 +69,6 @@ fun SettingsScreen(
     }
 
     // BAG editor state.
-    var newClubName by remember { mutableStateOf("") }
-    var addRejected by remember { mutableStateOf(false) }
     var renameTarget by remember { mutableStateOf<ClubRecord?>(null) }
     var renameText by remember { mutableStateOf("") }
     var renameRejected by remember { mutableStateOf(false) }
@@ -144,46 +143,11 @@ fun SettingsScreen(
                     )
                 }
             }
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(GolfSpacing.Sm),
-                modifier = Modifier.padding(top = GolfSpacing.Sm),
-            ) {
-                OutlinedTextField(
-                    value = newClubName,
-                    onValueChange = {
-                        newClubName = it.take(20)
-                        addRejected = false
-                    },
-                    singleLine = true,
-                    modifier = Modifier.width(160.dp),
-                )
-                Text(
-                    text = "ADD",
-                    style = GolfTypography.MetricLabel,
-                    color = GolfColors.Teal,
-                    modifier = Modifier
-                        .clickable {
-                            scope.launch {
-                                if (onAddClub(newClubName.trim())) {
-                                    newClubName = ""
-                                    addRejected = false
-                                } else {
-                                    addRejected = true
-                                }
-                            }
-                        }
-                        .border(1.dp, GolfColors.Teal, RoundedCornerShape(50))
-                        .padding(horizontal = GolfSpacing.Lg, vertical = 8.dp),
-                )
-            }
-            if (addRejected) {
-                Text(
-                    text = if (newClubName.isBlank()) "ENTER A NAME" else if (newClubName.contains(',')) "NO COMMAS" else "ALREADY IN BAG",
-                    style = GolfTypography.Status,
-                    color = GolfColors.AlertRed,
-                )
-            }
+            // M5x E3: same shared add-club form as the range picker.
+            AddClubForm(
+                onSubmit = onAddClub,
+                onAdded = {},
+            )
         }
         SectionCard("DEBUG - NOTIFICATION CAPTURE (BENCH)") {
             Row(modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)) {

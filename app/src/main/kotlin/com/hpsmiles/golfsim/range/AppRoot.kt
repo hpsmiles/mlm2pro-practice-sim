@@ -113,13 +113,34 @@ fun AppRoot() {
         }
     }
 
+    // M5: one gated club capture for all three tabs (replaces the three
+    // per-tab captures). Also feeds the bag-miss guard and capture stamping.
+    val clubRecords by remember(sessionRepository, repoReady) {
+        gatedFlow(repoReady, { sessionRepository.clubs }, flowOf(emptyList()))
+    }.collectAsState(initial = emptyList())
+
+    // M5x E3/TRIGGER: if the active club is no longer in the bag — TEST club
+    // purged by END SESSION, or a deletion — the active club falls back to
+    // "—". An EMPTY bag is never a miss: on cold start the persisted club is
+    // restored synchronously from SharedPreferences while clubRecords is
+    // still the gated empty flow (repoReady awaits Room I/O), so treating it
+    // as a miss would wipe the saved selection before the real bag arrives.
+    // Genuine empty-bag paths (delete-active) already self-correct in the
+    // rename/delete handlers before emission.
+    LaunchedEffect(clubRecords) {
+        if (clubRecords.isEmpty()) return@LaunchedEffect // gate closed / fresh install — not a miss
+        val name = activeClubName ?: return@LaunchedEffect
+        if (clubRecords.none { it.name == name }) selectClub(null)
+    }
+
     // M5: persist every accepted shot. Fire-and-forget — the repository never
     // throws and flags StatusStrip via persistError (spec §8).
     fun persist(shot: DisplayShot?, source: ShotSource) {
         if (shot == null) return
         val club = activeClubName
+        val clubWasTemp = clubRecords.find { it.name == club }?.isTemp ?: false
         scope.launch {
-            sessionRepository.appendShot(shot.ballData, shot.shotResult, source, club, shot.timestampMs)
+            sessionRepository.appendShot(shot.ballData, shot.shotResult, source, club, shot.timestampMs, clubWasTemp)
         }
     }
 
@@ -308,35 +329,25 @@ fun AppRoot() {
                 }
                 when (tab) {
                     RangeTab.RANGE -> {
-                        // Getter flow — remember-capture once (Task 4b);
-                        // gated behind the restore flag (post-merge fix).
-                        val clubRecords by remember(sessionRepository, repoReady) {
-                            gatedFlow(repoReady, { sessionRepository.clubs }, flowOf(emptyList()))
-                        }.collectAsState(initial = emptyList())
                         RangeScreen(
                             Modifier.weight(1f),
                             session = session,
                             activeClubName = activeClubName,
-                            clubNames = clubRecords.map { it.name },
+                            clubs = clubRecords,
                             onSelectClub = ::selectClub,
-                            onAddClub = { sessionRepository.addClub(it) },
+                            onAddClub = sessionRepository::addClub,
                         )
                     }
                     RangeTab.SETTINGS -> {
-                        // Getter flow — remember-capture once (Task 4b);
-                        // gated behind the restore flag (post-merge fix).
-                        val clubRecords by remember(sessionRepository, repoReady) {
-                            gatedFlow(repoReady, { sessionRepository.clubs }, flowOf(emptyList()))
-                        }.collectAsState(initial = emptyList())
                         SettingsScreen(
                             captureLog = captureLog,
                             clubs = clubRecords,
-                            onAddClub = { sessionRepository.addClub(it) },
+                            onAddClub = sessionRepository::addClub,
                             onRenameClub = { id, name ->
                                 val renamed = sessionRepository.renameClub(id, name)
                                 if (renamed) {
-                                    // The pill shows a name, not an id — follow an
-                                    // active-club rename so it never dangles (Task 8a).
+                                    // Renamed club was active → the pill follows
+                                    // the new name; delete clears selection.
                                     val wasActive =
                                         clubRecords.find { it.id == id }?.name == activeClubName
                                     if (wasActive) selectClub(name.trim())
@@ -344,9 +355,6 @@ fun AppRoot() {
                                 renamed
                             },
                             onDeleteClub = { id ->
-                                // Deleting the active club clears the pill (Task 8a): a
-                                // dangling name would keep tagging new shots with a
-                                // club that no longer exists in the bag.
                                 val deletedName = clubRecords.find { it.id == id }?.name
                                 scope.launch {
                                     sessionRepository.deleteClub(id)
@@ -356,11 +364,6 @@ fun AppRoot() {
                         )
                     }
                     RangeTab.HISTORY -> {
-                        // Getter flow — remember-capture once (Task 4b);
-                        // gated behind the restore flag (post-merge fix).
-                        val clubRecords by remember(sessionRepository, repoReady) {
-                            gatedFlow(repoReady, { sessionRepository.clubs }, flowOf(emptyList()))
-                        }.collectAsState(initial = emptyList())
                         HistoryScreen(
                             Modifier.weight(1f),
                             summaries = summaries,

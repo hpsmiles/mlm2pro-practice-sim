@@ -36,6 +36,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.hpsmiles.golfsim.core.data.record.ClubRecord
+import com.hpsmiles.golfsim.core.data.record.ClubType
 import com.hpsmiles.golfsim.core.designsystem.GolfColors
 import com.hpsmiles.golfsim.core.designsystem.GolfSpacing
 import com.hpsmiles.golfsim.core.designsystem.GolfTheme
@@ -90,9 +92,9 @@ fun RangeScreen(
     modifier: Modifier = Modifier,
     session: RangeSession,
     activeClubName: String? = null,
-    clubNames: List<String> = emptyList(),
+    clubs: List<ClubRecord> = emptyList(),
     onSelectClub: (String?) -> Unit = {},
-    onAddClub: suspend (String) -> Boolean = { false },
+    onAddClub: suspend (String, ClubType, Boolean) -> Boolean = { _, _, _ -> false },
 ) {
     var playFraction by remember { mutableFloatStateOf(1f) }
     var speedMult by remember { mutableStateOf(SpeedMult.X15) }
@@ -273,7 +275,7 @@ fun RangeScreen(
             if (showClubPicker) {
                 ClubPickerOverlay(
                     activeClubName = activeClubName,
-                    clubNames = clubNames,
+                    clubs = clubs,
                     onDismiss = { showClubPicker = false },
                     onSelectClub = onSelectClub,
                     onAddClub = onAddClub,

@@ -12,51 +12,44 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.hpsmiles.golfsim.core.data.record.ClubRecord
+import com.hpsmiles.golfsim.core.data.record.ClubType
 import com.hpsmiles.golfsim.core.designsystem.GolfColors
 import com.hpsmiles.golfsim.core.designsystem.GolfSpacing
 import com.hpsmiles.golfsim.core.designsystem.GolfTypography
-import kotlinx.coroutines.launch
 
 /** Dim scrim over the whole range (mockup club-selector.html). */
 private val OverlayScrim = Color(0x88000000)
 
 /**
- * M5 (spec D7, mockup club-selector): full-range club picker overlay.
- * Scrim tap dismisses. The first tile is "—" (untagged — clears the pill);
- * each bag tile makes that club active. The ＋ ADD tile reveals an inline
- * field routed through [onAddClub] — the repository owns the duplicate /
- * blank rules, so a rejected name keeps the form open with a hint.
+ * M5x E2/E3: club picker over a scrim. Real clubs first (type-first order
+ * arrives via the repository), then a trailing amber TEST section for
+ * session-scoped clubs. The ＋ ADD tile reveals the shared [AddClubForm].
  */
 @Composable
 fun ClubPickerOverlay(
     activeClubName: String?,
-    clubNames: List<String>,
+    clubs: List<ClubRecord>,
     onDismiss: () -> Unit,
     onSelectClub: (String?) -> Unit,
-    onAddClub: suspend (String) -> Boolean,
+    onAddClub: suspend (String, ClubType, Boolean) -> Boolean,
 ) {
     var adding by remember { mutableStateOf(false) }
-    var newName by remember { mutableStateOf("") }
-    var addRejected by remember { mutableStateOf(false) }
-    val scope = rememberCoroutineScope()
 
     Box(
         modifier = Modifier
@@ -65,8 +58,6 @@ fun ClubPickerOverlay(
             .clickable(onClick = onDismiss),
         contentAlignment = Alignment.Center,
     ) {
-        // Panel swallows the scrim's dismiss click without consuming it
-        // beyond its own bounds (enabled=false click still steals the tap).
         Surface(
             shape = RoundedCornerShape(GolfSpacing.CornerCard),
             color = GolfColors.Card,
@@ -78,85 +69,64 @@ fun ClubPickerOverlay(
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 Text("ACTIVE CLUB", style = GolfTypography.ScreenTitle, color = GolfColors.TextPrimary)
-                // "—" (untagged) tile first, then the bag, 4 per row. Capped
-                // at four visible rows (72dp tiles + Md gaps = 324dp) and
-                // scrollable beyond, so the panel never outgrows the
-                // tablet's usable landscape height however large the bag
-                // grows (Task 7 quality review; M6/M7 A/B duplicates).
+                val real = clubs.filter { !it.isTemp }
+                val test = clubs.filter { it.isTemp }
                 Column(
                     modifier = Modifier
                         .heightIn(max = 324.dp)
                         .verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(GolfSpacing.Md),
                 ) {
-                    (listOf<String?>(null) + clubNames).chunked(4).forEach { row ->
+                    (listOf<ClubRecord?>(null) + real).chunked(4).forEach { row ->
                         Row(horizontalArrangement = Arrangement.spacedBy(GolfSpacing.Sm)) {
-                            row.forEach { name ->
+                            row.forEach { club ->
                                 ClubTile(
-                                    label = name ?: "—",
-                                    active = name == activeClubName,
+                                    label = club?.name ?: "—",
+                                    active = club?.name == activeClubName,
                                     onClick = {
-                                        onSelectClub(name)
+                                        onSelectClub(club?.name)
                                         onDismiss()
                                     },
                                 )
                             }
                         }
                     }
+                    // TEST section — only while any exist (spec §8).
+                    if (test.isNotEmpty()) {
+                        Text(
+                            "TEST",
+                            style = GolfTypography.MetricLabel,
+                            color = GolfColors.Amber,
+                            modifier = Modifier.align(Alignment.Start),
+                        )
+                        test.chunked(4).forEach { row ->
+                            Row(horizontalArrangement = Arrangement.spacedBy(GolfSpacing.Sm)) {
+                                row.forEach { club ->
+                                    ClubTile(
+                                        label = club.name,
+                                        active = club.name == activeClubName,
+                                        temp = true,
+                                        onClick = {
+                                            onSelectClub(club.name)
+                                            onDismiss()
+                                        },
+                                    )
+                                }
+                            }
+                        }
+                    }
                 }
+                // The row remains a tile so the reveal pattern is unchanged.
                 ClubTile(
                     label = if (adding) "×" else "＋ ADD",
                     active = false,
-                    onClick = {
-                        adding = !adding
-                        addRejected = false
-                    },
+                    onClick = { adding = !adding },
                 )
                 if (adding) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(GolfSpacing.Sm),
-                    ) {
-                        OutlinedTextField(
-                            value = newName,
-                            onValueChange = {
-                                newName = it.take(20)
-                                addRejected = false
-                            },
-                            singleLine = true,
-                            modifier = Modifier.width(160.dp),
-                        )
-                        Text(
-                            text = "ADD",
-                            style = GolfTypography.MetricLabel,
-                            color = GolfColors.Teal,
-                            modifier = Modifier
-                                .clickable {
-                                    scope.launch {
-                                        if (onAddClub(newName.trim())) {
-                                            adding = false
-                                            newName = ""
-                                            addRejected = false
-                                        } else {
-                                            addRejected = true
-                                        }
-                                    }
-                                }
-                                .border(1.dp, GolfColors.Teal, RoundedCornerShape(50))
-                                .padding(horizontal = GolfSpacing.Lg, vertical = 8.dp),
-                        )
-                    }
-                }
-                // Gated on `adding`: a double-tap on ADD races two submits —
-                // the first can succeed and close the form while the second
-                // reports a now-duplicate name. Without the gate that late
-                // rejection ghosts the hint under the closed form (Task 7
-                // quality review).
-                if (adding && addRejected) {
-                    Text(
-                        text = if (newName.isBlank()) "ENTER A NAME" else if (newName.contains(',')) "NO COMMAS" else "ALREADY IN BAG",
-                        style = GolfTypography.Status,
-                        color = GolfColors.AlertRed,
+                    AddClubForm(
+                        onSubmit = onAddClub,
+                        onAdded = { adding = false },
+                        onCancel = { adding = false },
                     )
                 }
             }
@@ -164,20 +134,33 @@ fun ClubPickerOverlay(
     }
 }
 
-/** 84×72 tile per the D7 mockup; Teal border marks the active club. */
+/**
+ * 84×72 tile per the D7 mockup; Teal border marks the active club. M5x:
+ * TEST tiles get an amber border + small TEST label.
+ */
 @Composable
-private fun ClubTile(label: String, active: Boolean, onClick: () -> Unit) {
+private fun ClubTile(label: String, active: Boolean, onClick: () -> Unit, temp: Boolean = false) {
+    val edge = when {
+        active -> GolfColors.Teal
+        temp -> GolfColors.Amber
+        else -> GolfColors.Line
+    }
     Box(
         modifier = Modifier
             .size(84.dp, 72.dp)
-            .border(1.dp, if (active) GolfColors.Teal else GolfColors.Line, RoundedCornerShape(GolfSpacing.Sm))
+            .border(1.dp, edge, RoundedCornerShape(GolfSpacing.Sm))
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
-        Text(
-            text = label,
-            style = GolfTypography.Status.copy(fontSize = 16.sp),
-            color = if (active) GolfColors.Teal else GolfColors.TextPrimary,
-        )
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(
+                text = label,
+                style = GolfTypography.Status.copy(fontSize = 16.sp),
+                color = if (active) GolfColors.Teal else GolfColors.TextPrimary,
+            )
+            if (temp) {
+                Text("TEST", style = GolfTypography.Status.copy(fontSize = 9.sp), color = GolfColors.Amber)
+            }
+        }
     }
 }
