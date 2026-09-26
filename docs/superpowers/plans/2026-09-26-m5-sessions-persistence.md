@@ -3193,7 +3193,7 @@ TDD split: the table/meta formatting rules are pure JVM logic → tested here (r
 // app/src/test/kotlin/com/hpsmiles/golfsim/history/HistoryFormatsTest.kt
 package com.hpsmiles.golfsim.history
 
-import com.hpsmiles.golfsim.core.data.SessionSummary
+import com.hpsmiles.golfsim.core.data.record.SessionSummary
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -3243,7 +3243,7 @@ class HistoryFormatsTest {
 
 - [ ] **Step 2: Run the test to verify it fails**
 
-Run: `$env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"; .\gradlew.bat :app:test --tests "com.hpsmiles.golfsim.history.HistoryFormatsTest"`
+Run: `$env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"; .\gradlew.bat :app:testDebugUnitTest --tests "com.hpsmiles.golfsim.history.HistoryFormatsTest"`
 Expected: compile error — `HistoryFormats` unresolved (and `history` package does not exist yet).
 
 - [ ] **Step 3: Implement `HistoryFormats.kt`**
@@ -3287,7 +3287,7 @@ object HistoryFormats {
 
 - [ ] **Step 4: Run the test to verify it passes**
 
-Run: `$env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"; .\gradlew.bat :app:test --tests "com.hpsmiles.golfsim.history.HistoryFormatsTest"`
+Run: `$env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"; .\gradlew.bat :app:testDebugUnitTest --tests "com.hpsmiles.golfsim.history.HistoryFormatsTest"`
 Expected: PASS — 4 tests green.
 
 - [ ] **Step 5: Create `HistoryScreen.kt`**
@@ -3332,9 +3332,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.hpsmiles.golfsim.core.data.SessionSummary
-import com.hpsmiles.golfsim.core.data.SessionTitles
-import com.hpsmiles.golfsim.core.data.ShotRecord
+import com.hpsmiles.golfsim.core.data.record.SessionSummary
+import com.hpsmiles.golfsim.core.data.record.SessionTitles
+import com.hpsmiles.golfsim.core.data.record.ShotRecord
 import com.hpsmiles.golfsim.core.designsystem.GolfColors
 import com.hpsmiles.golfsim.core.designsystem.GolfSpacing
 import com.hpsmiles.golfsim.core.designsystem.GolfTypography
