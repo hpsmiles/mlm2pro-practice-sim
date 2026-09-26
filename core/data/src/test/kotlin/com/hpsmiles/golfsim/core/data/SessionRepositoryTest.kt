@@ -213,4 +213,27 @@ class SessionRepositoryTest {
         val tagged = repo.observeShots(session.id).first()
         assertTrue(tagged.all { it.clubName!!.length == 20 }) // MAX_CLUB
     }
+
+    @Test
+    fun `renameClub rejects blank, commas, duplicates and self-renames`() = runTest {
+        val repo = newRepo()
+        repo.initializeAndRestore() // seeds the default bag — the pin needs 7i to exist
+        val sevenIron = repo.clubs.first().first { it.name == "7i" }
+
+        // Rejection rules mirror addClub (blank / comma / duplicate) — Task 8a pin.
+        assertFalse(repo.renameClub(sevenIron.id, "   "))
+        assertFalse(repo.renameClub(sevenIron.id, "56, W"))
+        assertFalse(repo.renameClub(sevenIron.id, "SW"))
+
+        // Renaming to the club's own current name is also a "duplicate" —
+        // conscious behavior (no self-exclusion): a no-op CONFIRM shows
+        // ALREADY IN BAG rather than silently succeeding.
+        assertFalse(repo.renameClub(sevenIron.id, " 7i "))
+
+        // Valid rename: the clubs flow shows the new name, not the old one.
+        assertTrue(repo.renameClub(sevenIron.id, "7 iron"))
+        val names = repo.clubs.first().map { it.name }
+        assertTrue("7 iron" in names)
+        assertFalse("7i" in names)
+    }
 }

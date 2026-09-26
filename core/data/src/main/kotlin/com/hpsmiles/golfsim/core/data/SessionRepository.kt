@@ -161,28 +161,69 @@ class SessionRepository private constructor(private val context: Context) {
         shotDao.retagShotIds(ids, clubName?.trim()?.take(MAX_CLUB))
     }
 
-    /** False on blank, comma-containing (summary CSV separator), or duplicate name. */
+    /**
+     * False on blank, comma-containing (summary CSV separator), or duplicate
+     * name. Never throws (Task 8a): a lost unique-name race (double-tap)
+     * returns false like a sequential duplicate; a real I/O failure flags
+     * [persistError], clears on success.
+     */
     suspend fun addClub(name: String): Boolean {
         val trimmed = name.trim()
         if (trimmed.isBlank() || trimmed.length > MAX_CLUB) return false
         if (trimmed.contains(',')) return false
-        if (clubDao.findByName(trimmed) != null) return false
-        clubDao.insert(ClubEntity(name = trimmed, sortOrder = clubDao.maxSortOrder() + 1))
-        return true
+        return try {
+            if (clubDao.findByName(trimmed) != null) return false
+            clubDao.insert(ClubEntity(name = trimmed, sortOrder = clubDao.maxSortOrder() + 1))
+            persistError.value = false
+            true
+        } catch (t: Throwable) {
+            if (t is CancellationException) throw t
+            // TOCTOU on the unique-name index (double-tap): the club exists
+            // by now — same outcome as the duplicate check above, so this is
+            // a rejection, not a DB failure. Room's Android driver throws the
+            // FRAMEWORK exception class. (Task 8a)
+            if (t is android.database.sqlite.SQLiteConstraintException) return false
+            Log.e(TAG, "addClub failed", t)
+            persistError.value = true
+            false
+        }
     }
 
-    /** False on blank, comma-containing (summary CSV separator), or duplicate name. */
+    /**
+     * False on blank, comma-containing, or duplicate name (including the
+     * club's own current name — no self-exclusion, pinned by the Task 8a
+     * test). Never throws; mirrors [addClub]'s failure contract.
+     */
     suspend fun renameClub(id: Long, newName: String): Boolean {
         val trimmed = newName.trim()
         if (trimmed.isBlank() || trimmed.length > MAX_CLUB) return false
         if (trimmed.contains(',')) return false
-        if (clubDao.findByName(trimmed) != null) return false
-        clubDao.rename(id, trimmed)
-        return true
+        return try {
+            if (clubDao.findByName(trimmed) != null) return false
+            clubDao.rename(id, trimmed)
+            persistError.value = false
+            true
+        } catch (t: Throwable) {
+            if (t is CancellationException) throw t
+            // Lost the unique-name race (double-tap) — mirrors addClub: a
+            // rejection, not a DB failure. (Task 8a)
+            if (t is android.database.sqlite.SQLiteConstraintException) return false
+            Log.e(TAG, "renameClub failed", t)
+            persistError.value = true
+            false
+        }
     }
 
+    /** Never throws (Task 8a); flags [persistError] on failure, clears on success. */
     suspend fun deleteClub(id: Long) {
-        clubDao.delete(id)
+        try {
+            clubDao.delete(id)
+            persistError.value = false
+        } catch (t: Throwable) {
+            if (t is CancellationException) throw t
+            Log.e(TAG, "deleteClub failed", t)
+            persistError.value = true
+        }
     }
 
     private fun build(): Mlm2proDatabase =

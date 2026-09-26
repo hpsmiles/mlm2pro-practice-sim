@@ -292,8 +292,27 @@ fun AppRoot() {
                             captureLog = captureLog,
                             clubs = clubRecords,
                             onAddClub = { sessionRepository.addClub(it) },
-                            onRenameClub = { id, name -> sessionRepository.renameClub(id, name) },
-                            onDeleteClub = { id -> scope.launch { sessionRepository.deleteClub(id) } },
+                            onRenameClub = { id, name ->
+                                val renamed = sessionRepository.renameClub(id, name)
+                                if (renamed) {
+                                    // The pill shows a name, not an id — follow an
+                                    // active-club rename so it never dangles (Task 8a).
+                                    val wasActive =
+                                        clubRecords.find { it.id == id }?.name == activeClubName
+                                    if (wasActive) selectClub(name.trim())
+                                }
+                                renamed
+                            },
+                            onDeleteClub = { id ->
+                                // Deleting the active club clears the pill (Task 8a): a
+                                // dangling name would keep tagging new shots with a
+                                // club that no longer exists in the bag.
+                                val deletedName = clubRecords.find { it.id == id }?.name
+                                scope.launch {
+                                    sessionRepository.deleteClub(id)
+                                    if (deletedName == activeClubName) selectClub(null)
+                                }
+                            },
                         )
                     }
                 }
