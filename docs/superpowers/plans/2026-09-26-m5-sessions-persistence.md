@@ -3016,6 +3016,7 @@ Append to `SessionRepositoryTest.kt` after the `retagShots trims and truncates c
     @Test
     fun `renameClub rejects blank, commas, duplicates and self-renames`() = runTest {
         val repo = newRepo()
+        repo.initializeAndRestore() // seeds the default bag — the pin needs 7i to exist
         val sevenIron = repo.clubs.first().first { it.name == "7i" }
 
         // Rejection rules mirror addClub (blank / comma / duplicate) — Task 8a pin.
@@ -3041,12 +3042,6 @@ Expected: **26 tests, 0 failures** (SessionRepositoryTest 11 → 12; pin passes 
 
 - [ ] **Step 2: Wrap the club trio in the never-throws contract**
 
-In `SessionRepository.kt` add the import in alphabetical position between `androidx.room.Room` and the first `com.hpsmiles` import:
-
-```kotlin
-import androidx.sqlite.db.SQLiteConstraintException
-```
-
 Replace `addClub`, `renameClub`, `deleteClub` (keep everything else in the file unchanged):
 
 ```kotlin
@@ -3065,13 +3060,13 @@ Replace `addClub`, `renameClub`, `deleteClub` (keep everything else in the file 
             clubDao.insert(ClubEntity(name = trimmed, sortOrder = clubDao.maxSortOrder() + 1))
             persistError.value = false
             true
-        } catch (e: SQLiteConstraintException) {
-            // Lost the unique-name index race (double-tap): the club exists
-            // by now, so this is the same outcome as the duplicate check
-            // above — a rejection, not a DB failure. (Task 8a)
-            false
         } catch (t: Throwable) {
             if (t is CancellationException) throw t
+            // TOCTOU on the unique-name index (double-tap): the club exists
+            // by now — same outcome as the duplicate check above, so this is
+            // a rejection, not a DB failure. Room's Android driver throws the
+            // FRAMEWORK exception class. (Task 8a)
+            if (t is android.database.sqlite.SQLiteConstraintException) return false
             Log.e(TAG, "addClub failed", t)
             persistError.value = true
             false
@@ -3092,11 +3087,11 @@ Replace `addClub`, `renameClub`, `deleteClub` (keep everything else in the file 
             clubDao.rename(id, trimmed)
             persistError.value = false
             true
-        } catch (e: SQLiteConstraintException) {
-            // Lost the unique-name race (mirrors addClub). (Task 8a)
-            false
         } catch (t: Throwable) {
             if (t is CancellationException) throw t
+            // Lost the unique-name race (double-tap) — mirrors addClub: a
+            // rejection, not a DB failure. (Task 8a)
+            if (t is android.database.sqlite.SQLiteConstraintException) return false
             Log.e(TAG, "renameClub failed", t)
             persistError.value = true
             false
@@ -3174,7 +3169,7 @@ git commit -m "fix(app): never-throw club edits, pin rename rules, maintain acti
 - No delete-confirmation dialog — club is trivially re-addable and shot history keeps snapshotted strings.
 - `clubRejectionHint` extraction (hint expression duplicated in SettingsScreen + ClubPickerOverlay) — defer until a third consumer exists.
 - SettingsScreen file split, `key()` on club rows, stale-rename-dialog no-op success — unchanged from Task 8 notes.
-- TOCTOU constraint-catch branch is not unit-testable under Robolectric (Robolectric's SQLite doesn't throw — Task 4 lesson); verified by the Task 10 checklist items marked "Task 8a".
+- TOCTOU constraint-catch branch is not unit-testable under Robolectric (Robolectric's SQLite doesn't throw — Task 4 lesson); verified by the Task 10 checklist items marked "Task 8a". The check uses the framework exception class (`android.database.sqlite.SQLiteConstraintException`) because Room's Android driver throws it unwrapped; an androidx.sqlite variant (bundled driver) would fall through to the generic branch — no crash, transient strip.
 
 ---
 
