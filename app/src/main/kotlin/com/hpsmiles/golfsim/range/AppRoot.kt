@@ -53,11 +53,13 @@ import com.hpsmiles.golfsim.core.designsystem.GolfTypography
 import com.hpsmiles.golfsim.core.designsystem.NavRail
 import com.hpsmiles.golfsim.core.designsystem.NavRailButton
 import com.hpsmiles.golfsim.core.designsystem.StatusStrip
+import com.hpsmiles.golfsim.history.HistoryScreen
 import com.hpsmiles.golfsim.settings.SettingsScreen
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 
-private enum class RangeTab { RANGE, SETTINGS }
+private enum class RangeTab { RANGE, SETTINGS, HISTORY }
 
 /** The bench device session key convention (same bytes the auth write carries raw). */
 private fun benchSessionKey(): ByteArray = ByteArray(32) { it.toByte() }
@@ -200,6 +202,25 @@ fun AppRoot() {
         }
     }
 
+    // M5 Task 9: history tab state.
+    // summaries is a getter flow — remember-capture once (Task 4b).
+    val summaries by remember(sessionRepository) { sessionRepository.summaries }
+        .collectAsState(initial = emptyList())
+    val liveOnly by sessionRepository.liveOnly.collectAsState()
+    var historySelectedId by remember { mutableStateOf<Long?>(null) }
+    val historyShots by remember(historySelectedId) {
+        historySelectedId?.let { sessionRepository.observeShots(it) } ?: flowOf(emptyList())
+    }.collectAsState(initial = emptyList())
+
+    // Newest session is selected by default; an absent selection falls back
+    // to newest so the detail pane never points at a ghost row.
+    LaunchedEffect(summaries) {
+        val ids = summaries.map { it.id }
+        if (historySelectedId == null || historySelectedId !in ids) {
+            historySelectedId = summaries.firstOrNull()?.id
+        }
+    }
+
     var tab by remember { mutableStateOf(RangeTab.RANGE) }
     GolfTheme {
         Column(
@@ -212,6 +233,7 @@ fun AppRoot() {
                 NavRail {
                     NavRailButton("RANGE", tab == RangeTab.RANGE, onClick = { tab = RangeTab.RANGE })
                     NavRailButton("SETTINGS", tab == RangeTab.SETTINGS, onClick = { tab = RangeTab.SETTINGS })
+                    NavRailButton("HISTORY", tab == RangeTab.HISTORY, onClick = { tab = RangeTab.HISTORY })
 
                     // M4d user request (2026-09-24, revised): FIRE / MODE /
                     // CONNECT live at the BOTTOM of the rail, under a flexible
@@ -312,6 +334,30 @@ fun AppRoot() {
                                     sessionRepository.deleteClub(id)
                                     if (deletedName == activeClubName) selectClub(null)
                                 }
+                            },
+                        )
+                    }
+                    RangeTab.HISTORY -> {
+                        // Getter flow — remember-capture once (Task 4b).
+                        val clubRecords by remember(sessionRepository) {
+                            sessionRepository.clubs
+                        }.collectAsState(initial = emptyList())
+                        HistoryScreen(
+                            Modifier.weight(1f),
+                            summaries = summaries,
+                            liveOnly = liveOnly,
+                            onToggleLiveOnly = {
+                                sessionRepository.liveOnly.value = !sessionRepository.liveOnly.value
+                            },
+                            shots = historyShots,
+                            selectedSessionId = historySelectedId,
+                            onSelectSession = { historySelectedId = it },
+                            clubNames = clubRecords.map { it.name },
+                            onRetag = { ids, club ->
+                                scope.launch { sessionRepository.retagShots(ids, club) }
+                            },
+                            onRenameSession = { id, title ->
+                                scope.launch { sessionRepository.renameSession(id, title) }
                             },
                         )
                     }
