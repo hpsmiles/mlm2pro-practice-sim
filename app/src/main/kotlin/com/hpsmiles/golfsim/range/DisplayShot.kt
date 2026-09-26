@@ -7,9 +7,11 @@ import com.hpsmiles.golfsim.core.physics.ShotResult
 /**
  * One shot as the range screen holds it: the decoded launch data, the solve
  * inputs used, and the physics result. All UI rendering derives from these.
+ * `timestampMs` stamps capture time (injectable clock via RangeSession).
  */
 data class DisplayShot(
     val ballData: BallData,
     val launch: LaunchConditions,
     val shotResult: ShotResult,
+    val timestampMs: Long = 0L,
 )

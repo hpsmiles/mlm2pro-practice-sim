@@ -1,8 +1,12 @@
 package com.hpsmiles.golfsim.range
 
 import com.hpsmiles.golfsim.core.ble.BallData
+import com.hpsmiles.golfsim.core.data.record.RestoredSession
+import com.hpsmiles.golfsim.core.data.record.ShotRecord
+import com.hpsmiles.golfsim.core.data.record.ShotSource
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -19,12 +23,12 @@ class RangeSessionTest {
     private fun garbage() = fade().copy(ballSpeed = 0.0)
 
     @Test
-    fun `add returns true and appends a DisplayShot with simulated result`() {
+    fun `add returns a DisplayShot and appends it`() {
         val session = RangeSession()
-        assertTrue(session.add(fade()))
+        val shot = session.add(fade())
+        assertNotNull(shot)
         assertEquals(1, session.shots.size)
-        val shot = session.shots[0]
-        assertEquals(44.2, shot.ballData.ballSpeed, 1e-9)
+        assertEquals(44.2, shot!!.ballData.ballSpeed, 1e-9)
         assertEquals(21.7, shot.launch.launchAngleDeg, 1e-9)
         assertTrue(shot.shotResult.carryM > 0.0)
     }
@@ -38,11 +42,49 @@ class RangeSessionTest {
     }
 
     @Test
-    fun `add returns false and appends nothing when LaunchConditions require fails`() {
+    fun `add returns null and appends nothing when LaunchConditions require fails`() {
         val session = RangeSession()
-        assertFalse(session.add(garbage()))
+        assertNull(session.add(garbage()))
         assertEquals(0, session.shots.size)
         assertEquals(0, session.tick.intValue)
+    }
+
+    private fun shotRecord(seq: Int, club: String?) = ShotRecord(
+        id = seq.toLong(), sessionId = 5L, seq = seq, timestampMs = seq.toLong(),
+        source = ShotSource.LIVE, clubName = club, ballData = fade(),
+        carryM = 140.9, totalM = 150.0, sideM = -3.0, apexM = 27.0, flightTimeSec = 6.1,
+    )
+
+    @Test
+    fun `add stamps the shot from the injectable clock`() {
+        val session = RangeSession()
+        var now = 123_456L
+        session.clockMs = { now }
+        val shot = session.add(fade())
+        assertEquals(123_456L, shot!!.timestampMs)
+        now = 999L
+        assertEquals(999L, session.add(fade())!!.timestampMs) // each shot stamped at its own add
+    }
+
+    @Test
+    fun `restore skips rows that no longer pass launch guards`() {
+        val session = RangeSession()
+        val bad = shotRecord(2, "7i").copy(ballData = garbage())
+        session.restore(RestoredSession(5L, 0, listOf(bad)))
+        assertEquals(0, session.shots.size)
+    }
+
+    @Test
+    fun `restore rebuilds resting shots and misreads without trajectories`() {
+        val session = RangeSession()
+        session.restore(RestoredSession(5L, 3, listOf(shotRecord(0, "7i"), shotRecord(1, null))))
+        assertEquals(2, session.shots.size)
+        assertEquals(0L, session.shots[0].timestampMs)
+        assertEquals(3, session.misreadCount.intValue)
+        // Scalar-backed ShotResult carries no samples (nothing replays after restore)…
+        assertEquals(0, session.shots[0].shotResult.samples.size)
+        // …and rollout is derived on restore: total - carry.
+        assertEquals(9.1, session.shots[0].shotResult.rolloutM, 1e-9)
     }
 
     @Test
