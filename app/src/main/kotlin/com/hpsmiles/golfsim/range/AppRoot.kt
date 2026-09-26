@@ -26,6 +26,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -43,6 +44,8 @@ import com.hpsmiles.golfsim.core.connect.EnvironmentConfig
 import com.hpsmiles.golfsim.core.connect.HandshakeSequencer
 import com.hpsmiles.golfsim.core.connect.Mlm2proGattClient
 import com.hpsmiles.golfsim.core.connect.Mlm2proScanner
+import com.hpsmiles.golfsim.core.data.SessionRepository
+import com.hpsmiles.golfsim.core.data.record.ShotSource
 import com.hpsmiles.golfsim.core.designsystem.GolfColors
 import com.hpsmiles.golfsim.core.designsystem.GolfSpacing
 import com.hpsmiles.golfsim.core.designsystem.GolfTheme
@@ -74,14 +77,49 @@ fun AppRoot() {
     // root so demo (RangeScreen fire) and live BLE callbacks append to one list.
     val session = remember { RangeSession() }
 
+    // M5: persistence facade — one per composition. Bag seeding, DB probe and
+    // open-session restore run once at startup; appends ride the existing
+    // main-thread mediation (single-writer discipline, spec §7).
+    val sessionRepository = remember { SessionRepository.open(context) }
+    val activeClubStore = remember { ActiveClubStore(context) }
+    var activeClubName by remember { mutableStateOf(activeClubStore.get()) }
+
+    fun selectClub(name: String?) {
+        activeClubName = name
+        activeClubStore.set(name)
+    }
+
+    LaunchedEffect(sessionRepository) {
+        val restored = sessionRepository.initializeAndRestore()
+        if (restored != null) {
+            val skipped = session.restore(restored)
+            // Guard-skipped rows are persisted data we could not rebuild —
+            // surfaced in logcat rather than dropped silently (Task 5b).
+            if (skipped > 0) Log.w("AppRoot", "restore skipped $skipped invalid shot row(s)")
+        }
+    }
+
+    // M5: persist every accepted shot. Fire-and-forget — the repository never
+    // throws and flags StatusStrip via persistError (spec §8).
+    fun persist(shot: DisplayShot?, source: ShotSource) {
+        if (shot == null) return
+        val club = activeClubName
+        scope.launch {
+            sessionRepository.appendShot(shot.ballData, shot.shotResult, source, club, shot.timestampMs)
+        }
+    }
+
     // Live shot delivery: GATT callbacks fire on a binder thread; hop to main
     // before touching Compose snapshot state.
     DisposableEffect(gattClient) {
         gattClient.onMeasurement = { ballData ->
-            scope.launch { session.add(ballData) }
+            scope.launch { persist(session.add(ballData), ShotSource.LIVE) }
         }
         gattClient.onMisread = {
-            scope.launch { session.markMisread() }
+            scope.launch {
+                session.markMisread()
+                sessionRepository.incrementMisread()
+            }
         }
         onDispose {
             gattClient.onMeasurement = null
@@ -97,7 +135,7 @@ fun AppRoot() {
     // FIRE lives in the rail (2026-09-24 user request); demo firing appends to
     // the shared session exactly like RangeScreen did.
     fun fireDemo() {
-        if (demo) session.add(demoSource.nextShot())
+        if (demo) persist(session.add(demoSource.nextShot()), ShotSource.DEMO)
     }
 
     // BLE permission gate hoisted from RangeScreen (CONNECT moved to the rail).
@@ -210,15 +248,34 @@ fun AppRoot() {
                             onClick = { disconnectClient(gattClient) },
                         )
                     }
+
+                    // M5: explicit session end (spec D1). Non-destructive — the
+                    // session stays fully browsable in HISTORY (Task 9).
+                    // Getter flow (new Flow per access) — remember-capture it
+                    // so collectAsState doesn't restart collection on every
+                    // recomposition (Task 4b review finding).
+                    val hasOpenSession by remember(sessionRepository) {
+                        sessionRepository.hasOpenSession
+                    }.collectAsState(false)
+                    if (hasOpenSession) {
+                        Spacer(Modifier.height(4.dp))
+                        RailChip(
+                            label = "END SESSION",
+                            border = GolfColors.Amber,
+                            labelColor = GolfColors.Amber,
+                            onClick = { scope.launch { sessionRepository.endSession() } },
+                        )
+                    }
                 }
                 when (tab) {
                     RangeTab.RANGE -> RangeScreen(Modifier.weight(1f), session = session)
                     RangeTab.SETTINGS -> SettingsScreen(captureLog = captureLog)
                 }
             }
+            val persistError by sessionRepository.persistError.collectAsState()
             StatusStrip(
                 armed = demo || connectionState is ConnectionState.Armed,
-                info = describe(connectionState, demo = demo, scanning = scanning),
+                info = if (persistError) "DB WRITE FAILING" else describe(connectionState, demo = demo, scanning = scanning),
             )
         }
     }
