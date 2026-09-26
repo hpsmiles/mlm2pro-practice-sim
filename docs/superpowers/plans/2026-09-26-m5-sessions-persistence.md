@@ -1141,16 +1141,26 @@ class SessionRepository private constructor(private val context: Context) {
     /** History filter: true = live shots only (default, spec D4). UI toggles. */
     val liveOnly = MutableStateFlow(true)
 
-    /** Session list, already mapped through the [liveOnly] filter. */
-    val summaries: Flow<List<SessionSummary>> =
-        combine(sessionDao.observeSummaries(), liveOnly) { rows, onlyLive ->
+    /**
+     * Session list, already mapped through the [liveOnly] filter.
+     *
+     * These three flows are property GETTERS, not stored fields: they must
+     * re-derive from the CURRENT [db] so they survive a corrupt-DB recovery
+     * ([recoverFromCorruptFile] swaps in a rebuilt database). Flows captured
+     * from the closed database die with Room's cancelled SupervisorJob —
+     * caught by the recovery mechanism test, the first code path to execute
+     * real recovery.
+     */
+    val summaries: Flow<List<SessionSummary>>
+        get() = combine(sessionDao.observeSummaries(), liveOnly) { rows, onlyLive ->
             rows.map { it.toSummary(onlyLive) }
         }
 
-    val hasOpenSession: Flow<Boolean> = sessionDao.observeOpen().map { it != null }
+    val hasOpenSession: Flow<Boolean>
+        get() = sessionDao.observeOpen().map { it != null }
 
-    val clubs: Flow<List<ClubRecord>> =
-        clubDao.observeClubs().map { list -> list.map { ClubRecord(it.id, it.name) } }
+    val clubs: Flow<List<ClubRecord>>
+        get() = clubDao.observeClubs().map { list -> list.map { ClubRecord(it.id, it.name) } }
 
     fun observeShots(sessionId: Long): Flow<List<ShotRecord>> =
         shotDao.observeShots(sessionId).map { list -> list.map { it.toRecord() } }
