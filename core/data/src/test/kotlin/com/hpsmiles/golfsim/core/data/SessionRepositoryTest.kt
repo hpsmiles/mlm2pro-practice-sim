@@ -120,6 +120,49 @@ class SessionRepositoryTest {
     }
 
     @Test
+    fun `setShotsExcluded flips rows and re-emits the shots flow`() = runTest {
+        val repo = newRepo()
+        repo.initializeAndRestore()
+        fire(repo, 0)
+        fire(repo, 1)
+        val sessionId = repo.summaries.first().single().id
+        val ids = repo.observeShots(sessionId).first().map { it.id }
+        repo.setShotsExcluded(listOf(ids[1]), true)
+        val flags = repo.observeShots(sessionId).first().map { it.excluded }
+        assertEquals(listOf(false, true), flags)
+        repo.setShotsExcluded(listOf(ids[1]), false)
+        assertEquals(listOf(false, false), repo.observeShots(sessionId).first().map { it.excluded })
+    }
+
+    @Test
+    fun `excluded shots drop from summary averages and longest - counts intact`() = runTest {
+        val repo = newRepo()
+        repo.initializeAndRestore()
+        repo.appendShot(ball, ShotResult(140.0, 10.0, 150.0, -3.0, 27.0, 6.0), ShotSource.LIVE, "7i", 1L)
+        repo.appendShot(ball, ShotResult(160.0, 10.0, 170.0, -3.0, 27.0, 6.0), ShotSource.LIVE, "7i", 2L)
+        val sessionId = repo.summaries.first().single().id
+        val ids = repo.observeShots(sessionId).first().map { it.id }
+        repo.setShotsExcluded(listOf(ids[1]), true) // exclude the 160 m shot
+        val s = repo.summaries.first().single()
+        assertEquals(2, s.shotCount)                 // count unchanged (spec §5.4)
+        assertEquals(140.0, s.avgCarryM!!, 0.0)
+        assertEquals(140.0, s.maxCarryM!!, 0.0)
+
+        // Exercise the ALL aggregate legs too (default liveOnly=true only
+        // touches the live* legs; History's ALL view reads all*).
+        repo.liveOnly.value = false
+        val all = repo.summaries.first().single()
+        assertEquals(140.0, all.avgCarryM!!, 0.0)  // unfiltered all-leg would read 150.0
+        assertEquals(140.0, all.maxCarryM!!, 0.0)  // unfiltered all-leg would read 160.0
+
+        // Every live shot excluded → NULL carry aggregates (contract Task 6 needs).
+        repo.setShotsExcluded(listOf(ids[0]), true)
+        val allExcluded = repo.summaries.first().single()
+        assertNull(allExcluded.avgCarryM)
+        assertNull(allExcluded.maxCarryM)
+    }
+
+    @Test
     fun `liveOnly filter re-shapes statistics`() = runTest {
         val repo = newRepo()
         repo.initializeAndRestore()

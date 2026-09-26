@@ -36,10 +36,10 @@ interface SessionDao {
                COUNT(sh.id) AS shotCount,
                COALESCE(SUM(CASE WHEN sh.source = 0 THEN 1 ELSE 0 END), 0) AS liveCount,
                COALESCE(SUM(CASE WHEN sh.source = 1 THEN 1 ELSE 0 END), 0) AS demoCount,
-               AVG(CASE WHEN sh.source = 0 THEN sh.carryM END) AS liveAvgCarryM,
-               MAX(CASE WHEN sh.source = 0 THEN sh.carryM END) AS liveMaxCarryM,
-               AVG(sh.carryM) AS allAvgCarryM,
-               MAX(sh.carryM) AS allMaxCarryM,
+               AVG(CASE WHEN sh.source = 0 AND sh.excluded = 0 THEN sh.carryM END) AS liveAvgCarryM,
+               MAX(CASE WHEN sh.source = 0 AND sh.excluded = 0 THEN sh.carryM END) AS liveMaxCarryM,
+               AVG(CASE WHEN sh.excluded = 0 THEN sh.carryM END) AS allAvgCarryM,
+               MAX(CASE WHEN sh.excluded = 0 THEN sh.carryM END) AS allMaxCarryM,
                GROUP_CONCAT(DISTINCT CASE WHEN sh.source = 0 THEN sh.clubName END) AS liveClubsCsv,
                GROUP_CONCAT(DISTINCT sh.clubName) AS allClubsCsv
         FROM sessions s

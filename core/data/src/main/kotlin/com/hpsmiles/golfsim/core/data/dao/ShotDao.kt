@@ -24,6 +24,10 @@ interface ShotDao {
     @Query("UPDATE shots SET clubName = :clubName WHERE id IN (:ids)")
     suspend fun retagShotIds(ids: List<Long>, clubName: String?)
 
+    /** M5x E5: batch exclusion flag; flows re-emit on the UPDATE. */
+    @Query("UPDATE shots SET excluded = :excluded WHERE id IN (:ids)")
+    suspend fun setShotsExcluded(ids: List<Long>, excluded: Boolean)
+
     @Query("DELETE FROM shots")
     suspend fun deleteAll()
 }

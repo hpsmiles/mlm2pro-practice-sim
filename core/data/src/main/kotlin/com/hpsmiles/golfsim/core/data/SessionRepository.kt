@@ -195,6 +195,19 @@ class SessionRepository private constructor(private val context: Context) {
         }
     }
 
+    /** Never throws (M5x E5); batch-flips the excluded flag, flows re-emit. */
+    suspend fun setShotsExcluded(ids: List<Long>, excluded: Boolean) {
+        if (ids.isEmpty()) return
+        try {
+            shotDao.setShotsExcluded(ids, excluded)
+            persistError.value = false
+        } catch (t: Throwable) {
+            if (t is CancellationException) throw t
+            Log.e(TAG, "setShotsExcluded failed", t)
+            persistError.value = true
+        }
+    }
+
     /**
      * False on blank, comma-containing (summary CSV separator), or duplicate
      * name. Never throws (Task 8a): a lost unique-name race (double-tap)
