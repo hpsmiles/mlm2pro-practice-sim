@@ -1785,6 +1785,125 @@ git commit -m "feat(range): RangeSession returns timestamped shots and restores 
 ```
 
 ---
+### Task 5b: Restore-seam hardening — skip count + no relaunch replay
+
+Follow-up to the Task 5 quality review. Two latent plan defects surface the moment Task 6 wires `restore()` into AppRoot:
+
+1. **Relaunch replay:** the restored last shot becomes `currentShot`; the playback effect (`RangeScreen.kt`, `LaunchedEffect(currentShot, speedMult)`) launches with `playFraction = 1f`, which is below `FollowCam.endFraction` when `rolloutM > 0`. Flight samples are empty (static camera) but rollout samples are not → an unwanted ~1 s ground-roll animation of the PREVIOUS session's last shot at every relaunch — contradicting "nothing replays after a restart" (the `toDisplayShot()` KDoc).
+2. **Silent skip:** rows failing launch guards vanish with no log, counter, or return value — "I had 14 shots yesterday, now 12" is undebuggable.
+
+Fix contract: `restore()` returns the skip count (Task 6 AppRoot logs it), and RangeScreen gates playback on `tick > 0` (restored shots are pre-animated). Also resets the misread coalesce window inside `restore()` (hygiene if it is ever called mid-session).
+
+**Files:**
+- Modify: `app/src/main/kotlin/com/hpsmiles/golfsim/range/RangeSession.kt`
+- Modify: `app/src/main/kotlin/com/hpsmiles/golfsim/range/RangeScreen.kt`
+- Test: `app/src/test/kotlin/com/hpsmiles/golfsim/range/RangeSessionTest.kt`
+
+**Interfaces:**
+- Consumes: Task 5 `RestoredSession`, `ShotRecord.toDisplayShot()`.
+- Produces (supersedes Task 5's `restore(...): Unit`): `RangeSession.restore(restored: RestoredSession): Int` — number of rows skipped for failing launch guards. Task 6 wiring logs the return value; RangeScreen playback ignores restored shots via the tick gate.
+
+- [ ] **Step 1: Extend the failing tests**
+
+In `RangeSessionTest.kt`, replace the two restore tests with:
+
+```kotlin
+    @Test
+    fun `restore skips rows that no longer pass launch guards`() {
+        val session = RangeSession()
+        val bad = shotRecord(2, "7i").copy(ballData = garbage())
+        assertEquals(1, session.restore(RestoredSession(5L, 0, listOf(bad))))
+        assertEquals(0, session.shots.size)
+    }
+
+    @Test
+    fun `restore rebuilds resting shots and misreads without trajectories`() {
+        val session = RangeSession()
+        assertEquals(0, session.restore(RestoredSession(5L, 3, listOf(shotRecord(0, "7i"), shotRecord(1, null)))))
+        assertEquals(2, session.shots.size)
+        assertEquals(0L, session.shots[0].timestampMs)
+        assertEquals(1L, session.shots[1].timestampMs) // seq order survives the rebuild
+        assertEquals(3, session.misreadCount.intValue)
+        assertEquals(0, session.tick.intValue)          // restore never bumps tick (playback gate)
+        // Scalar-backed ShotResult carries no samples (nothing replays after restore)…
+        assertEquals(0, session.shots[0].shotResult.samples.size)
+        // …and rollout is derived on restore: total - carry.
+        assertEquals(9.1, session.shots[0].shotResult.rolloutM, 1e-9)
+        // A second restore clears before refilling and reports zero skips.
+        assertEquals(0, session.restore(RestoredSession(6L, 0, listOf(shotRecord(0, "8i")))))
+        assertEquals(1, session.shots.size)
+    }
+```
+
+- [ ] **Step 2: Run red**
+
+Run: `$env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"; .\gradlew.bat :app:test`
+Expected: FAILED — both modified tests fail on the return-value assertions (`expected:<1> but was:<kotlin.Unit>` / `expected:<0> but was:<kotlin.Unit>`); all other tests green.
+
+- [ ] **Step 3: Implement the skip count + coalesce reset**
+
+In `RangeSession.kt`, replace `restore` with:
+
+```kotlin
+    /**
+     * M5 restart resume: rebuilds scalar-backed resting shots from the open
+     * session. No trajectories (nothing replays — RangeScreen gates playback
+     * on tick > 0, so restored shots render pre-animated), no tick bump.
+     * Returns the count of rows skipped because they no longer pass the
+     * launch guards (AppRoot logs it — silent data loss is undebuggable).
+     * Also resets the misread coalesce window, so even a hypothetical
+     * mid-session restore cannot inherit a stale [lastMisreadMs].
+     */
+    fun restore(restored: RestoredSession): Int {
+        shots.clear()
+        var skipped = 0
+        restored.shots.forEach { record ->
+            val shot = record.toDisplayShot()
+            if (shot == null) {
+                skipped++
+            } else {
+                shots.add(shot)
+            }
+        }
+        misreadCount.intValue = restored.misreadCount
+        lastMisreadMs = 0L
+        return skipped
+    }
+```
+
+- [ ] **Step 4: Run green**
+
+Run: `$env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"; .\gradlew.bat :app:test`
+Expected: BUILD SUCCESSFUL — RangeSessionTest 8/8 (same eight test methods, extended), :app total 55 tests 0 failures.
+
+- [ ] **Step 5: Gate playback on live-accepted shots only**
+
+In `RangeScreen.kt`, in the playback effect (`LaunchedEffect(currentShot, speedMult)`, ~line 118), insert the tick gate as the FIRST statement of the effect body (keep the rest of the effect unchanged):
+
+```kotlin
+    LaunchedEffect(currentShot, speedMult) {
+        // M5 restore: tick 0 means no live-accepted shot this process, so
+        // the current shot is a restored (pre-animated) one — never replay
+        // its rollout, at relaunch or on a speed-mult change.
+        if (session.tick.intValue == 0) return@LaunchedEffect
+        val shot = currentShot ?: return@LaunchedEffect
+        if (shot.shotResult.flightTimeSec <= 0.0) return@LaunchedEffect
+```
+
+No unit test — Compose wiring, per the repo decision (Task 6's precedent); verified by `:app:test` compiling it, `:app:assembleDebug`, and Task 10 scenario B.
+
+- [ ] **Step 6: Confirm :core:data untouched**
+
+Run: `$env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"; .\gradlew.bat :core:data:test`
+Expected: BUILD SUCCESSFUL — 25 tests 0 failures (unchanged).
+
+- [ ] **Step 7: Commit**
+
+```bash
+git add app/src
+git commit -m "feat(app): count restore skips and never replay restored shots"
+```
+
 ### Task 6: AppRoot persistence wiring + END SESSION chip + `ActiveClubStore`
 
 **Files:**
@@ -1792,7 +1911,7 @@ git commit -m "feat(range): RangeSession returns timestamped shots and restores 
 - Modify: `app/src/main/kotlin/com/hpsmiles/golfsim/range/AppRoot.kt`
 
 **Interfaces:**
-- Consumes: Task 4 `SessionRepository` API; Task 5 `RangeSession.add(): DisplayShot?` + `restore(RestoredSession)`.
+- Consumes: Task 4 `SessionRepository` API; Task 5b `RangeSession.add(): DisplayShot?` + `restore(RestoredSession): Int` (skip count; log non-zero via `Log.w`).
 - Produces (Task 7/8/9 rely on): `ActiveClubStore(context)` with `get(): String?` / `set(String?)`; AppRoot-held `sessionRepository`, `activeClubName` state, `selectClub(name: String?)` helper, `persist(shot, source)` helper; StatusStrip shows `DB WRITE FAILING` while `persistError` is set; rail shows END SESSION while a session is open.
 
 No unit tests in this task — it is Compose wiring, and `ActiveClubStore` is pure SharedPreferences delegation (spec §4 keeps SharedPreferences). Verified by `:app:test` staying green, `:app:assembleDebug`, and the Task 10 device checklist ("pill selection survives restart").
@@ -1836,6 +1955,7 @@ In `app/src/main/kotlin/com/hpsmiles/golfsim/range/AppRoot.kt`:
 (a) Add imports (near the existing `androidx.compose.runtime.*` block):
 
 ```kotlin
+import android.util.Log
 import androidx.compose.runtime.LaunchedEffect
 import com.hpsmiles.golfsim.core.data.SessionRepository
 import com.hpsmiles.golfsim.core.data.record.ShotSource
@@ -1857,7 +1977,13 @@ import com.hpsmiles.golfsim.core.data.record.ShotSource
     }
 
     LaunchedEffect(sessionRepository) {
-        sessionRepository.initializeAndRestore()?.let { session.restore(it) }
+        val restored = sessionRepository.initializeAndRestore()
+        if (restored != null) {
+            val skipped = session.restore(restored)
+            // Guard-skipped rows are persisted data we could not rebuild —
+            // surfaced in logcat rather than dropped silently (Task 5b).
+            if (skipped > 0) Log.w("AppRoot", "restore skipped $skipped invalid shot row(s)")
+        }
     }
 
     // M5: persist every accepted shot. Fire-and-forget — the repository never
@@ -3226,6 +3352,7 @@ adb helper for force-stops: `& "$env:LOCALAPPDATA\Android\Sdk\platform-tools\adb
 - [ ] From the open 1-shot session: FIRE 3 more (4 open-session shots on the mat as resting balls).
 - [ ] Force-stop WITHOUT ending the session; relaunch.
 - [ ] RANGE: the 4 previous shots render as resting balls at their landing spots (scalar-backed restore — no replay animation for restored shots is expected); SESSION panel shows `shots 4`; HISTORY shows the same single session, still OPEN.
+- [ ] At relaunch the last restored shot is already at rest — no tracer redraw or rollout animation plays (playback is gated on `tick > 0`); changing the speed multiplier before the first new FIRE must also not replay it.
 - [ ] FIRE 1 more → count goes to 5 on the SAME session (no second session row in HISTORY).
 
 - [ ] **Step 5b: On-device DB-corruption recovery (the real-throw path the JVM cannot simulate)**
