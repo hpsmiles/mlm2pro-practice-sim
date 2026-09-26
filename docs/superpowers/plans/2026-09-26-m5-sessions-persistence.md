@@ -2150,6 +2150,132 @@ git commit -m "feat(app): persist shots via SessionRepository, END SESSION chip,
 
 ---
 
+### Task 6a: Misread gating + never-throws for misread/end writes
+
+Task 6 wiring landed two plan-level defects found by the Task 6 quality review:
+
+1. **Misread double-count.** One physical mishit fires `onMisread` twice (EVENTS `0x05 0x00` + all-zero MEASUREMENT sentinel, ~200 ms apart — exactly why `RangeSession.markMisread` coalesces). Task 6's wiring called `sessionRepository.incrementMisread()` unconditionally, so the DB counts 2 per mishit while the pill counts 1 — and `restore()` writes the doubled DB count back into the pill, so the misread pill doubles on every restart.
+2. **`incrementMisread`/`endSession` can throw.** The plan claims "the repository never throws" but only `appendShot`/`initializeAndRestore` honor it. A degraded DB (the exact state `persistError` advertises) makes the next misread or END SESSION tap throw on the main scope — an app crash instead of the `DB WRITE FAILING` strip.
+
+Fix both now, before Task 10's device pass discovers them on hardware.
+
+**Files:**
+- Modify: `app/src/main/kotlin/com/hpsmiles/golfsim/range/RangeSession.kt` (`markMisread`, ~line 95)
+- Modify: `app/src/main/kotlin/com/hpsmiles/golfsim/range/AppRoot.kt` (`onMisread` block, ~line 118)
+- Modify: `core/data/src/main/kotlin/com/hpsmiles/golfsim/core/data/SessionRepository.kt` (`incrementMisread` + `endSession`, ~lines 126–135)
+- Test: `app/src/test/kotlin/com/hpsmiles/golfsim/range/RangeSessionTest.kt`
+
+**Interfaces:**
+- Produces: `RangeSession.markMisread(atMs: Long = clockMs()): Boolean` — true when this call incremented the pill (the coalesce owner), false when swallowed by the 500 ms window. AppRoot gates the DB increment on the return value.
+
+Conscious deferrals (do not re-flag): `dismissMisreads()` stays memory-only (DB is authoritative across restarts; a dismissed pill resurrects on relaunch); misreads before the first accepted shot of a session are not persisted (no session row exists yet); the never-closed Room instance at AppRoot root is accepted for activity-lifetime scope. This task SUPERSEDES the Task 4b note "persistError clearing only on shot writes" — after this task, ANY successful repository write (shot, misread, end) clears `persistError`.
+
+- [ ] **Step 1: Strengthen the misread coalesce test (RED)**
+
+In `RangeSessionTest.kt`, add `import org.junit.Assert.assertFalse` (alphabetical position: after `assertEquals`, before `assertNotNull`) and replace the old `misreads coalesce inside 500 ms window` test (same fixture clock, now also asserting the return value: counted / coalesced / counted):
+
+```kotlin
+    @Test
+    fun `misreads coalesce inside 500 ms window and report the coalesce owner`() {
+        val session = RangeSession()
+        var now = 1_000L
+        session.clockMs = { now }
+        assertTrue(session.markMisread(atMs = now))
+        assertFalse(session.markMisread(atMs = now + 200)) // EVENTS + MEASUREMENT pair
+        assertEquals(1, session.misreadCount.intValue)
+        assertTrue(session.markMisread(atMs = now + 1_000)) // genuinely new misread
+        assertEquals(2, session.misreadCount.intValue)
+    }
+```
+
+- [ ] **Step 2: RED check**
+
+Run: `$env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"; .\gradlew.bat :app:testDebugUnitTest`
+Expected: BUILD FAILED — compile error on the new assertions (`markMisread` returns `Unit`, the test expects `Boolean`: type mismatch).
+
+- [ ] **Step 3: Make `markMisread` report the coalesce owner**
+
+Replace `markMisread` in `RangeSession.kt`:
+
+```kotlin
+    /**
+     * One real mishit emits BOTH the EVENTS MisreadAlert and the all-zero
+     * MEASUREMENT sentinel ~200 ms apart (M4c, event-010 + event-027).
+     * Coalesce that pair into a single pill increment. Returns true when
+     * this call was counted (the coalesce owner) — AppRoot gates the DB
+     * increment on it so the persisted count matches the pill.
+     */
+    fun markMisread(atMs: Long = clockMs()): Boolean {
+        if (atMs - lastMisreadMs < MISREAD_COALESCE_MS) return false
+        lastMisreadMs = atMs
+        misreadCount.intValue++
+        return true
+    }
+```
+
+- [ ] **Step 4: Gate the AppRoot wiring on the owner**
+
+In `AppRoot.kt`, replace the `onMisread` handler body:
+
+```kotlin
+        gattClient.onMisread = {
+            scope.launch {
+                // Only the coalesce owner persists, or each mishit would
+                // count twice in the DB (EVENTS + MEASUREMENT pair).
+                if (session.markMisread()) sessionRepository.incrementMisread()
+            }
+        }
+```
+
+- [ ] **Step 5: Never-throw contract for misread/end writes**
+
+Replace `incrementMisread` and `endSession` in `SessionRepository.kt`:
+
+```kotlin
+    /**
+     * Coalesced misread (RangeSession already coalesces the 0x05 pair).
+     * Never throws — same contract as [appendShot] (spec §8).
+     */
+    suspend fun incrementMisread() {
+        try {
+            val open = sessionDao.findOpen() ?: return
+            sessionDao.incrementMisread(open.id)
+            persistError.value = false
+        } catch (t: Throwable) {
+            if (t is CancellationException) throw t
+            Log.e(TAG, "incrementMisread failed", t)
+            persistError.value = true
+        }
+    }
+
+    /** Never throws — same contract as [appendShot] (spec §8). */
+    suspend fun endSession() {
+        try {
+            val open = sessionDao.findOpen() ?: return
+            sessionDao.end(open.id, System.currentTimeMillis())
+            persistError.value = false
+        } catch (t: Throwable) {
+            if (t is CancellationException) throw t
+            Log.e(TAG, "endSession failed", t)
+            persistError.value = true
+        }
+    }
+```
+
+- [ ] **Step 6: Verify GREEN**
+
+Run: `$env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"; .\gradlew.bat :app:test :core:data:test :app:assembleDebug`
+Expected: `BUILD SUCCESSFUL` — :app 55 tests 0 failures (the rewritten coalesce test among them), :core:data 25 tests 0 failures (existing repo tests unaffected: "endSession closes - misreads after end are ignored" still passes because the no-open-session early return is unchanged), APK assembles.
+
+- [ ] **Step 7: Commit**
+
+```bash
+git add app/src core/data/src
+git commit -m "fix(app): gate misread persistence on the coalesce owner, never throw from misread end"
+```
+
+---
+
 ### Task 7: Active-club pill + picker overlay (range)
 
 **Files:**
