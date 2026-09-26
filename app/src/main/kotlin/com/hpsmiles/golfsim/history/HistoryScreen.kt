@@ -20,6 +20,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -32,9 +34,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.hpsmiles.golfsim.core.data.record.ClubRecord
 import com.hpsmiles.golfsim.core.data.record.SessionSummary
 import com.hpsmiles.golfsim.core.data.record.SessionTitles
 import com.hpsmiles.golfsim.core.data.record.ShotRecord
@@ -51,6 +55,8 @@ import com.hpsmiles.golfsim.core.designsystem.MetricChip
  * then pick a club chip (or "—") and APPLY to retag. Tapping the session
  * title opens a rename dialog.
  */
+private enum class HistoryMode(val label: String) { ORDER("ORDER"), CLUBS("CLUBS") }
+
 @Composable
 fun HistoryScreen(
     modifier: Modifier = Modifier,
@@ -63,6 +69,8 @@ fun HistoryScreen(
     clubNames: List<String>,
     onRetag: (List<Long>, String?) -> Unit,
     onRenameSession: (Long, String) -> Unit,
+    clubs: List<ClubRecord> = emptyList(),
+    onToggleExcluded: (Long, Boolean) -> Unit = { _, _ -> },
 ) {
     // Selection + retag choice reset whenever the viewed session changes.
     var selectedIds by remember(selectedSessionId) { mutableStateOf(setOf<Long>()) }
@@ -87,6 +95,7 @@ fun HistoryScreen(
                     SessionDetail(
                         session = selected,
                         shots = shots,
+                        clubs = clubs,
                         selectedIds = selectedIds,
                         onSelectionChange = {
                             selectedIds = it
@@ -99,6 +108,7 @@ fun HistoryScreen(
                             renameText = selected.title ?: ""
                             showRename = true
                         },
+                        onToggleExcluded = onToggleExcluded,
                     )
                 }
                 if (selectedIds.isNotEmpty()) {
@@ -237,10 +247,13 @@ private fun Badge(label: String, color: Color) {
 private fun SessionDetail(
     session: SessionSummary,
     shots: List<ShotRecord>,
+    clubs: List<ClubRecord>,
     selectedIds: Set<Long>,
     onSelectionChange: (Set<Long>) -> Unit,
     onRename: () -> Unit,
+    onToggleExcluded: (Long, Boolean) -> Unit,
 ) {
+    var mode by remember(session.id) { mutableStateOf(HistoryMode.ORDER) }
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -267,49 +280,48 @@ private fun SessionDetail(
                 MetricChip("longest", String.format(java.util.Locale.US, "%.0f", it), "M")
             }
         }
-        // Shot table (D5): # CLUB CARRY SIDE BALL SPIN.
-        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            HeaderCell("#", 36.dp)
-            HeaderCell("CLUB", 64.dp)
-            HeaderCell("CARRY", 80.dp)
-            HeaderCell("SIDE", 84.dp)
-            HeaderCell("BALL", 88.dp)
-            HeaderCell("SPIN", 104.dp)
+        // M5x E4: ORDER (today's flat table) | CLUBS (grouped with AVG rows).
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.border(1.dp, GolfColors.Line, RoundedCornerShape(50)),
+        ) {
+            HistoryMode.entries.forEach { m ->
+                Text(
+                    m.label,
+                    style = GolfTypography.Status,
+                    color = if (mode == m) GolfColors.Teal else GolfColors.TextMuted,
+                    modifier = Modifier
+                        .clickable { mode = m }
+                        .background(if (mode == m) GolfColors.Card else Color.Transparent)
+                        .padding(horizontal = GolfSpacing.Lg, vertical = 4.dp),
+                )
+            }
         }
-        shots.forEach { shot ->
-            val selected = shot.id in selectedIds
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .combinedClickable(
-                        onClick = {
-                            // D6: tap toggles membership only while a
-                            // selection is active (long-press starts it).
-                            if (selectedIds.isNotEmpty()) {
-                                onSelectionChange(
-                                    if (selected) selectedIds - shot.id else selectedIds + shot.id,
-                                )
-                            }
-                        },
-                        onLongClick = {
-                            if (!selected) onSelectionChange(selectedIds + shot.id)
-                        },
-                    )
-                    .background(if (selected) GolfColors.Panel else Color.Transparent)
-                    .border(
-                        1.dp,
-                        if (selected) GolfColors.Teal else Color.Transparent,
-                        RoundedCornerShape(GolfSpacing.Sm),
-                    )
-                    .padding(vertical = 4.dp),
-            ) {
-                Cell("${shot.seq + 1}", 36.dp)
-                Cell(HistoryFormats.clubOrDash(shot.clubName), 64.dp)
-                Cell(HistoryFormats.carry(shot.carryM), 80.dp)
-                Cell(HistoryFormats.side(shot.sideM), 84.dp)
-                Cell(HistoryFormats.ballMph(shot.ballData.ballSpeed), 88.dp)
-                Cell(HistoryFormats.spin(shot.ballData.totalSpin), 104.dp)
+        // Unified table (both modes): 11 metric columns + tick, scrolls horizontally.
+        Column(
+            modifier = Modifier.horizontalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            HeaderRow()
+            if (mode == HistoryMode.ORDER) {
+                if (shots.isEmpty()) {
+                    Text("NO SHOTS", style = GolfTypography.Status, color = GolfColors.TextMuted)
+                }
+                shots.forEach { shot ->
+                    ShotRow(shot, shot.id in selectedIds, selectedIds, onSelectionChange, onToggleExcluded)
+                }
+            } else {
+                val groups = remember(shots, clubs) { groupByClub(shots, clubs) }
+                if (groups.isEmpty()) {
+                    Text("NO SHOTS", style = GolfTypography.Status, color = GolfColors.TextMuted)
+                }
+                groups.forEach { group ->
+                    GroupHeaderRow(group)
+                    AvgRow(statsFor(group))
+                    group.shots.forEach { shot ->
+                        ShotRow(shot, shot.id in selectedIds, selectedIds, onSelectionChange, onToggleExcluded)
+                    }
+                }
             }
         }
     }
@@ -326,11 +338,137 @@ private fun HeaderCell(text: String, width: Dp) {
 }
 
 @Composable
-private fun Cell(text: String, width: Dp) {
+private fun HeaderRow() {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        val cols = listOf(
+            "#" to 36.dp, "CARRY" to 80.dp, "TOTAL" to 80.dp, "SIDE" to 84.dp, "APEX" to 80.dp,
+            "BALL" to 88.dp, "CLUB" to 76.dp, "SMASH" to 64.dp, "LAUNCH" to 72.dp,
+            "AXIS" to 72.dp, "SPIN" to 96.dp,
+        )
+        cols.forEach { (label, w) -> HeaderCell(label, w) }
+        Spacer(Modifier.width(48.dp)) // tick column
+    }
+}
+
+@Composable
+private fun GroupHeaderRow(group: ClubGroup) {
+    val stats = statsFor(group)
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(GolfSpacing.Sm),
+        modifier = Modifier.padding(top = GolfSpacing.Sm),
+    ) {
+        Text(
+            HistoryFormats.clubOrDash(group.clubName),
+            style = GolfTypography.MetricLabel,
+            color = GolfColors.TextSecondary,
+        )
+        Text("${group.shots.size} SHOTS", style = GolfTypography.Status, color = GolfColors.TextMuted)
+        Text("σ CARRY ${HistoryFormats.sigma(stats.sigmaCarryM)}", style = GolfTypography.Status, color = GolfColors.TextMuted)
+        Text("σ BALL ${HistoryFormats.sigma(stats.sigmaBallMph)}", style = GolfTypography.Status, color = GolfColors.TextMuted)
+        if (group.wasTemp) Badge("TEST", GolfColors.Amber)
+    }
+}
+
+@Composable
+private fun AvgRow(stats: ClubStats) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text("AVG", style = GolfTypography.MetricLabel, color = GolfColors.Teal, modifier = Modifier.width(36.dp))
+        AvgCell(HistoryFormats::carry, stats.avgCarryM, 80.dp)
+        AvgCell(HistoryFormats::total, stats.avgTotalM, 80.dp)
+        AvgCell(HistoryFormats::side, stats.avgSideM, 84.dp)
+        AvgCell(HistoryFormats::apex, stats.avgApexM, 80.dp)
+        AvgCell(HistoryFormats::ballMph, stats.avgBallMph, 88.dp)
+        AvgCell(HistoryFormats::clubMph, stats.avgClubMph, 76.dp)
+        val smash = stats.avgSmash
+        Text(
+            text = smash?.let { String.format(java.util.Locale.US, "%.2f", it) } ?: "-",
+            style = GolfTypography.Body,
+            color = GolfColors.Teal,
+            modifier = Modifier.width(64.dp),
+        )
+        AvgCell(HistoryFormats::launch, stats.avgLaunchDeg, 72.dp)
+        AvgCell(HistoryFormats::axis, stats.avgAxisDeg, 72.dp)
+        AvgCell(HistoryFormats::avgSpin, stats.avgSpinRpm, 96.dp)
+        Spacer(Modifier.width(48.dp))
+    }
+}
+
+@Composable
+private fun AvgCell(format: (Double) -> String, value: Double?, width: Dp) {
+    Text(
+        text = value?.let(format) ?: "-",
+        style = GolfTypography.Body,
+        color = GolfColors.Teal,
+        modifier = Modifier.width(width),
+    )
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun ShotRow(
+    shot: ShotRecord,
+    selected: Boolean,
+    selectedIds: Set<Long>,
+    onSelectionChange: (Set<Long>) -> Unit,
+    onToggleExcluded: (Long, Boolean) -> Unit,
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .combinedClickable(
+                onClick = {
+                    // D6 unchanged: tap toggles membership only while a
+                    // selection is active (long-press starts it).
+                    if (selectedIds.isNotEmpty()) {
+                        onSelectionChange(
+                            if (selected) selectedIds - shot.id else selectedIds + shot.id,
+                        )
+                    }
+                },
+                onLongClick = {
+                    if (!selected) onSelectionChange(selectedIds + shot.id)
+                },
+            )
+            .background(if (selected) GolfColors.Panel else Color.Transparent)
+            .border(
+                1.dp,
+                if (selected) GolfColors.Teal else Color.Transparent,
+                RoundedCornerShape(GolfSpacing.Sm),
+            )
+            .padding(vertical = 4.dp),
+    ) {
+        ShotCell("${shot.seq + 1}", 36.dp, shot.excluded)
+        ShotCell(HistoryFormats.carry(shot.carryM), 80.dp, shot.excluded)
+        ShotCell(HistoryFormats.total(shot.totalM), 80.dp, shot.excluded)
+        ShotCell(HistoryFormats.side(shot.sideM), 84.dp, shot.excluded)
+        ShotCell(HistoryFormats.apex(shot.apexM), 80.dp, shot.excluded)
+        ShotCell(HistoryFormats.ballMph(shot.ballData.ballSpeed), 88.dp, shot.excluded)
+        ShotCell(HistoryFormats.clubMph(shot.ballData.clubHeadSpeed), 76.dp, shot.excluded)
+        ShotCell(HistoryFormats.smash(shot.ballData.ballSpeed, shot.ballData.clubHeadSpeed), 64.dp, shot.excluded)
+        ShotCell(HistoryFormats.launch(shot.ballData.launchAngle), 72.dp, shot.excluded)
+        ShotCell(HistoryFormats.axis(shot.ballData.spinAxis), 72.dp, shot.excluded)
+        ShotCell(HistoryFormats.spin(shot.ballData.totalSpin), 96.dp, shot.excluded)
+        Checkbox(
+            checked = shot.excluded,
+            onCheckedChange = { onToggleExcluded(shot.id, it) },
+            colors = CheckboxDefaults.colors(
+                checkedColor = GolfColors.Amber,
+                checkmarkColor = GolfColors.Base,
+                uncheckedColor = if (shot.excluded) GolfColors.Amber else GolfColors.TextMuted,
+            ),
+            modifier = Modifier.width(48.dp),
+        )
+    }
+}
+
+@Composable
+private fun ShotCell(text: String, width: Dp, excluded: Boolean) {
     Text(
         text = text,
         style = GolfTypography.Body,
-        color = GolfColors.TextPrimary,
+        color = if (excluded) GolfColors.TextMuted else GolfColors.TextPrimary,
+        textDecoration = if (excluded) TextDecoration.LineThrough else null,
         modifier = Modifier.width(width),
     )
 }

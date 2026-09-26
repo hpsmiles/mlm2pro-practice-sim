@@ -25,6 +25,27 @@ object HistoryFormats {
 
     fun clubOrDash(clubName: String?): String = clubName ?: "—"
 
+    fun total(m: Double): String = String.format(Locale.US, "%.0f m", m)
+
+    fun apex(m: Double): String = String.format(Locale.US, "%.1f m", m)
+
+    fun clubMph(clubHeadSpeedMps: Double): String =
+        String.format(Locale.US, "%.1f mph", clubHeadSpeedMps * MPH_PER_MS)
+
+    fun smash(ballSpeedMps: Double, clubHeadSpeedMps: Double): String =
+        if (clubHeadSpeedMps > 0.0) {
+            String.format(Locale.US, "%.2f", ballSpeedMps / clubHeadSpeedMps)
+        } else "-"
+
+    fun launch(deg: Double): String = String.format(Locale.US, "%.1f°", deg)
+
+    fun axis(deg: Double): String =
+        String.format(Locale.US, "%+.1f°", deg).replace('-', '−')
+
+    fun avgSpin(spinRpm: Double): String = String.format(Locale.US, "%.0f rpm", spinRpm)
+
+    fun sigma(v: Double): String = String.format(Locale.US, "%.1f", v)
+
     fun sessionMeta(s: SessionSummary): String {
         val count = if (s.shotCount == 1) "1 shot" else "${s.shotCount} shots"
         val avg = s.avgCarryM?.let { " · avg ${carry(it)}" } ?: ""

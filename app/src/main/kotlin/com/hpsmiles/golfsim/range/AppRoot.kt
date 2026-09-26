@@ -375,11 +375,15 @@ fun AppRoot() {
                             selectedSessionId = historySelectedId,
                             onSelectSession = { historySelectedId = it },
                             clubNames = clubRecords.map { it.name },
+                            clubs = clubRecords,
                             onRetag = { ids, club ->
                                 scope.launch { sessionRepository.retagShots(ids, club) }
                             },
                             onRenameSession = { id, title ->
                                 scope.launch { sessionRepository.renameSession(id, title) }
+                            },
+                            onToggleExcluded = { id, excluded ->
+                                scope.launch { sessionRepository.setShotsExcluded(listOf(id), excluded) }
                             },
                         )
                     }
