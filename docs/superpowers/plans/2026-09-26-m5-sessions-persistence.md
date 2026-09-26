@@ -3252,7 +3252,7 @@ Expected: compile error — `HistoryFormats` unresolved (and `history` package d
 // app/src/main/kotlin/com/hpsmiles/golfsim/history/HistoryFormats.kt
 package com.hpsmiles.golfsim.history
 
-import com.hpsmiles.golfsim.core.data.SessionSummary
+import com.hpsmiles.golfsim.core.data.record.SessionSummary
 import java.util.Locale
 
 /** Metres/second to mph for display (same constant as the range panel). */
