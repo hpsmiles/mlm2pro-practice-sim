@@ -2995,6 +2995,189 @@ git commit -m "feat(app): bag editor section in settings"
 
 ---
 
+### Task 8a: Club mutation hardening - never-throw contract + active-pill maintenance
+
+**Why (Task 8 quality review):** `addClub`/`renameClub`/`deleteClub` predate the never-throws contract that `appendShot`/`incrementMisread`/`endSession` got in Task 6a. Task 8 put them on an unguarded `scope.launch` UI path, so (a) a double-tap on ADD can lose the unique-name-index race → `SQLiteConstraintException` → uncaught main-scope crash; (b) any Room I/O failure crashes instead of flagging the strip; (c) `renameClub`'s rejection rules had zero automated coverage; (d) deleting/renaming the active club leaves the range pill dangling on a name no longer in the bag (it keeps tagging new shots).
+
+**Files:**
+- Modify: `core/data/src/main/kotlin/com/hpsmiles/golfsim/core/data/SessionRepository.kt`
+- Test: `core/data/src/test/kotlin/com/hpsmiles/golfsim/core/data/SessionRepositoryTest.kt`
+- Modify: `app/src/main/kotlin/com/hpsmiles/golfsim/range/AppRoot.kt` (SETTINGS branch only)
+
+**Interfaces:**
+- Consumes: `selectClub(name: String?)` (Task 6, AppRoot.kt:87), `clubRecords` getter flow (Task 4b remember-mandate), existing club-trio signatures.
+- Produces: unchanged public signatures (`addClub`/`renameClub`: Boolean; `deleteClub`: Unit) with the never-throws contract added; `renameClub` rejection rules pinned by test; the active pill follows renames and clears on delete of the active club.
+
+- [ ] **Step 1: Append the renameClub pin test**
+
+Append to `SessionRepositoryTest.kt` after the `retagShots trims and truncates club names` test, before the class closing brace:
+
+```kotlin
+    @Test
+    fun `renameClub rejects blank, commas, duplicates and self-renames`() = runTest {
+        val repo = newRepo()
+        val sevenIron = repo.clubs.first().first { it.name == "7i" }
+
+        // Rejection rules mirror addClub (blank / comma / duplicate) — Task 8a pin.
+        assertFalse(repo.renameClub(sevenIron.id, "   "))
+        assertFalse(repo.renameClub(sevenIron.id, "56, W"))
+        assertFalse(repo.renameClub(sevenIron.id, "SW"))
+
+        // Renaming to the club's own current name is also a "duplicate" —
+        // conscious behavior (no self-exclusion): a no-op CONFIRM shows
+        // ALREADY IN BAG rather than silently succeeding.
+        assertFalse(repo.renameClub(sevenIron.id, " 7i "))
+
+        // Valid rename: the clubs flow shows the new name, not the old one.
+        assertTrue(repo.renameClub(sevenIron.id, "7 iron"))
+        val names = repo.clubs.first().map { it.name }
+        assertTrue("7 iron" in names)
+        assertFalse("7i" in names)
+    }
+```
+
+Run: `$env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"; .\gradlew.bat :core:data:testDebugUnitTest`
+Expected: **26 tests, 0 failures** (SessionRepositoryTest 11 → 12; pin passes immediately — T4b precedent, this pins existing behavior the contract wraps must not change).
+
+- [ ] **Step 2: Wrap the club trio in the never-throws contract**
+
+In `SessionRepository.kt` add the import in alphabetical position between `androidx.room.Room` and the first `com.hpsmiles` import:
+
+```kotlin
+import androidx.sqlite.db.SQLiteConstraintException
+```
+
+Replace `addClub`, `renameClub`, `deleteClub` (keep everything else in the file unchanged):
+
+```kotlin
+    /**
+     * False on blank, comma-containing (summary CSV separator), or duplicate
+     * name. Never throws (Task 8a): a lost unique-name race (double-tap)
+     * returns false like a sequential duplicate; a real I/O failure flags
+     * [persistError], clears on success.
+     */
+    suspend fun addClub(name: String): Boolean {
+        val trimmed = name.trim()
+        if (trimmed.isBlank() || trimmed.length > MAX_CLUB) return false
+        if (trimmed.contains(',')) return false
+        return try {
+            if (clubDao.findByName(trimmed) != null) return false
+            clubDao.insert(ClubEntity(name = trimmed, sortOrder = clubDao.maxSortOrder() + 1))
+            persistError.value = false
+            true
+        } catch (e: SQLiteConstraintException) {
+            // Lost the unique-name index race (double-tap): the club exists
+            // by now, so this is the same outcome as the duplicate check
+            // above — a rejection, not a DB failure. (Task 8a)
+            false
+        } catch (t: Throwable) {
+            if (t is CancellationException) throw t
+            Log.e(TAG, "addClub failed", t)
+            persistError.value = true
+            false
+        }
+    }
+
+    /**
+     * False on blank, comma-containing, or duplicate name (including the
+     * club's own current name — no self-exclusion, pinned by the Task 8a
+     * test). Never throws; mirrors [addClub]'s failure contract.
+     */
+    suspend fun renameClub(id: Long, newName: String): Boolean {
+        val trimmed = newName.trim()
+        if (trimmed.isBlank() || trimmed.length > MAX_CLUB) return false
+        if (trimmed.contains(',')) return false
+        return try {
+            if (clubDao.findByName(trimmed) != null) return false
+            clubDao.rename(id, trimmed)
+            persistError.value = false
+            true
+        } catch (e: SQLiteConstraintException) {
+            // Lost the unique-name race (mirrors addClub). (Task 8a)
+            false
+        } catch (t: Throwable) {
+            if (t is CancellationException) throw t
+            Log.e(TAG, "renameClub failed", t)
+            persistError.value = true
+            false
+        }
+    }
+
+    /** Never throws (Task 8a); flags [persistError] on failure, clears on success. */
+    suspend fun deleteClub(id: Long) {
+        try {
+            clubDao.delete(id)
+            persistError.value = false
+        } catch (t: Throwable) {
+            if (t is CancellationException) throw t
+            Log.e(TAG, "deleteClub failed", t)
+            persistError.value = true
+        }
+    }
+```
+
+Run: `$env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"; .\gradlew.bat :core:data:test`
+Expected: **26 tests, 0 failures** — rejection semantics unchanged, so the Step 1 pin stays green.
+
+- [ ] **Step 3: Active-pill maintenance in the AppRoot SETTINGS branch**
+
+Replace the `RangeTab.SETTINGS -> { ... }` block in `AppRoot.kt` with:
+
+```kotlin
+                    RangeTab.SETTINGS -> {
+                        // Getter flow — remember-capture once (Task 4b).
+                        val clubRecords by remember(sessionRepository) {
+                            sessionRepository.clubs
+                        }.collectAsState(initial = emptyList())
+                        SettingsScreen(
+                            captureLog = captureLog,
+                            clubs = clubRecords,
+                            onAddClub = { sessionRepository.addClub(it) },
+                            onRenameClub = { id, name ->
+                                val renamed = sessionRepository.renameClub(id, name)
+                                if (renamed) {
+                                    // The pill shows a name, not an id — follow an
+                                    // active-club rename so it never dangles (Task 8a).
+                                    val wasActive =
+                                        clubRecords.find { it.id == id }?.name == activeClubName
+                                    if (wasActive) selectClub(name.trim())
+                                }
+                                renamed
+                            },
+                            onDeleteClub = { id ->
+                                // Deleting the active club clears the pill (Task 8a): a
+                                // dangling name would keep tagging new shots with a
+                                // club that no longer exists in the bag.
+                                val deletedName = clubRecords.find { it.id == id }?.name
+                                scope.launch {
+                                    sessionRepository.deleteClub(id)
+                                    if (deletedName == activeClubName) selectClub(null)
+                                }
+                            },
+                        )
+                    }
+```
+
+Run: `$env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"; .\gradlew.bat :app:test :app:assembleDebug`
+Expected: `BUILD SUCCESSFUL`, **55 tests, 0 failures** (no test files touched).
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add core/data/src app/src/main/kotlin/com/hpsmiles/golfsim/range/AppRoot.kt
+git commit -m "fix(app): never-throw club edits, pin rename rules, maintain active pill"
+```
+
+**Conscious deferrals (do not re-flag in review):**
+- Self-rename stays a rejection (no self-exclusion) — pinned by the Step 1 test.
+- SettingsScreen ADD-row double-tap ghost hint ("ENTER A NAME" after a successful add): same race class Task 7a deferred for the picker (in-flight disabling); benign here because a successful add visibly adds a row.
+- No delete-confirmation dialog — club is trivially re-addable and shot history keeps snapshotted strings.
+- `clubRejectionHint` extraction (hint expression duplicated in SettingsScreen + ClubPickerOverlay) — defer until a third consumer exists.
+- SettingsScreen file split, `key()` on club rows, stale-rename-dialog no-op success — unchanged from Task 8 notes.
+- TOCTOU constraint-catch branch is not unit-testable under Robolectric (Robolectric's SQLite doesn't throw — Task 4 lesson); verified by the Task 10 checklist items marked "Task 8a".
+
+---
+
 ### Task 9: History screen (master-detail, retag, rename)
 
 **Files:**
@@ -3654,6 +3837,8 @@ adb helper for force-stops: `& "$env:LOCALAPPDATA\Android\Sdk\platform-tools\adb
 - [ ] In the picker's ＋ ADD form: type `7i` → ADD → `ALREADY IN BAG` (repository rule, not a local guess); then type `7i-A` → ADD → new tile appears (M7 duplicate-name pattern works); then type `7i,` → ADD → `NO COMMAS` (repository comma rule).
 - [ ] Picker overlay mechanics (Task 7a): tap the scrim (anywhere outside the panel) → overlay dismisses; tap the panel body → it does NOT. Add clubs until a fifth tile row would exist → the grid scrolls inside the capped four-row panel and nothing overflows the screen.
 - [ ] ADD-flow race (Task 7a): type a brand-new club name and double-tap ADD rapidly → exactly one club is added and NO hint text lingers after the form closes.
+- [ ] SETTINGS ADD race (Task 8a): in the BAG card type a brand-new club name and double-tap ADD rapidly → exactly one club row is added, no crash, and the StatusStrip does NOT show DB WRITE FAILING.
+- [ ] Active-pill maintenance (Task 8a): select a club on the range pill → in SETTINGS rename that club → CONFIRM → the range pill shows the new name (it still does after force-stop + relaunch). Then delete that club in SETTINGS → the pill resets to "—".
 - [ ] HISTORY tab: newest session (auto-title "EEE d MMM · HH:mm" format, DEMO + OPEN badges) is selected by default; stat chips show the right shot count; `LIVE ONLY` is on and the list is EMPTY (demo-only) — toggle `ALL` → the session appears (spec D4).
 - [ ] Long-press one untagged row → Teal selection + retag bar; tap two more rows; choose `8i`; APPLY → those rows' CLUB column reads `8i`, list club summary updates.
 - [ ] Tap the session title → rename dialog pre-filled → type `Demo tag test` → CONFIRM → list row + detail title update. Rename again with only spaces → CONFIRM → title returns to the auto-title (repo blank ⇒ null).
