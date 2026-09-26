@@ -131,6 +131,19 @@ class SessionRepositoryTest {
     }
 
     @Test
+    fun `liveOnly hides demo-only sessions from the list`() = runTest {
+        val repo = newRepo()
+        repo.initializeAndRestore()
+        repo.appendShot(ball, result, ShotSource.DEMO, "SW", 1L)
+        repo.appendShot(ball, result, ShotSource.DEMO, "SW", 2L)
+        repo.endSession()
+        // Default LIVE ONLY: a session with no live shots vanishes entirely.
+        assertTrue(repo.summaries.first().isEmpty())
+        repo.liveOnly.value = false
+        assertEquals(2, repo.summaries.first().single().shotCount)
+    }
+
+    @Test
     fun `garbage database file is tolerated, not recovered`() = runTest {
         // Three empirical rounds proved Robolectric's SQLite will not throw
         // on ANY forged "corrupt" file: 64 garbage bytes open as an empty DB,

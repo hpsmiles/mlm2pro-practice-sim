@@ -88,7 +88,13 @@ fun HistoryScreen(
                         session = selected,
                         shots = shots,
                         selectedIds = selectedIds,
-                        onSelectionChange = { selectedIds = it },
+                        onSelectionChange = {
+                            selectedIds = it
+                            // Rows toggled off to empty: clear the remembered
+                            // club choice so the next long-press bar starts
+                            // fresh instead of resurrecting it. (Task 9a)
+                            if (it.isEmpty()) retagIndex = -1
+                        },
                         onRename = {
                             renameText = selected.title ?: ""
                             showRename = true

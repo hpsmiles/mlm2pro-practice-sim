@@ -53,7 +53,10 @@ class SessionRepository private constructor(private val context: Context) {
      */
     val summaries: Flow<List<SessionSummary>>
         get() = combine(sessionDao.observeSummaries(), liveOnly) { rows, onlyLive ->
-            rows.map { it.toSummary(onlyLive) }
+            // D4: LIVE ONLY drops sessions with no live shots (demo-only)
+            // from the list entirely; toSummary() re-shapes the statistics
+            // slice. ALL shows everything. (Task 9a)
+            rows.filter { !onlyLive || it.liveCount > 0 }.map { it.toSummary(onlyLive) }
         }
 
     val hasOpenSession: Flow<Boolean>
@@ -152,13 +155,31 @@ class SessionRepository private constructor(private val context: Context) {
         }
     }
 
+    /** Never throws — same contract as [appendShot] (Task 9a). */
     suspend fun renameSession(id: Long, title: String) {
-        sessionDao.rename(id, title.trim().take(MAX_TITLE).ifBlank { null })
+        val trimmed = title.trim().take(MAX_TITLE).ifBlank { null }
+        try {
+            sessionDao.rename(id, trimmed)
+            persistError.value = false
+        } catch (t: Throwable) {
+            if (t is CancellationException) throw t
+            Log.e(TAG, "renameSession failed", t)
+            persistError.value = true
+        }
     }
 
+    /** Never throws — same contract as [appendShot] (Task 9a). */
     suspend fun retagShots(ids: List<Long>, clubName: String?) {
         if (ids.isEmpty()) return
-        shotDao.retagShotIds(ids, clubName?.trim()?.take(MAX_CLUB))
+        val trimmed = clubName?.trim()?.take(MAX_CLUB)
+        try {
+            shotDao.retagShotIds(ids, trimmed)
+            persistError.value = false
+        } catch (t: Throwable) {
+            if (t is CancellationException) throw t
+            Log.e(TAG, "retagShots failed", t)
+            persistError.value = true
+        }
     }
 
     /**
