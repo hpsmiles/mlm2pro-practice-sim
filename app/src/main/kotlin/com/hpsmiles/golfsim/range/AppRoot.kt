@@ -283,7 +283,19 @@ fun AppRoot() {
                             onAddClub = { sessionRepository.addClub(it) },
                         )
                     }
-                    RangeTab.SETTINGS -> SettingsScreen(captureLog = captureLog)
+                    RangeTab.SETTINGS -> {
+                        // Getter flow — remember-capture once (Task 4b).
+                        val clubRecords by remember(sessionRepository) {
+                            sessionRepository.clubs
+                        }.collectAsState(initial = emptyList())
+                        SettingsScreen(
+                            captureLog = captureLog,
+                            clubs = clubRecords,
+                            onAddClub = { sessionRepository.addClub(it) },
+                            onRenameClub = { id, name -> sessionRepository.renameClub(id, name) },
+                            onDeleteClub = { id -> scope.launch { sessionRepository.deleteClub(id) } },
+                        )
+                    }
                 }
             }
             val persistError by sessionRepository.persistError.collectAsState()
