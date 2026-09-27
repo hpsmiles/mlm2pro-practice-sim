@@ -10,19 +10,19 @@ Sequencing approach: **walking skeleton down the pipeline** — prove the risky 
 
 Gradle + Kotlin + Jetpack Compose project, minSdk 31, module layout, `.gitignore`, GitHub Actions CI (build + unit tests on every push).
 
-**Exit:** skeleton app installs and runs on the Lenovo tablet; CI green.
+**Exit:** skeleton app installs and runs on the Lenovo tablet; CI green. **Shipped.**
 
 ## M1 — BLE Byte-Decoder (pure Kotlin, TDD)
 
 Port MLM2PRO byte mappings from open-source references (Duwaynef/MLM2PRO-BT-APP, springbok/MLM2PRO-GSPro-Connector). Capture real GATT notification payloads with the device in the shed and commit them as golden fixtures. Decoder is pure and deterministic: raw bytes → Ball Speed, Launch Angle, Launch Direction, Spin, Spin Axis.
 
-**Exit:** decoder reproduces all captured metrics for every golden fixture.
+**Exit:** decoder reproduces all captured metrics for every golden fixture. **Shipped.**
 
 ## M2 — Ball-Flight Engine (pure Kotlin, TDD)
 
 Port drag/lift ODE math from `libgolf` / `golfmodel`. Validate two ways: published reference trajectories, and side-by-side against the Rapsodo app in the shed. Outputs: carry, total distance, side-curve, rollout.
 
-**Exit:** reference shot set matches Rapsodo within agreed tolerance.
+**Exit:** reference shot set matches Rapsodo within agreed tolerance. **Shipped.**
 
 ## M3 — UI Design System (look & feel)
 
@@ -34,28 +34,41 @@ Decide the visual identity before building any screen:
 
 Deliberately not designing later module screens up front — each feature milestone (M5+) gets its own UI design pass reusing this design system.
 
-**Exit:** signed-off mockups; design-system module compiles with theme and primitives in place.
+**Exit:** signed-off mockups; design-system module compiles with theme and primitives in place. **Shipped.**
 
 ## M4 — Clean Practice Environment (first vertical slice)
 
 Live BLE scanner + GATT client → decoder → physics → UI. Flat range grid, scaled target ovals, shot tracers, landing points, live dispersion, last-shot metric bar.
 
-**Exit:** hit a ball, see it land within ~2s; carry matches Rapsodo.
+**Exit:** hit a ball, see it land within ~2s; carry matches Rapsodo. **Shipped** (tracers, painted range and follow-cam followed 2026-09-24/25).
 
 ### M4 follow-ups (requested 2026-09-24 — TODO, not scheduled yet)
 
-- **Ball follow-cam view**: replay the flight from a camera set distance
-  BEHIND THE BALL (translating with it) instead of the fixed player POV — the
-  standard sim-software view. Needs a travelling-camera projection layer on
-  top of the existing `TrajectorySample` stream (pure math change in
-  `PovProjector`, no 3D engine).
+- **Ball follow-cam view** *(shipped 2026-09-25)*: replay the flight from a camera set distance
+   BEHIND THE BALL (translating with it) instead of the fixed player POV — the
+   standard sim-software view. Needs a travelling-camera projection layer on
+   top of the existing `TrajectorySample` stream (pure math change in
+   `PovProjector`, no 3D engine).
 - Visit the ball-flight eye line after multiple shots on the same spot.
 
 ## M5 — Sessions & Persistence
 
 Room DB, session history, club tagging, past-session review.
 
-**Exit:** sessions survive app restart.
+**Exit:** sessions survive app restart. **Shipped 2026-09-26.**
+
+## M5x — Range & History UI Edits (shipped 2026-09-27)
+
+Six user-requested edits layered on M5, delivered as Room schema v2 + UI rework (design: `docs/superpowers/specs/2026-09-26-m5x-ui-edits-design.md`):
+
+- Filled teal **ACTIVE CLUB** trigger button, top-right under VIEW.
+- **Club types** (Driver…Putter) with type-first bag/picker ordering; shared add-club form with TYPE dropdown + TEST toggle.
+- **Session-scoped TEST clubs** — purged at session end, shots keep the label and show an amber TEST badge in history.
+- History **ORDER | CLUBS** toggle: per-club AVG/σ rows over a unified 11-column shot row.
+- **Shot exclusion ticks** — mishits drop from averages/σ/session chips (persisted; counts + CSV export unchanged by design).
+- Standing **50–350 m distance signs** (POV perspective boards + top-down icons) replacing the painted band lines.
+
+**Exit:** device-verified over a live M5 install (includes Room migration v1→v2); merged as `a24e5aa`.
 
 ## M6 — Bag Mapping & True Gapping
 
