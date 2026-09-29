@@ -127,4 +127,13 @@ class BreakThePaneGameTest {
         game.add(ball())
         assertTrue(game.lastFeedback.isNotBlank())
     }
+
+    @Test
+    fun `missed both - long straight past green reports LONG`() {
+        // Lateral crossing outside the pane, long past the green.
+        val game = newGame(crossX = 10.0, crossZ = PaneGeom(target).zRefM, restX = 0.0, restY = target + 20.0)
+        val shot = game.add(ball())!!
+        assertEquals(BreakOutcomeKind.MISSED_BOTH, shot.outcome.kind)
+        assertEquals("LONG", shot.outcome.feedback)
+    }
 }

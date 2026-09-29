@@ -105,6 +105,7 @@ class BreakThePaneGame {
                     crossing.zM < p.bottomZM -> "SHORT - UNDER THE PANE"
                     crossing.zM > p.topZM -> "OVER THE PANE"
                     result.restY < targetM - greenRadiusM() -> "SHORT"
+                    result.restY > targetM + greenRadiusM() && kotlin.math.abs(result.restX) <= greenRadiusM() -> "LONG"
                     result.restX < 0.0 -> "MISSED LEFT"
                     else -> "MISSED RIGHT"
                 }

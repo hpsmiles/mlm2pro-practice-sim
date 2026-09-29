@@ -13,16 +13,16 @@ import com.hpsmiles.golfsim.range.RangeCamera
 import com.hpsmiles.golfsim.range.RangeRollout
 import com.hpsmiles.golfsim.range.RangeScene
 
-    /**
-     * Shared POV drawing for both game canvases. Mirrors PovRangeCanvas's screen
-     * mapping (focal = 1.10w, v0 = 0.30h) and ground clipping so the follow cam
-     * chases the exact drawn geometry, same as the range.
-     *
-     * Tracers are drawn from the same frame-scaled + rolled-out sample list that
-     * [FollowCam] consumes, so big apexes stay clamped to the top 8% and the
-     * rollout segment appears during the landing hold.
-     */
-    object GameScene {
+/**
+ * Shared POV drawing for both game canvases. Mirrors PovRangeCanvas's screen
+ * mapping (focal = 1.10w, v0 = 0.30h) and ground clipping so the follow cam
+ * chases the exact drawn geometry, same as the range.
+ *
+ * Tracers are drawn from the same frame-scaled + rolled-out sample list that
+ * [FollowCam] consumes, so big apexes stay clamped to the top 8% and the
+ * rollout segment appears during the landing hold.
+ */
+object GameScene {
 
     fun focalPx(w: Float): Float = w * 1.10f
     fun v0Px(h: Float): Float = h * 0.30f
