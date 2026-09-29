@@ -53,6 +53,10 @@ import com.hpsmiles.golfsim.core.designsystem.GolfTypography
 import com.hpsmiles.golfsim.core.designsystem.NavRail
 import com.hpsmiles.golfsim.core.designsystem.NavRailButton
 import com.hpsmiles.golfsim.core.designsystem.StatusStrip
+import com.hpsmiles.golfsim.games.BreakThePaneGame
+import com.hpsmiles.golfsim.games.GameMode
+import com.hpsmiles.golfsim.games.GamesScreen
+import com.hpsmiles.golfsim.games.TargetPracticeGame
 import com.hpsmiles.golfsim.history.HistoryScreen
 import com.hpsmiles.golfsim.settings.SettingsScreen
 import kotlinx.coroutines.flow.Flow
@@ -60,7 +64,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 
-private enum class RangeTab { RANGE, SETTINGS, HISTORY }
+private enum class RangeTab { RANGE, GAMES, SETTINGS, HISTORY }
 
 /** The bench device session key convention (same bytes the auth write carries raw). */
 private fun benchSessionKey(): ByteArray = ByteArray(32) { it.toByte() }
@@ -79,6 +83,13 @@ fun AppRoot() {
     // M4d: shared Range shot list + no-read counter, owned at the composition
     // root so demo (RangeScreen fire) and live BLE callbacks append to one list.
     val session = remember { RangeSession() }
+
+    // M5.5: tab + game mode hoisted above the shot dispatcher so
+    // onMeasurement/fireDemo can route before first composition.
+    var tab by remember { mutableStateOf(RangeTab.RANGE) }
+    val targetPractice = remember { TargetPracticeGame() }
+    val breakPane = remember { BreakThePaneGame() }
+    var activeGame by remember { mutableStateOf(GameMode.NONE) }
 
     // M5: persistence facade — one per composition. Bag seeding, DB probe and
     // open-session restore run once at startup; appends ride the existing
@@ -144,11 +155,38 @@ fun AppRoot() {
         }
     }
 
+    /**
+     * M5.5 dispatch (spec §3): a shot goes to the active game OR the range
+     * session — never both. Game shots are never range-persisted; completed
+     * games emit exactly one summary row via takeResult().
+     */
+    fun routeShot(ballData: com.hpsmiles.golfsim.core.ble.BallData, source: com.hpsmiles.golfsim.core.data.record.ShotSource) {
+        when (activeGame) {
+            GameMode.NONE -> persist(session.add(ballData), source)
+            GameMode.TARGET_PRACTICE -> {
+                targetPractice.add(ballData)
+                targetPractice.takeResult()?.let { p ->
+                    scope.launch {
+                        sessionRepository.saveGameResult(p.mode, p.difficulty, p.targetM, p.score, source, targetPractice.clockMs())
+                    }
+                }
+            }
+            GameMode.BREAK_PANE -> {
+                breakPane.add(ballData)
+                breakPane.takeResult()?.let { p ->
+                    scope.launch {
+                        sessionRepository.saveGameResult(p.mode, p.difficulty, p.targetM, p.score, source, breakPane.clockMs())
+                    }
+                }
+            }
+        }
+    }
+
     // Live shot delivery: GATT callbacks fire on a binder thread; hop to main
     // before touching Compose snapshot state.
     DisposableEffect(gattClient) {
         gattClient.onMeasurement = { ballData ->
-            scope.launch { persist(session.add(ballData), ShotSource.LIVE) }
+            scope.launch { routeShot(ballData, ShotSource.LIVE) }
         }
         gattClient.onMisread = {
             scope.launch {
@@ -168,10 +206,10 @@ fun AppRoot() {
     var demo by remember { mutableStateOf(true) }
     val demoSource = remember { com.hpsmiles.golfsim.core.ble.DemoShotSource() }
 
-    // FIRE lives in the rail (2026-09-24 user request); demo firing appends to
-    // the shared session exactly like RangeScreen did.
+    // FIRE lives in the rail (2026-09-24 user request); demo firing routes to
+    // the active game or the range session.
     fun fireDemo() {
-        if (demo) persist(session.add(demoSource.nextShot()), ShotSource.DEMO)
+        if (demo) routeShot(demoSource.nextShot(), ShotSource.DEMO)
     }
 
     // BLE permission gate hoisted from RangeScreen (CONNECT moved to the rail).
@@ -257,7 +295,19 @@ fun AppRoot() {
         }
     }
 
-    var tab by remember { mutableStateOf(RangeTab.RANGE) }
+    var pendingTab by remember { mutableStateOf<RangeTab?>(null) }
+    var confirmLeaveGame by remember { mutableStateOf(false) }
+    fun requestTab(to: RangeTab) {
+        val midGame = activeGame != GameMode.NONE &&
+            (targetPractice.shots.isNotEmpty() || breakPane.shots.isNotEmpty())
+        if (midGame && to != RangeTab.GAMES) {
+            pendingTab = to
+            confirmLeaveGame = true
+        } else {
+            tab = to
+        }
+    }
+
     GolfTheme {
         Column(
             modifier = Modifier
@@ -267,9 +317,10 @@ fun AppRoot() {
         ) {
             Row(modifier = Modifier.weight(1f)) {
                 NavRail {
-                    NavRailButton("RANGE", tab == RangeTab.RANGE, onClick = { tab = RangeTab.RANGE })
-                    NavRailButton("SETTINGS", tab == RangeTab.SETTINGS, onClick = { tab = RangeTab.SETTINGS })
-                    NavRailButton("HISTORY", tab == RangeTab.HISTORY, onClick = { tab = RangeTab.HISTORY })
+                    NavRailButton("RANGE", tab == RangeTab.RANGE, onClick = { requestTab(RangeTab.RANGE) })
+                    NavRailButton("GAMES", tab == RangeTab.GAMES, onClick = { tab = RangeTab.GAMES })
+                    NavRailButton("SETTINGS", tab == RangeTab.SETTINGS, onClick = { requestTab(RangeTab.SETTINGS) })
+                    NavRailButton("HISTORY", tab == RangeTab.HISTORY, onClick = { requestTab(RangeTab.HISTORY) })
 
                     // M4d user request (2026-09-24, revised): FIRE / MODE /
                     // CONNECT live at the BOTTOM of the rail, under a flexible
@@ -338,6 +389,15 @@ fun AppRoot() {
                             onAddClub = sessionRepository::addClub,
                         )
                     }
+                    RangeTab.GAMES -> {
+                        GamesScreen(
+                            modifier = Modifier.weight(1f),
+                            targetPractice = targetPractice,
+                            breakPane = breakPane,
+                            activeGame = activeGame,
+                            onActiveGameChange = { activeGame = it },
+                        )
+                    }
                     RangeTab.SETTINGS -> {
                         SettingsScreen(
                             captureLog = captureLog,
@@ -393,6 +453,25 @@ fun AppRoot() {
             StatusStrip(
                 armed = demo || connectionState is ConnectionState.Armed,
                 info = if (persistError) "DB WRITE FAILING" else describe(connectionState, demo = demo, scanning = scanning),
+            )
+        }
+
+        if (confirmLeaveGame) {
+            androidx.compose.material3.AlertDialog(
+                onDismissRequest = { confirmLeaveGame = false },
+                title = { Text("LEAVE GAME?") },
+                text = { Text("Shots already taken in this game will be discarded.") },
+                confirmButton = {
+                    androidx.compose.material3.TextButton(onClick = {
+                        confirmLeaveGame = false
+                        activeGame = GameMode.NONE
+                        tab = pendingTab ?: RangeTab.RANGE
+                        pendingTab = null
+                    }) { Text("LEAVE") }
+                },
+                dismissButton = {
+                    androidx.compose.material3.TextButton(onClick = { confirmLeaveGame = false }) { Text("STAY") }
+                },
             )
         }
     }
