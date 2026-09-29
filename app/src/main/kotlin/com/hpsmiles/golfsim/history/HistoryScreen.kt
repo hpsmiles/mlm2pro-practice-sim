@@ -31,6 +31,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -54,6 +55,10 @@ private enum class HistoryTab(val label: String) {
 }
 
 private enum class HistoryMode(val label: String) { ORDER("ORDER"), CLUBS("CLUBS") }
+private enum class GameHistoryOrder(val label: String) {
+    RECENCY("RECENT"),
+    BEST("BEST"),
+}
 
 @Composable
 fun HistoryScreen(
@@ -90,7 +95,7 @@ fun HistoryScreen(
                     onRenameSession = onRenameSession,
                     onToggleExcluded = onToggleExcluded,
                 )
-                HistoryTab.GAMES -> GamesHistory(gameResults)
+                HistoryTab.GAMES -> GamesHistory(gameResults, sortModel = GameHistorySorting)
             }
         }
     }
@@ -224,7 +229,11 @@ private fun SessionsHistory(
 @Composable
 private fun GamesHistory(
     gameResults: List<GameResultEntity>,
+    sortModel: GameHistorySorting,
 ) {
+    var order by remember { mutableStateOf(GameHistorySorting.Order.RECENCY) }
+    val grouped = remember(gameResults, order) { sortModel.sorted(gameResults, order) }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -232,16 +241,47 @@ private fun GamesHistory(
             .padding(GolfSpacing.Md),
         verticalArrangement = Arrangement.spacedBy(GolfSpacing.Sm),
     ) {
-        Text(
-            text = "GAME SCORES",
-            style = GolfTypography.ScreenTitle,
-            color = GolfColors.TextPrimary,
-        )
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text(
+                text = "GAME SCORES",
+                style = GolfTypography.ScreenTitle,
+                color = GolfColors.TextPrimary,
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(GolfSpacing.Xs)) {
+                GameHistorySorting.Order.entries.forEach { o ->
+                    val active = o == order
+                    Text(
+                        text = o.label,
+                        style = GolfTypography.Status,
+                        color = if (active) GolfColors.Teal else GolfColors.TextMuted,
+                        modifier = Modifier
+                            .clickable { order = o }
+                            .border(1.dp, if (active) GolfColors.Teal else GolfColors.Line, RoundedCornerShape(50))
+                            .padding(horizontal = GolfSpacing.Sm, vertical = 2.dp),
+                    )
+                }
+            }
+        }
+
         if (gameResults.isEmpty()) {
             Text("NO GAMES YET", style = GolfTypography.Status, color = GolfColors.TextMuted)
         } else {
-            gameResults.forEach { result ->
-                GameResultRow(result)
+            grouped.forEach { (mode, results) ->
+                if (results.isNotEmpty()) {
+                    Text(
+                        text = GameHistoryFormats.modeLabel(mode),
+                        style = GolfTypography.MetricLabel,
+                        color = GolfColors.TextSecondary,
+                        modifier = Modifier.padding(top = GolfSpacing.Sm),
+                    )
+                    results.forEach { result ->
+                        GameResultRow(result)
+                    }
+                }
             }
         }
     }
