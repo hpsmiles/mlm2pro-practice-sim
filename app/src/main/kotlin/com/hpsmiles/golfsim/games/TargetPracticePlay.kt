@@ -43,14 +43,22 @@ fun TargetPracticePlay(
     var playFraction by remember { mutableFloatStateOf(1f) }
 
     // Restart the flight animation each time a shot lands (tick bump).
+    // Runs past 1 through the follow-cam landing hold (FollowCam.endFraction),
+    // same as the range playback, so the camera snaps back to the STATIC
+    // ready view after the hold instead of parking at the landing frame
+    // (user report 2026-09-29).
     LaunchedEffect(game.tick.intValue) {
-        if (game.shots.isEmpty()) return@LaunchedEffect
+        val shot = game.shots.lastOrNull() ?: return@LaunchedEffect
+        if (shot.shot.shotResult.samples.isEmpty() || shot.shot.shotResult.flightTimeSec <= 0.0) {
+            return@LaunchedEffect
+        }
         val durationMs = GolfMotion.TracerDrawMs.toFloat()
+        val end = FollowCam.endFraction(shot.shot.shotResult).toFloat()
         var last = withFrameNanos { it }
         playFraction = 0f
-        while (playFraction < 1f) {
+        while (playFraction < end) {
             val now = withFrameNanos { it }
-            playFraction = (playFraction + ((now - last) / 1_000_000.0 / durationMs).toFloat()).coerceAtMost(1f)
+            playFraction = (playFraction + ((now - last) / 1_000_000.0 / durationMs).toFloat()).coerceAtMost(end)
             last = now
         }
     }
