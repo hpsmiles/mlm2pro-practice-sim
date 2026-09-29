@@ -8,7 +8,7 @@ Single-device: runs entirely on an Android tablet — no companion PC, no cloud.
 
 ## Status
 
-Shipped through **M5x** (2026-09-27): live BLE shot pipeline (decode → ball-flight physics → POV/top-down range with tracers, follow-cam and standing distance signs), Room-backed sessions with club tagging, history with per-club AVG/σ and shot exclusion, club types with session-scoped TEST clubs. Next up: M6 bag mapping & true gapping.
+Shipped through **M5.5** (2026-09-29): live BLE shot pipeline (decode → ball-flight physics → POV/top-down range with tracers, follow-cam and standing distance signs), Room-backed sessions with club tagging, history with per-club AVG/σ and shot exclusion, club types with session-scoped TEST clubs — plus two practice games, **Target Practice** (rest-position band scoring on an archery target face) and **Break the Pane** (fly-through + land-on-green break rule), with game history. Next up: M6 bag mapping & true gapping.
 
 ## Modules
 

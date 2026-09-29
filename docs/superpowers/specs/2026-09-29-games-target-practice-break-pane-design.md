@@ -177,3 +177,17 @@ Pure JUnit4, mirroring existing patterns (`RangeSignsTest`, `FollowCamTest`, `Ra
 - **BounceRollModel review**: low-shot rollout appears underestimated (0.9 m for a low 8i). Revisit Penner spin-back/retention parameters in a dedicated milestone.
 - History view for `game_results` (best/last per distance bin per difficulty).
 - Green firmness / stimp setting in game setup (`Surface.green(stimp)` already supports it).
+
+## 12. Post-implementation amendments (1–5, device-verified 2026-09-29)
+
+All five amendment rounds shipped on the tablet before merge; this section is the authoritative record where it diverges from §4/§5 above.
+
+1. **Speed control (both games)** — 1x / 1.5x / 2x / 4x chips (default 1.5x, matching the range) replace the fixed replay duration; pacing is `flightTimeSec * 1000 / divisor` animated through `FollowCam.endFraction` with the landing-hold snap-back to the ready view.
+2. **Range dressing (both games)** — mow stripes + 50–350 m side distance boards render in the game canvases via a shared `RangeDecorations` painter extracted from `PovRangeCanvas` (range visuals unchanged). The range's practice grid / target ovals are deliberately NOT drawn in games (games have their own target face / pane).
+3. **Shot metrics panel (both games)** — right-side panel mirroring the range screen's, showing the latest shot's metrics.
+4. **Reveal timing (Target Practice)** — scoring remains rest-based (§4) and is computed at shot ingest from the simulated `restX/restY`, but the HUD reveals each shot's points (and the TOTAL) only when that shot's animation reaches `FollowCam.endFraction` (landed + rolled out + camera snapped back). Both games' result overlays use the same gate.
+5. **Green geometry divergence (intentional)** — Target Practice's green radius equals the active difficulty's outer scoring band (EASY 18 m / MEDIUM 15 m / HARD 10 m; pre-start fallback `6·target/140`), so the rollout surface (`GreenZoneSurfaceProvider`) matches the visual green. Break the Pane keeps `6·target/140`. Target Practice additionally renders an archery-bullseye palette (white → black → blue → red → non-amber gold; `GolfColors.Amber` remains reserved for the live tracer/rest dot), ring score labels, no fringe ring (removed in games; the range keeps fringes), and an enlarged pin.
+6. **History** — HISTORY > GAMES groups results by game type with a RECENT (default) / BEST sort; BEST = Target Practice highest score first, Break the Pane fewest shots first, ties broken by `playedAtEpochMs` descending.
+7. **Leave policy** — `GameLeavePolicy.confirmRequired(mode, shotsTaken, complete)`: zero-shot or completed games relinquish the shot stream without a prompt (`activeGame` resets to `GameMode.NONE` on non-GAMES navigation); mid-game leave prompts with a confirm dialog.
+8. **Camera/tracer clamp** — the chase camera and canvas derive `apexVMin` from a nested `BoxWithConstraints` matching the canvas size (metrics panel excluded), keeping the drawn flight and camera geometry identical.
+9. **Persistence semantics** — a mixed LIVE/DEMO game row takes the completing shot's `source`; `playedAtEpochMs` records game completion time.
