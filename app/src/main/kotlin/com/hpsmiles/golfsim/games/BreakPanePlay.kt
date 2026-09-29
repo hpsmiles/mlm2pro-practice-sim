@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -33,7 +34,7 @@ import com.hpsmiles.golfsim.core.designsystem.SectionCard
 import com.hpsmiles.golfsim.range.FollowCam
 import com.hpsmiles.golfsim.range.RangeCamera
 
-/** Break the Pane play view: canvas, pane-state minimap, feedback, overlay (spec 5). */
+/** Break the Pane play view: canvas, minimap, feedback, metrics panel, overlay. */
 @Composable
 fun BreakPanePlay(
     game: BreakThePaneGame,
@@ -66,66 +67,88 @@ fun BreakPanePlay(
         }
     }
 
+    val showResultOverlay = rememberGameResultOverlayGate(
+        complete = game.complete,
+        lastShotResult = game.shots.lastOrNull()?.shot?.shotResult,
+        playFraction = playFraction,
+    )
+
     BoxWithConstraints(modifier.fillMaxSize().background(GolfColors.Base)) {
-        val camera = when (val shot = game.shots.lastOrNull()) {
-            null -> RangeCamera.STATIC
-            else -> FollowCam.cameraAt(shot.shot.shotResult, playFraction, GameScene.apexVMin(constraints.maxWidth.toFloat(), constraints.maxHeight.toFloat()))
-        }
-        BreakPaneCanvas(
-            game = game,
-            playFraction = playFraction,
-            camera = camera,
-            modifier = Modifier.fillMaxSize(),
-        )
+        Row(modifier = Modifier.fillMaxSize()) {
+            Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
+                val constraints = this@BoxWithConstraints.constraints
+                val camera = when (val shot = game.shots.lastOrNull()) {
+                    null -> RangeCamera.STATIC
+                    else -> FollowCam.cameraAt(
+                        shot.shot.shotResult,
+                        playFraction,
+                        GameScene.apexVMin(constraints.maxWidth.toFloat(), constraints.maxHeight.toFloat()),
+                    )
+                }
+                BreakPaneCanvas(
+                    game = game,
+                    playFraction = playFraction,
+                    camera = camera,
+                    modifier = Modifier.fillMaxSize(),
+                )
 
-        // HUD: pane-state minimap (3x3, filled teal = broken), shots counter, feedback.
-        Column(
-            modifier = Modifier.align(Alignment.TopStart).padding(GolfSpacing.Sm),
-            verticalArrangement = Arrangement.spacedBy(2.dp),
-        ) {
-            SpeedChipRow(
-                selected = speedMult,
-                onSelect = { speedMult = it },
-                modifier = Modifier.padding(bottom = GolfSpacing.Xs),
-            )
-            for (row in 2 downTo 0) {
-                Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                    for (col in 0..2) {
-                        val cell = row * 3 + col
-                        Box(
-                            modifier = Modifier
-                                .size(16.dp)
-                                .background(if (cell in game.brokenCells) GolfColors.Teal else GolfColors.Panel)
-                                .border(1.dp, GolfColors.Line, RoundedCornerShape(2.dp)),
-                        )
+                // HUD: pane-state minimap (3x3, filled teal = broken), shots counter, feedback.
+                Column(
+                    modifier = Modifier.align(Alignment.TopStart).padding(GolfSpacing.Sm),
+                    verticalArrangement = Arrangement.spacedBy(2.dp),
+                ) {
+                    SpeedChipRow(
+                        selected = speedMult,
+                        onSelect = { speedMult = it },
+                        modifier = Modifier.padding(bottom = GolfSpacing.Xs),
+                    )
+                    for (row in 2 downTo 0) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                            for (col in 0..2) {
+                                val cell = row * 3 + col
+                                Box(
+                                    modifier = Modifier
+                                        .size(16.dp)
+                                        .background(if (cell in game.brokenCells) GolfColors.Teal else GolfColors.Panel)
+                                        .border(1.dp, GolfColors.Line, RoundedCornerShape(2.dp)),
+                                )
+                            }
+                        }
+                    }
+                    Text("SHOTS ${game.shotCount}", style = GolfTypography.MetricValue, color = GolfColors.TextPrimary)
+                }
+                if (game.lastFeedback.isNotBlank()) {
+                    Text(
+                        text = game.lastFeedback,
+                        style = GolfTypography.Status,
+                        color = GolfColors.Teal,
+                        modifier = Modifier.align(Alignment.BottomCenter).padding(GolfSpacing.Md),
+                    )
+                }
+
+                // PANE BROKEN overlay appears only after the last shot has
+                // finished rolling and the camera snapped back to STATIC.
+                if (showResultOverlay) {
+                    SectionCard(
+                        title = "PANE BROKEN",
+                        modifier = Modifier.align(Alignment.Center).fillMaxWidth().padding(GolfSpacing.Xl),
+                    ) {
+                        Column(verticalArrangement = Arrangement.spacedBy(GolfSpacing.Xs)) {
+                            Text("Total shots: ${game.shotCount}", style = GolfTypography.MetricValue, color = GolfColors.Teal)
+                            Text("Lower is better.", style = GolfTypography.Body, color = GolfColors.TextSecondary)
+                            Row(horizontalArrangement = Arrangement.spacedBy(GolfSpacing.Sm)) {
+                                Button(onClick = { game.start(game.targetM) }) { Text("PLAY AGAIN") }
+                                OutlinedButton(onClick = onBack) { Text("BACK") }
+                            }
+                        }
                     }
                 }
             }
-            Text("SHOTS ${game.shotCount}", style = GolfTypography.MetricValue, color = GolfColors.TextPrimary)
-        }
-        if (game.lastFeedback.isNotBlank()) {
-            Text(
-                text = game.lastFeedback,
-                style = GolfTypography.Status,
-                color = GolfColors.Teal,
-                modifier = Modifier.align(Alignment.BottomCenter).padding(GolfSpacing.Md),
-            )
-        }
 
-        if (game.complete) {
-            SectionCard(
-                title = "PANE BROKEN",
-                modifier = Modifier.align(Alignment.Center).fillMaxWidth().padding(GolfSpacing.Xl),
-            ) {
-                Column(verticalArrangement = Arrangement.spacedBy(GolfSpacing.Xs)) {
-                    Text("Total shots: ${game.shotCount}", style = GolfTypography.MetricValue, color = GolfColors.Teal)
-                    Text("Lower is better.", style = GolfTypography.Body, color = GolfColors.TextSecondary)
-                    Row(horizontalArrangement = Arrangement.spacedBy(GolfSpacing.Sm)) {
-                        Button(onClick = { game.start(game.targetM) }) { Text("PLAY AGAIN") }
-                        OutlinedButton(onClick = onBack) { Text("BACK") }
-                    }
-                }
-            }
+            GameMetricsPanel(
+                currentShot = game.shots.lastOrNull()?.shot,
+                sessionShots = game.shots.map { it.shot },
+            )
         }
     }
 }

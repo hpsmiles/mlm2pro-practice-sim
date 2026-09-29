@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -33,7 +34,7 @@ import com.hpsmiles.golfsim.core.designsystem.SectionCard
 import com.hpsmiles.golfsim.range.FollowCam
 import com.hpsmiles.golfsim.range.RangeCamera
 
-/** Target Practice play view: canvas, HUD, result overlay (spec section 4). */
+/** Target Practice play view: canvas, HUD, metrics panel, result overlay. */
 @Composable
 fun TargetPracticePlay(
     game: TargetPracticeGame,
@@ -67,78 +68,99 @@ fun TargetPracticePlay(
         }
     }
 
+    val showResultOverlay = rememberGameResultOverlayGate(
+        complete = game.complete,
+        lastShotResult = game.shots.lastOrNull()?.shot?.shotResult,
+        playFraction = playFraction,
+    )
+
     BoxWithConstraints(modifier.fillMaxSize().background(GolfColors.Base)) {
-        val camera = when (val shot = game.shots.lastOrNull()) {
-            null -> RangeCamera.STATIC
-            else -> FollowCam.cameraAt(shot.shot.shotResult, playFraction, GameScene.apexVMin(constraints.maxWidth.toFloat(), constraints.maxHeight.toFloat()))
-        }
-        TargetPracticeCanvas(
-            game = game,
-            current = game.shots.lastOrNull(),
-            playFraction = playFraction,
-            camera = camera,
-            modifier = Modifier.fillMaxSize(),
-        )
-
-        // HUD: per-shot point indicators + running total.
-        Row(
-            modifier = Modifier.align(Alignment.TopStart).padding(GolfSpacing.Sm),
-            horizontalArrangement = Arrangement.spacedBy(GolfSpacing.Xs),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            SpeedChipRow(
-                selected = speedMult,
-                onSelect = { speedMult = it },
-                modifier = Modifier.padding(end = GolfSpacing.Sm),
-            )
-
-            repeat(TargetPracticeScoring.SHOTS_PER_GAME) { i ->
-                val pts = game.shots.getOrNull(i)?.points
-                Box(
-                    modifier = Modifier
-                        .background(if (pts != null) GolfColors.Teal55 else GolfColors.Panel)
-                        .border(1.dp, GolfColors.Line, RoundedCornerShape(GolfSpacing.Sm))
-                        .padding(horizontal = GolfSpacing.Sm, vertical = 4.dp),
-                ) {
-                    Text(text = pts?.toString() ?: "-", style = GolfTypography.MetricValue, color = GolfColors.TextPrimary)
+        Row(modifier = Modifier.fillMaxSize()) {
+            Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
+                val constraints = this@BoxWithConstraints.constraints
+                val camera = when (val shot = game.shots.lastOrNull()) {
+                    null -> RangeCamera.STATIC
+                    else -> FollowCam.cameraAt(
+                        shot.shot.shotResult,
+                        playFraction,
+                        GameScene.apexVMin(constraints.maxWidth.toFloat(), constraints.maxHeight.toFloat()),
+                    )
                 }
-            }
-            Text(
-                text = "TOTAL ${game.totalPoints}",
-                style = GolfTypography.MetricValue,
-                color = GolfColors.TextPrimary,
-                modifier = Modifier.padding(start = GolfSpacing.Sm),
-            )
-        }
+                TargetPracticeCanvas(
+                    game = game,
+                    current = game.shots.lastOrNull(),
+                    playFraction = playFraction,
+                    camera = camera,
+                    modifier = Modifier.fillMaxSize(),
+                )
 
-        // Result overlay after shot 5.
-        if (game.complete) {
-            val resultShots = game.shots.toList()
-            SectionCard(
-                title = "RESULT",
-                modifier = Modifier.align(Alignment.Center).fillMaxWidth().padding(GolfSpacing.Xl),
-            ) {
-                Column(verticalArrangement = Arrangement.spacedBy(GolfSpacing.Xs)) {
-                    resultShots.forEachIndexed { i, s ->
-                        Text(
-                            text = "${i + 1}.  ${s.points} pts   miss ${String.format(Locale.US, "%.1f", s.missM)} m",
-                            style = GolfTypography.Body,
-                            color = GolfColors.TextPrimary,
-                        )
+                // HUD: per-shot point indicators + running total.
+                Row(
+                    modifier = Modifier.align(Alignment.TopStart).padding(GolfSpacing.Sm),
+                    horizontalArrangement = Arrangement.spacedBy(GolfSpacing.Xs),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    SpeedChipRow(
+                        selected = speedMult,
+                        onSelect = { speedMult = it },
+                        modifier = Modifier.padding(end = GolfSpacing.Sm),
+                    )
+
+                    repeat(TargetPracticeScoring.SHOTS_PER_GAME) { i ->
+                        val pts = game.shots.getOrNull(i)?.points
+                        Box(
+                            modifier = Modifier
+                                .background(if (pts != null) GolfColors.Teal55 else GolfColors.Panel)
+                                .border(1.dp, GolfColors.Line, RoundedCornerShape(GolfSpacing.Sm))
+                                .padding(horizontal = GolfSpacing.Sm, vertical = 4.dp),
+                        ) {
+                            Text(text = pts?.toString() ?: "-", style = GolfTypography.MetricValue, color = GolfColors.TextPrimary)
+                        }
                     }
                     Text(
-                        text = "TOTAL ${game.totalPoints} / ${TargetPracticeScoring.MAX_SCORE}",
+                        text = "TOTAL ${game.totalPoints}",
                         style = GolfTypography.MetricValue,
-                        color = GolfColors.Teal,
+                        color = GolfColors.TextPrimary,
+                        modifier = Modifier.padding(start = GolfSpacing.Sm),
                     )
-                    Row(horizontalArrangement = Arrangement.spacedBy(GolfSpacing.Sm)) {
-                        Button(onClick = { game.start(game.targetM, game.difficulty) }) {
-                            Text("PLAY AGAIN")
+                }
+
+                // Result overlay after shot 5, once the ball has finished rolling
+                // and the camera has snapped back to STATIC.
+                if (showResultOverlay) {
+                    val resultShots = game.shots.toList()
+                    SectionCard(
+                        title = "RESULT",
+                        modifier = Modifier.align(Alignment.Center).fillMaxWidth().padding(GolfSpacing.Xl),
+                    ) {
+                        Column(verticalArrangement = Arrangement.spacedBy(GolfSpacing.Xs)) {
+                            resultShots.forEachIndexed { i, s ->
+                                Text(
+                                    text = "${i + 1}.  ${s.points} pts   miss ${String.format(Locale.US, "%.1f", s.missM)} m",
+                                    style = GolfTypography.Body,
+                                    color = GolfColors.TextPrimary,
+                                )
+                            }
+                            Text(
+                                text = "TOTAL ${game.totalPoints} / ${TargetPracticeScoring.MAX_SCORE}",
+                                style = GolfTypography.MetricValue,
+                                color = GolfColors.Teal,
+                            )
+                            Row(horizontalArrangement = Arrangement.spacedBy(GolfSpacing.Sm)) {
+                                Button(onClick = { game.start(game.targetM, game.difficulty) }) {
+                                    Text("PLAY AGAIN")
+                                }
+                                OutlinedButton(onClick = onBack) { Text("BACK") }
+                            }
                         }
-                        OutlinedButton(onClick = onBack) { Text("BACK") }
                     }
                 }
             }
+
+            GameMetricsPanel(
+                currentShot = game.shots.lastOrNull()?.shot,
+                sessionShots = game.shots.map { it.shot },
+            )
         }
     }
 }

@@ -285,6 +285,10 @@ fun AppRoot() {
     val historyShots by remember(historySelectedId) {
         historySelectedId?.let { sessionRepository.observeShots(it) } ?: flowOf(emptyList())
     }.collectAsState(initial = emptyList())
+    // Amendment 2: completed game scores in history.
+    val gameResults by remember(sessionRepository, repoReady) {
+        gatedFlow(repoReady, { sessionRepository.gameResults }, flowOf(emptyList()))
+    }.collectAsState(initial = emptyList())
 
     // Newest session is selected by default; an absent selection falls back
     // to newest so the detail pane never points at a ghost row.
@@ -445,6 +449,7 @@ fun AppRoot() {
                             onToggleExcluded = { id, excluded ->
                                 scope.launch { sessionRepository.setShotsExcluded(listOf(id), excluded) }
                             },
+                            gameResults = gameResults,
                         )
                     }
                 }

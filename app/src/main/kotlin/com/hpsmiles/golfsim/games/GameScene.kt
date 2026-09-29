@@ -80,19 +80,24 @@ object GameScene {
         }
     }
 
+    /**
+     * Game green: putting surface only. The range keeps its fringe ring; games
+     * do not, because the fringe looked like a scoring ring the user thought
+     * should count.
+     */
     fun DrawScope.drawGreen(cam: RangeCamera, w: Float, h: Float, cx: Double, cy: Double, radiusM: Double) {
-        groundPath(cam, w, h, RangeScene.circleOutline(cx, cy, radiusM * 1.35))?.let { drawPath(it, FringeTurf) }
         groundPath(cam, w, h, RangeScene.circleOutline(cx, cy, radiusM))?.let { drawPath(it, GreenTurf) }
     }
 
-    /** Graphic pin: flagstick + pennant, flat style (spec section 4/5). */
-    fun DrawScope.drawPin(cam: RangeCamera, w: Float, h: Float, cx: Double, cy: Double, heightM: Double = 2.4) {
+    /** Graphic pin: flagstick + pennant, flat style, scaled up for visibility. */
+    fun DrawScope.drawPin(cam: RangeCamera, w: Float, h: Float, cx: Double, cy: Double, heightM: Double = 4.2) {
         val base = PovProjector.project(cam, cx, cy, 0.0) ?: return
         val top = PovProjector.project(cam, cx, cy, heightM) ?: return
         val b = toScreen(w, h, base)
         val t = toScreen(w, h, top)
-        drawLine(GolfColors.TextPrimary, b, t, strokeWidth = 2f)
-        val px = 0.6 * focalPx(w) * top.scale // ~0.6 m pennant at that depth
+        // Thicker pole and larger pennant so the pin reads clearly from tee.
+        drawLine(GolfColors.TextPrimary, b, t, strokeWidth = 3f)
+        val px = 1.05 * focalPx(w) * top.scale
         val pennant = Path().apply {
             moveTo(t.x, t.y)
             lineTo(t.x + px.toFloat(), t.y + (px * 0.35).toFloat())

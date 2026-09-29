@@ -282,6 +282,10 @@ class SessionRepository private constructor(private val context: Context) {
         }
     }
 
+    /** Completed game summaries, newest first. Gated like [summaries]. */
+    val gameResults: Flow<List<GameResultEntity>>
+        get() = gameResultDao.observeAll()
+
     fun gameResultDao() = gameResultDao
 
     /**

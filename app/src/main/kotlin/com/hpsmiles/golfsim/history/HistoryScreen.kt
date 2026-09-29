@@ -38,6 +38,7 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.hpsmiles.golfsim.core.data.entity.GameResultEntity
 import com.hpsmiles.golfsim.core.data.record.ClubRecord
 import com.hpsmiles.golfsim.core.data.record.SessionSummary
 import com.hpsmiles.golfsim.core.data.record.SessionTitles
@@ -47,14 +48,11 @@ import com.hpsmiles.golfsim.core.designsystem.GolfSpacing
 import com.hpsmiles.golfsim.core.designsystem.GolfTypography
 import com.hpsmiles.golfsim.core.designsystem.MetricChip
 
-/**
- * M5 (spec §6 D5/D6, mockups review-layout + retag-interaction):
- * master-detail session history. Left: session summary list with the
- * LIVE ONLY / ALL toggle (backed by the repository's liveOnly flow).
- * Right: stat chips + shot table; long-press a row to start multi-select,
- * then pick a club chip (or "—") and APPLY to retag. Tapping the session
- * title opens a rename dialog.
- */
+private enum class HistoryTab(val label: String) {
+    SESSIONS("SESSIONS"),
+    GAMES("GAMES"),
+}
+
 private enum class HistoryMode(val label: String) { ORDER("ORDER"), CLUBS("CLUBS") }
 
 @Composable
@@ -71,8 +69,77 @@ fun HistoryScreen(
     onRenameSession: (Long, String) -> Unit,
     clubs: List<ClubRecord> = emptyList(),
     onToggleExcluded: (Long, Boolean) -> Unit = { _, _ -> },
+    gameResults: List<GameResultEntity> = emptyList(),
 ) {
-    // Selection + retag choice reset whenever the viewed session changes.
+    var tab by remember { mutableStateOf(HistoryTab.SESSIONS) }
+
+    Box(modifier = modifier.fillMaxSize().background(GolfColors.Base)) {
+        Row(modifier = Modifier.fillMaxSize()) {
+            HistorySidebar(tab = tab, onTabChange = { tab = it })
+            when (tab) {
+                HistoryTab.SESSIONS -> SessionsHistory(
+                    summaries = summaries,
+                    liveOnly = liveOnly,
+                    onToggleLiveOnly = onToggleLiveOnly,
+                    selectedSessionId = selectedSessionId,
+                    onSelectSession = onSelectSession,
+                    shots = shots,
+                    clubs = clubs,
+                    clubNames = clubNames,
+                    onRetag = onRetag,
+                    onRenameSession = onRenameSession,
+                    onToggleExcluded = onToggleExcluded,
+                )
+                HistoryTab.GAMES -> GamesHistory(gameResults)
+            }
+        }
+    }
+}
+
+@Composable
+private fun HistorySidebar(
+    tab: HistoryTab,
+    onTabChange: (HistoryTab) -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .width(56.dp)
+            .fillMaxSize()
+            .background(GolfColors.Panel)
+            .padding(vertical = GolfSpacing.Md),
+        verticalArrangement = Arrangement.spacedBy(GolfSpacing.Sm, Alignment.Top),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        HistoryTab.entries.forEach { t ->
+            val active = t == tab
+            Text(
+                text = t.label,
+                style = GolfTypography.Status.copy(fontSize = 10.sp),
+                color = if (active) GolfColors.Teal else GolfColors.TextMuted,
+                modifier = Modifier
+                    .clickable { onTabChange(t) }
+                    .background(if (active) GolfColors.Card else Color.Transparent, RoundedCornerShape(GolfSpacing.Sm))
+                    .border(1.dp, if (active) GolfColors.Teal else GolfColors.Line, RoundedCornerShape(GolfSpacing.Sm))
+                    .padding(horizontal = 4.dp, vertical = 8.dp),
+            )
+        }
+    }
+}
+
+@Composable
+private fun SessionsHistory(
+    summaries: List<SessionSummary>,
+    liveOnly: Boolean,
+    onToggleLiveOnly: () -> Unit,
+    selectedSessionId: Long?,
+    onSelectSession: (Long) -> Unit,
+    shots: List<ShotRecord>,
+    clubs: List<ClubRecord>,
+    clubNames: List<String>,
+    onRetag: (List<Long>, String?) -> Unit,
+    onRenameSession: (Long, String) -> Unit,
+    onToggleExcluded: (Long, Boolean) -> Unit,
+) {
     var selectedIds by remember(selectedSessionId) { mutableStateOf(setOf<Long>()) }
     var retagIndex by remember(selectedSessionId) { mutableStateOf(-1) }
     var showRename by remember { mutableStateOf(false) }
@@ -80,81 +147,143 @@ fun HistoryScreen(
     val retagChoices = remember(clubNames) { listOf<String?>(null) + clubNames }
     val selected = summaries.firstOrNull { it.id == selectedSessionId }
 
-    Box(modifier = modifier.fillMaxSize().background(GolfColors.Base)) {
-        Row(modifier = Modifier.fillMaxSize()) {
-            SessionList(summaries, selectedSessionId, liveOnly, onToggleLiveOnly, onSelectSession)
-            Box(modifier = Modifier.weight(1f).fillMaxSize()) {
-                if (selected == null) {
-                    Text(
-                        text = "SELECT A SESSION",
-                        style = GolfTypography.Status,
-                        color = GolfColors.TextMuted,
-                        modifier = Modifier.align(Alignment.Center),
-                    )
-                } else {
-                    SessionDetail(
-                        session = selected,
-                        shots = shots,
-                        clubs = clubs,
-                        selectedIds = selectedIds,
-                        onSelectionChange = {
-                            selectedIds = it
-                            // Rows toggled off to empty: clear the remembered
-                            // club choice so the next long-press bar starts
-                            // fresh instead of resurrecting it. (Task 9a)
-                            if (it.isEmpty()) retagIndex = -1
-                        },
-                        onRename = {
-                            renameText = selected.title ?: ""
-                            showRename = true
-                        },
-                        onToggleExcluded = onToggleExcluded,
-                    )
-                }
-                if (selectedIds.isNotEmpty()) {
-                    RetagBar(
-                        count = selectedIds.size,
-                        choices = retagChoices,
-                        choiceIndex = retagIndex,
-                        onChoose = { retagIndex = it },
-                        onApply = {
-                            onRetag(selectedIds.toList(), retagChoices.getOrNull(retagIndex))
-                            selectedIds = emptySet()
-                            retagIndex = -1
-                        },
-                        onCancel = {
-                            selectedIds = emptySet()
-                            retagIndex = -1
-                        },
-                        modifier = Modifier.align(Alignment.BottomCenter),
-                    )
-                }
+    Row(modifier = Modifier.fillMaxSize()) {
+        SessionList(summaries, selectedSessionId, liveOnly, onToggleLiveOnly, onSelectSession)
+        Box(modifier = Modifier.weight(1f).fillMaxSize()) {
+            if (selected == null) {
+                Text(
+                    text = "SELECT A SESSION",
+                    style = GolfTypography.Status,
+                    color = GolfColors.TextMuted,
+                    modifier = Modifier.align(Alignment.Center),
+                )
+            } else {
+                SessionDetail(
+                    session = selected,
+                    shots = shots,
+                    clubs = clubs,
+                    selectedIds = selectedIds,
+                    onSelectionChange = {
+                        selectedIds = it
+                        if (it.isEmpty()) retagIndex = -1
+                    },
+                    onRename = {
+                        renameText = selected.title ?: ""
+                        showRename = true
+                    },
+                    onToggleExcluded = onToggleExcluded,
+                )
+            }
+            if (selectedIds.isNotEmpty()) {
+                RetagBar(
+                    count = selectedIds.size,
+                    choices = retagChoices,
+                    choiceIndex = retagIndex,
+                    onChoose = { retagIndex = it },
+                    onApply = {
+                        onRetag(selectedIds.toList(), retagChoices.getOrNull(retagIndex))
+                        selectedIds = emptySet()
+                        retagIndex = -1
+                    },
+                    onCancel = {
+                        selectedIds = emptySet()
+                        retagIndex = -1
+                    },
+                    modifier = Modifier.align(Alignment.BottomCenter),
+                )
             }
         }
-        if (showRename && selected != null) {
-            AlertDialog(
-                onDismissRequest = { showRename = false },
-                title = { Text("RENAME SESSION") },
-                text = {
-                    OutlinedTextField(
-                        value = renameText,
-                        onValueChange = { renameText = it.take(40) },
-                        singleLine = true,
-                    )
+    }
+
+    if (showRename && selected != null) {
+        AlertDialog(
+            onDismissRequest = { showRename = false },
+            title = { Text("RENAME SESSION") },
+            text = {
+                OutlinedTextField(
+                    value = renameText,
+                    onValueChange = { renameText = it.take(40) },
+                    singleLine = true,
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        onRenameSession(selected.id, renameText.trim())
+                        showRename = false
+                    },
+                ) { Text("CONFIRM") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showRename = false }) { Text("CANCEL") }
+            },
+        )
+    }
+}
+
+@Composable
+private fun GamesHistory(
+    gameResults: List<GameResultEntity>,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(GolfSpacing.Md),
+        verticalArrangement = Arrangement.spacedBy(GolfSpacing.Sm),
+    ) {
+        Text(
+            text = "GAME SCORES",
+            style = GolfTypography.ScreenTitle,
+            color = GolfColors.TextPrimary,
+        )
+        if (gameResults.isEmpty()) {
+            Text("NO GAMES YET", style = GolfTypography.Status, color = GolfColors.TextMuted)
+        } else {
+            gameResults.forEach { result ->
+                GameResultRow(result)
+            }
+        }
+    }
+}
+
+@Composable
+private fun GameResultRow(result: GameResultEntity) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(GolfColors.Card, RoundedCornerShape(GolfSpacing.Sm))
+            .border(1.dp, GolfColors.Line, RoundedCornerShape(GolfSpacing.Sm))
+            .padding(GolfSpacing.Md),
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(
+                text = GameHistoryFormats.modeLabel(result.mode),
+                style = GolfTypography.Body,
+                color = GolfColors.TextPrimary,
+            )
+            Text(
+                text = buildString {
+                    append(GameHistoryFormats.targetDistanceM(result.distanceBin))
+                    val diff = GameHistoryFormats.difficultyLabel(result.difficulty)
+                    if (diff.isNotBlank()) {
+                        append(" · ")
+                        append(diff)
+                    }
+                    append(" · ")
+                    append(GameHistoryFormats.dateTime(result.playedAtEpochMs))
                 },
-                confirmButton = {
-                    TextButton(
-                        onClick = {
-                            onRenameSession(selected.id, renameText.trim())
-                            showRename = false
-                        },
-                    ) { Text("CONFIRM") }
-                },
-                dismissButton = {
-                    TextButton(onClick = { showRename = false }) { Text("CANCEL") }
-                },
+                style = GolfTypography.BodySmall,
+                color = GolfColors.TextMuted,
             )
         }
+        Text(
+            text = GameHistoryFormats.scoreLabel(result),
+            style = GolfTypography.MetricValue,
+            color = GolfColors.Teal,
+        )
     }
 }
 
@@ -280,7 +409,6 @@ private fun SessionDetail(
                 MetricChip("longest", String.format(java.util.Locale.US, "%.0f", it), "M")
             }
         }
-        // M5x E4: ORDER (today's flat table) | CLUBS (grouped with AVG rows).
         Row(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.border(1.dp, GolfColors.Line, RoundedCornerShape(50)),
@@ -297,7 +425,6 @@ private fun SessionDetail(
                 )
             }
         }
-        // Unified table (both modes): 11 metric columns + tick, scrolls horizontally.
         Column(
             modifier = Modifier.horizontalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(2.dp),
@@ -346,7 +473,7 @@ private fun HeaderRow() {
             "AXIS" to 72.dp, "SPIN" to 96.dp,
         )
         cols.forEach { (label, w) -> HeaderCell(label, w) }
-        Spacer(Modifier.width(48.dp)) // tick column
+        Spacer(Modifier.width(48.dp))
     }
 }
 
@@ -418,8 +545,6 @@ private fun ShotRow(
         modifier = Modifier
             .combinedClickable(
                 onClick = {
-                    // D6 unchanged: tap toggles membership only while a
-                    // selection is active (long-press starts it).
                     if (selectedIds.isNotEmpty()) {
                         onSelectionChange(
                             if (selected) selectedIds - shot.id else selectedIds + shot.id,
