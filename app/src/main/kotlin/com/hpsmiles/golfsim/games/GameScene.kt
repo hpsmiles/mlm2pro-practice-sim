@@ -1,5 +1,6 @@
 package com.hpsmiles.golfsim.games
 
+import android.graphics.Paint
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
@@ -10,6 +11,7 @@ import com.hpsmiles.golfsim.core.physics.ShotResult
 import com.hpsmiles.golfsim.range.FollowCam
 import com.hpsmiles.golfsim.range.PovProjector
 import com.hpsmiles.golfsim.range.RangeCamera
+import com.hpsmiles.golfsim.range.RangeDecorations
 import com.hpsmiles.golfsim.range.RangeRollout
 import com.hpsmiles.golfsim.range.RangeScene
 
@@ -67,9 +69,15 @@ object GameScene {
     private val GreenTurf = Color(0xFF1C3A30)
     private val FringeTurf = Color(0xFF16291F)
 
-    fun DrawScope.drawGameGround(cam: RangeCamera, w: Float, h: Float) {
-        drawRect(GolfColors.Base) // sky/backdrop
-        groundPath(cam, w, h, RangeScene.fairwayOutline())?.let { drawPath(it, GolfColors.HoleFairway) }
+    /**
+     * Game ground: same sky, fairway, mow stripes, distance boards, and
+     * horizon haze as the range, but no practice grid or target ovals.
+     */
+    fun DrawScope.drawGameGround(cam: RangeCamera, w: Float, h: Float, labelPaint: Paint) {
+        with(RangeDecorations) {
+            drawRangeGround(cam, w, h)
+            drawRangeSigns(cam, w, h, labelPaint)
+        }
     }
 
     fun DrawScope.drawGreen(cam: RangeCamera, w: Float, h: Float, cx: Double, cy: Double, radiusM: Double) {

@@ -7,32 +7,20 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.unit.sp
 import com.hpsmiles.golfsim.core.designsystem.GolfColors
 import com.hpsmiles.golfsim.core.physics.ShotResult
 import com.hpsmiles.golfsim.core.physics.TrajectorySample
-import kotlin.math.cos
 import kotlin.math.max
-import kotlin.math.sin
-import kotlin.math.tan
 
 // Painted-ground palette A — "Tour Broadcast" (approved spec palette).
 // Sky switched to a white background at user request (2026-09-24).
-private val SKY_TOP = Color(0xFFFCFDFE)
-private val SKY_BOTTOM = Color(0xFFD9E4EA)
-private val ROUGH_BASE = Color(0xFF1E4D26)
-private val FAIRWAY = Color(0xFF3E8E43)
-private val STRIPE_LIGHT = Color(0xFF47A04C)
-private val STRIPE_DARK = Color(0xFF3A8440)
 private val GREEN_SURFACE = Color(0xFF5FBF63)
 private val FRINGE = Color(0xFF2F6E35)
-private val HAZE = Color.White.copy(alpha = 0.22f)
 
 // Previous-shot tracer lines: faded teal per the M3 design language
 // (history = teal, live moment = amber).
@@ -77,37 +65,26 @@ fun PovRangeCanvas(
         val h = size.height
         val focalPx = w * 1.10f
         val centerX = w / 2f
-        // Screen y of v = 0 (camera level). The world horizon sits at
-        // v = -tan(pitch) — it moves up the frame as the camera noses down.
         val v0Px = h * 0.30f
-        val horizonPx = v0Px - tan(camera.pitchRad).toFloat() * focalPx
         // Pitch rotation, shared by the band/target cull and the mat path.
-        val cosPitch = cos(camera.pitchRad)
-        val sinPitch = sin(camera.pitchRad)
+        val cosPitch = kotlin.math.cos(camera.pitchRad)
+        val sinPitch = kotlin.math.sin(camera.pitchRad)
         // Depth of a world point at ground level, in front of the camera
         // plane (depth <= 0 means behind the camera; do not draw).
         fun groundDepth(distM: Double) = (distM - camera.y) * cosPitch - (-camera.z) * sinPitch
 
-        // Sky, then painted ground back-to-front: rough base (full bleed),
-        // fairway, mow stripes, greens with fringes. All layers are flat
-        // polygons at z = groundHeight in front of the camera.
-        if (horizonPx > 0f) {
-            drawRect(
-                brush = Brush.verticalGradient(
-                    listOf(SKY_TOP, SKY_BOTTOM), startY = 0f, endY = horizonPx,
-                ),
-                size = Size(w, horizonPx),
-            )
+        // Sky, fairway, mow stripes, and horizon haze are shared with the
+        // games via RangeDecorations so the scenes read as the same facility.
+        with(RangeDecorations) {
+            drawRangeGround(camera, w, h)
         }
-        val groundTop = horizonPx.coerceAtLeast(0f)
-        drawRect(ROUGH_BASE, topLeft = Offset(0f, groundTop), size = Size(w, h - groundTop))
 
         // Flat-ground polygon: clip the world vertices against the camera
         // near plane, project them, and return the closed Path plus the
         // near-fade alpha for this layer (Fix B 2026-09-25: layers used to
         // pop off wholesale when the camera passed them; now they fade out
         // gracefully). Empty clip -> skip the layer.
-        fun groundPath(vertices: List<Pair<Double, Double>>): Pair<Path, Float>? {
+        fun localGroundPath(vertices: List<Pair<Double, Double>>): Pair<Path, Float>? {
             val clipped = PovProjector.clipGroundPath(vertices, camera)
             if (clipped.size < 3) return null
             var nearest = Double.POSITIVE_INFINITY
@@ -123,32 +100,14 @@ fun PovRangeCanvas(
             return path to PovProjector.nearFadeFactor(nearest).toFloat()
         }
 
-        val fairway = groundPath(RangeScene.fairwayOutline())
-        if (fairway != null) drawPath(fairway.first, FAIRWAY.copy(alpha = fairway.second))
-
-        // Alternating 10 m mow stripes as trapezoids clipped to the fairway.
-        for (index in 0 until RangeScene.stripeBandCount()) {
-            val (yFrom, yTo) = RangeScene.stripeBand(index)
-            if (yFrom >= RangeScene.FAIRWAY_END_Y) break
-            val halfFrom = RangeScene.fairwayHalfWidth(yFrom)
-            val halfTo = RangeScene.fairwayHalfWidth(yTo)
-            val stripe = groundPath(
-                listOf(-halfFrom to yFrom, halfFrom to yFrom, halfTo to yTo, -halfTo to yTo),
-            )
-            if (stripe != null) {
-                val base = if (RangeScene.stripeIsLight(0.0, yFrom)) STRIPE_LIGHT else STRIPE_DARK
-                drawPath(stripe.first, base.copy(alpha = stripe.second))
-            }
-        }
-
         // Greens: fringe ring first, putting surface on top.
         for (green in RangeScene.greens) {
             if (green.distanceM < 8.0) continue // near edge would sit at/behind the camera
-            val fringe = groundPath(
+            val fringe = localGroundPath(
                 RangeScene.circleOutline(green.lateralM, green.distanceM, green.fringeRadiusM),
             ) ?: continue
             drawPath(fringe.first, FRINGE.copy(alpha = fringe.second))
-            val surface = groundPath(
+            val surface = localGroundPath(
                 RangeScene.circleOutline(green.lateralM, green.distanceM, green.radiusM),
             ) ?: continue
             drawPath(surface.first, GREEN_SURFACE.copy(alpha = surface.second))
@@ -160,7 +119,7 @@ fun PovRangeCanvas(
         // groundPath clip+near-fade pipeline as the other painted layers, so
         // they cull and fade as the camera sweeps past.
         val half = RangeScene.CENTER_LINE_HALF_WIDTH_M
-        val centerLine = groundPath(
+        val centerLine = localGroundPath(
             listOf(
                 -half to RangeScene.FAIRWAY_TEE_Y,
                 half to RangeScene.FAIRWAY_TEE_Y,
@@ -177,7 +136,7 @@ fun PovRangeCanvas(
         for (lateralM in RangeScene.GUIDE_LINE_LATERALS_M) {
             val gHalf = RangeScene.GUIDE_LINE_HALF_WIDTH_M
             for ((yFrom, yTo) in RangeScene.guideDashSegments()) {
-                val dash = groundPath(
+                val dash = localGroundPath(
                     listOf(
                         (lateralM - gHalf) to yFrom,
                         (lateralM + gHalf) to yFrom,
@@ -192,46 +151,8 @@ fun PovRangeCanvas(
             }
         }
 
-        // M5x E6: standing distance signs replace the band lines. Dark-slate
-        // boards (Card bg, Line frame) with a teal top accent; the number
-        // scales with the projected board height. Cull a sign entirely once
-        // its ground point passes the camera plane (bands culled the same
-        // way). World-fixed, so the follow cam Just Works.
-        labelPaint.apply {
-            isAntiAlias = true
-            textAlign = android.graphics.Paint.Align.CENTER
-        }
-        for (sign in RangeSigns.signPlan()) {
-            val d = sign.distanceM.toDouble()
-            if (groundDepth(d) <= 0.0) continue // behind the camera plane
-            val xL = sign.xM - RangeSigns.BOARD_HALF_W_M
-            val xR = sign.xM + RangeSigns.BOARD_HALF_W_M
-            val bl = worldToScreen(camera, v0Px, focalPx, centerX, xL, d, RangeSigns.POST_H_M) ?: continue
-            val br = worldToScreen(camera, v0Px, focalPx, centerX, xR, d, RangeSigns.POST_H_M) ?: continue
-            val tl = worldToScreen(camera, v0Px, focalPx, centerX, xL, d, RangeSigns.BOARD_TOP_Z_M) ?: continue
-            val tr = worldToScreen(camera, v0Px, focalPx, centerX, xR, d, RangeSigns.BOARD_TOP_Z_M) ?: continue
-            // Posts
-            drawLine(GolfColors.Line, bl, tl, strokeWidth = 1f)
-            drawLine(GolfColors.Line, br, tr, strokeWidth = 1f)
-            // Board quad + frame + teal top-edge accent
-            val board = Path().apply {
-                moveTo(bl.x, bl.y); lineTo(br.x, br.y); lineTo(tr.x, tr.y); lineTo(tl.x, tl.y); close()
-            }
-            drawPath(board, GolfColors.Card)
-            drawPath(board, GolfColors.Line, style = Stroke(width = 1f))
-            drawLine(GolfColors.Teal, tl, tr, strokeWidth = 2f)
-            // Number — white, no unit, sized by the projected board height.
-            val boardHpx = ((bl.y + br.y) / 2f - (tl.y + tr.y) / 2f)
-            if (boardHpx > 3f) {
-                labelPaint.textSize = boardHpx * 0.55f
-                labelPaint.color = GolfColors.TextPrimary.toArgb()
-                drawContext.canvas.nativeCanvas.drawText(
-                    "${sign.distanceM}",
-                    (tl.x + tr.x) / 2f,
-                    (bl.y + br.y + tl.y + tr.y) / 4f + boardHpx * 0.18f,
-                    labelPaint,
-                )
-            }
+        with(RangeDecorations) {
+            drawRangeSigns(camera, w, h, labelPaint)
         }
 
         // Teal target ovals at (lateral, distance) metres.
@@ -263,19 +184,6 @@ fun PovRangeCanvas(
                 style = Stroke(width = 1f),
             )
         }
-
-        // Horizon haze, last over the painted ground: a soft white fade at
-        // the world horizon blending the scene into the sky.
-        drawRect(
-            brush = Brush.verticalGradient(
-                0f to HAZE,
-                1f to Color.Transparent,
-                startY = horizonPx,
-                endY = horizonPx + h * 0.15f,
-            ),
-            topLeft = Offset(0f, horizonPx),
-            size = Size(w, h * 0.15f),
-        )
 
         // Waiting = no shot, before impact, or after the follow cam has cut
         // back (the hold is over — the monitor is ready for the next shot).

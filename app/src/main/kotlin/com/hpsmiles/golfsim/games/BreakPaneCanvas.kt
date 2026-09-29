@@ -1,7 +1,9 @@
 package com.hpsmiles.golfsim.games
 
+import android.graphics.Paint
 import androidx.compose.foundation.Canvas
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -17,11 +19,12 @@ fun BreakPaneCanvas(
     camera: RangeCamera,
     modifier: Modifier = Modifier,
 ) {
+    val labelPaint = remember { Paint() }
     Canvas(modifier) {
         val w = size.width
         val h = size.height
         with(GameScene) {
-            drawGameGround(camera, w, h)
+            drawGameGround(camera, w, h, labelPaint)
             game.pane?.let { pane ->
                 drawGreen(camera, w, h, 0.0, game.targetM, game.greenRadiusM())
                 drawPin(camera, w, h, 0.0, game.targetM)

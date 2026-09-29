@@ -19,6 +19,7 @@ import java.util.Locale
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
@@ -26,7 +27,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.hpsmiles.golfsim.core.designsystem.GolfColors
-import com.hpsmiles.golfsim.core.designsystem.GolfMotion
 import com.hpsmiles.golfsim.core.designsystem.GolfSpacing
 import com.hpsmiles.golfsim.core.designsystem.GolfTypography
 import com.hpsmiles.golfsim.core.designsystem.SectionCard
@@ -41,19 +41,23 @@ fun TargetPracticePlay(
     modifier: Modifier = Modifier,
 ) {
     var playFraction by remember { mutableFloatStateOf(1f) }
+    var speedMult by remember { mutableStateOf(GameSpeedMult.X15) }
 
     // Restart the flight animation each time a shot lands (tick bump).
     // Runs past 1 through the follow-cam landing hold (FollowCam.endFraction),
     // same as the range playback, so the camera snaps back to the STATIC
     // ready view after the hold instead of parking at the landing frame
     // (user report 2026-09-29).
-    LaunchedEffect(game.tick.intValue) {
+    LaunchedEffect(game.tick.intValue, speedMult) {
         val shot = game.shots.lastOrNull() ?: return@LaunchedEffect
-        if (shot.shot.shotResult.samples.isEmpty() || shot.shot.shotResult.flightTimeSec <= 0.0) {
+        val result = shot.shot.shotResult
+        if (result.samples.isEmpty()) {
+            playFraction = FollowCam.endFraction(result).toFloat()
             return@LaunchedEffect
         }
-        val durationMs = GolfMotion.TracerDrawMs.toFloat()
-        val end = FollowCam.endFraction(shot.shot.shotResult).toFloat()
+        if (result.flightTimeSec <= 0.0) return@LaunchedEffect
+        val durationMs = result.flightTimeSec * 1000.0 / speedMult.divisor
+        val end = FollowCam.endFraction(result).toFloat()
         var last = withFrameNanos { it }
         playFraction = 0f
         while (playFraction < end) {
@@ -82,6 +86,12 @@ fun TargetPracticePlay(
             horizontalArrangement = Arrangement.spacedBy(GolfSpacing.Xs),
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            SpeedChipRow(
+                selected = speedMult,
+                onSelect = { speedMult = it },
+                modifier = Modifier.padding(end = GolfSpacing.Sm),
+            )
+
             repeat(TargetPracticeScoring.SHOTS_PER_GAME) { i ->
                 val pts = game.shots.getOrNull(i)?.points
                 Box(
