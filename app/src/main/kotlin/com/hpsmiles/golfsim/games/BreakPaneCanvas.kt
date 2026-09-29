@@ -8,7 +8,6 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import com.hpsmiles.golfsim.core.designsystem.GolfColors
 import com.hpsmiles.golfsim.range.PovProjector
 import com.hpsmiles.golfsim.range.RangeCamera
-import com.hpsmiles.golfsim.range.RangeScene
 
 /** POV canvas for Break the Pane: ground, green, pin, 3x3 glass pane, tracer. */
 @Composable
@@ -53,7 +52,7 @@ fun BreakPaneCanvas(
                 }
             }
             project(camera, w, h, 0.0, 0.0, 0.05)?.let { drawCircle(GolfColors.TextPrimary, 4f, it) }
-            game.shots.lastOrNull()?.let { drawTracer(camera, w, h, it.shot.shotResult, playFraction) }
+            game.shots.lastOrNull()?.let { drawTracer(camera, w, h, it.shot.shotResult, playFraction, GameScene.apexVMin(w, h)) }
         }
     }
 }
