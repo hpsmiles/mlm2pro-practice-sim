@@ -26,13 +26,8 @@ class GameSceneTest {
     }
 
     @Test
-    fun `project returns null behind camera`() {
-        assertNull(GameScene.project(RangeCamera.STATIC, 0f, 0f, 0.0, -50.0, 0.0))
-    }
-
-    @Test
     fun `project returns null behind static camera plane`() {
-        // A point behind the camera (negative y beyond CAM_BACK_M).
+        // A point behind the camera (negative y beyond CAM_BACK_M); viewport size does not matter.
         assertNull(GameScene.project(RangeCamera.STATIC, 1000f, 1000f, 0.0, -50.0, 0.0))
     }
 
@@ -42,5 +37,14 @@ class GameSceneTest {
         val sc = GameScene.toScreen(1000f, 1000f, p)
         assertEquals(500f + 110f, sc.x, 0.01f)
         assertEquals(300f - 55f, sc.y, 0.01f)
+    }
+
+    @Test
+    fun `apexVMin respects frame geometry`() {
+        // Bigger width relaxes the top-8% clamp (less negative / taller allowed apex).
+        val narrow = GameScene.apexVMin(1000f, 1000f)
+        val wide = GameScene.apexVMin(2000f, 1000f)
+        assertEquals((0.08 * 1000 - 300) / 1100.0, narrow, 1e-9)
+        assert(wide > narrow) { "wider frame should allow a less-negative apexVMin" }
     }
 }

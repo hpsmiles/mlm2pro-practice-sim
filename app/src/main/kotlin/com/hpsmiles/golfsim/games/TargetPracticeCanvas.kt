@@ -30,7 +30,7 @@ fun TargetPracticeCanvas(
             }
             drawPin(camera, w, h, 0.0, game.targetM)
             project(camera, w, h, 0.0, 0.0, 0.05)?.let { drawCircle(GolfColors.TextPrimary, 4f, it) }
-            current?.let { drawTracer(camera, w, h, it.shot.shotResult, playFraction) }
+            current?.let { drawTracer(camera, w, h, it.shot.shotResult, playFraction, GameScene.apexVMin(w, h)) }
         }
     }
 }

@@ -7,16 +7,22 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import com.hpsmiles.golfsim.core.designsystem.GolfColors
 import com.hpsmiles.golfsim.core.physics.ShotResult
+import com.hpsmiles.golfsim.range.FollowCam
 import com.hpsmiles.golfsim.range.PovProjector
 import com.hpsmiles.golfsim.range.RangeCamera
+import com.hpsmiles.golfsim.range.RangeRollout
 import com.hpsmiles.golfsim.range.RangeScene
 
-/**
- * Shared POV drawing for both game canvases. Mirrors PovRangeCanvas's screen
- * mapping (focal = 1.10w, v0 = 0.30h) and ground clipping so the follow cam
- * chases the exact drawn geometry, same as the range.
- */
-object GameScene {
+    /**
+     * Shared POV drawing for both game canvases. Mirrors PovRangeCanvas's screen
+     * mapping (focal = 1.10w, v0 = 0.30h) and ground clipping so the follow cam
+     * chases the exact drawn geometry, same as the range.
+     *
+     * Tracers are drawn from the same frame-scaled + rolled-out sample list that
+     * [FollowCam] consumes, so big apexes stay clamped to the top 8% and the
+     * rollout segment appears during the landing hold.
+     */
+    object GameScene {
 
     fun focalPx(w: Float): Float = w * 1.10f
     fun v0Px(h: Float): Float = h * 0.30f
@@ -88,9 +94,17 @@ object GameScene {
         drawPath(pennant, GolfColors.TextPrimary)
     }
 
-    /** Amber live-moment tracer + rest dot (amber reserved for the live moment). */
-    fun DrawScope.drawTracer(cam: RangeCamera, w: Float, h: Float, result: ShotResult, fraction: Float) {
-        val samples = result.samples
+    /**
+     * Amber live-moment tracer + rest dot (amber reserved for the live moment).
+     * [apexVMin] must be the same frame clamp line passed to [FollowCam.cameraAt],
+     * otherwise the tracer and camera diverge on high-apex shots.
+     */
+    fun DrawScope.drawTracer(cam: RangeCamera, w: Float, h: Float, result: ShotResult, fraction: Float, apexVMin: Double = FollowCam.REFERENCE_APEX_VMIN) {
+        val samples = if (result.flightTimeSec <= 0.0) {
+            FollowCam.scaledSamples(result, apexVMin)
+        } else {
+            FollowCam.scaledSamples(result, apexVMin) + RangeRollout.samples(result)
+        }
         if (samples.size < 2) return
         val n = (samples.size * fraction.coerceIn(0f, 1f)).toInt().coerceAtLeast(2)
         val path = Path()

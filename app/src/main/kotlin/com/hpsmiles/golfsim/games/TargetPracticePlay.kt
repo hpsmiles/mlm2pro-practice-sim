@@ -15,6 +15,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import java.util.Locale
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -102,7 +103,7 @@ fun TargetPracticePlay(
                 Column(verticalArrangement = Arrangement.spacedBy(GolfSpacing.Xs)) {
                     resultShots.forEachIndexed { i, s ->
                         Text(
-                            text = "${i + 1}.  ${s.points} pts   miss ${"%.1f".format(s.missM)} m",
+                            text = "${i + 1}.  ${s.points} pts   miss ${String.format(Locale.US, "%.1f", s.missM)} m",
                             style = GolfTypography.Body,
                             color = GolfColors.TextPrimary,
                         )
