@@ -8,7 +8,7 @@ class ReferenceTrajectoryTest {
 
     @Test
     fun `converges for every spec distance bracket`() {
-        for (target in listOf(50.0, 100.0, 140.0, 200.0)) {
+        for (target in listOf(50.0, 100.0, 140.0, 200.0, 300.0)) {
             val shot = ReferenceTrajectory.stockShot(target)
             assertEquals("target $target", target, shot.carryM, 1.0)
         }
@@ -18,6 +18,7 @@ class ReferenceTrajectoryTest {
     fun `deterministic`() {
         val a = ReferenceTrajectory.stockShot(140.0)
         val b = ReferenceTrajectory.stockShot(140.0)
+        assertEquals(a, b)
         assertEquals(a.carryM, b.carryM, 0.0)
         assertEquals(a.samples, b.samples)
     }

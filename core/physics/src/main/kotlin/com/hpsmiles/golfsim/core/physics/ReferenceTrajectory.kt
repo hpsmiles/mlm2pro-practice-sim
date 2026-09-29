@@ -5,23 +5,31 @@ package com.hpsmiles.golfsim.core.physics
  * ball speed (carry is monotonic in ball speed). Pure + deterministic -
  * anchors the Break-the-Pane middle row so all three rows stay reachable
  * by flighting (spec section 5 geometry, engine-verified calcs in section 2).
+ *
+ * Reference launch/spin profile is selected by distance bracket so every
+ * requested target is comfortably within the reachable envelope:
+ *   - target <= 120 m  : 21 degrees, 7500 rpm
+ *   - 120 < target <= 220 m : 18 degrees, 5500 rpm
+ *   - target > 220 m   : 14 degrees, 3000 rpm
+ * Within each bracket the profile is fixed, so carry is monotone in ball speed
+ * and the binary search is well behaved.
  */
 object ReferenceTrajectory {
 
-    private const val REF_LAUNCH_ANGLE_DEG = 21.0
-    private const val REF_SPIN_RPM = 7500
     const val SPEED_MIN_MPS = 20.0
     const val SPEED_MAX_MPS = 95.0
 
     /** Stock shot whose carry is closest to [targetM]. 60 iterations cap the ODE work. */
     fun stockShot(targetM: Double, toleranceM: Double = 0.5): ShotResult {
+        val launchAngleDeg = profileFor(targetM).first
+        val spinRpm = profileFor(targetM).second
         var lo = SPEED_MIN_MPS
         var hi = SPEED_MAX_MPS
-        var best = simulate(lo)
+        var best = simulate(lo, launchAngleDeg, spinRpm)
         var bestErr = kotlin.math.abs(best.carryM - targetM)
         repeat(60) {
             val mid = (lo + hi) / 2.0
-            val shot = simulate(mid)
+            val shot = simulate(mid, launchAngleDeg, spinRpm)
             val err = kotlin.math.abs(shot.carryM - targetM)
             if (err < bestErr) {
                 bestErr = err
@@ -41,12 +49,22 @@ object ReferenceTrajectory {
             ?: error("reference trajectory never crosses the pane plane at y=$planeY")
     }
 
-    private fun simulate(ballSpeedMps: Double): ShotResult =
+    private fun profileFor(targetM: Double): Pair<Double, Int> = when {
+        targetM <= 120.0 -> 21.0 to 7500
+        targetM <= 220.0 -> 18.0 to 5500
+        else -> 14.0 to 3000
+    }
+
+    private fun simulate(
+        ballSpeedMps: Double,
+        launchAngleDeg: Double,
+        spinRpm: Int,
+    ): ShotResult =
         BallFlightEngine.simulate(
             LaunchConditions(
                 ballSpeedMps = ballSpeedMps,
-                launchAngleDeg = REF_LAUNCH_ANGLE_DEG,
-                spinRpm = REF_SPIN_RPM,
+                launchAngleDeg = launchAngleDeg,
+                spinRpm = spinRpm,
             ),
             Environment(),
             UniformSurface(Surface.FAIRWAY_NORMAL),
