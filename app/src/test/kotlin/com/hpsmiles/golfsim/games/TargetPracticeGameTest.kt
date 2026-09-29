@@ -80,9 +80,21 @@ class TargetPracticeGameTest {
     }
 
     @Test
-    fun `green radius scales with target`() {
+    fun `green radius equals outermost band scaled by target`() {
         val game = TargetPracticeGame()
+        game.start(140.0, Difficulty.EASY)
+        assertEquals(18.0, game.greenRadiusM(), 1e-9)
+        game.start(140.0, Difficulty.MEDIUM)
+        assertEquals(15.0, game.greenRadiusM(), 1e-9)
+        game.start(140.0, Difficulty.HARD)
+        assertEquals(10.0, game.greenRadiusM(), 1e-9)
         game.start(280.0, Difficulty.MEDIUM)
-        assertEquals(12.0, game.greenRadiusM(), 1e-9)
+        assertEquals(30.0, game.greenRadiusM(), 1e-9)
+    }
+
+    @Test
+    fun `pre-start green radius falls back to default`() {
+        val game = TargetPracticeGame()
+        assertEquals(6.0, game.greenRadiusM(), 1e-9)
     }
 }

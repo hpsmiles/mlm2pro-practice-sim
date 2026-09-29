@@ -28,8 +28,9 @@ class TargetPracticeGame {
     var clockMs: () -> Long = { System.currentTimeMillis() }
 
     /**
-     * Injectable simulation seam. The default closure reads the CURRENT
-     * targetM/green radius so start() re-targets it.
+     * Injectable simulation seam. The default closure calls [greenRadiusM]
+     * every shot so the rollout surface matches the visual green as the
+     * difficulty changes (amendment 4: green now fills the outermost ring).
      */
     var simulator: (LaunchConditions) -> ShotResult = { launch ->
         BallFlightEngine.simulate(
@@ -44,10 +45,12 @@ class TargetPracticeGame {
     var difficulty: Difficulty = Difficulty.MEDIUM
         private set
     private var resultTaken = false
+    private var started = false
 
     fun start(targetM: Double, difficulty: Difficulty) {
         this.targetM = targetM
         this.difficulty = difficulty
+        started = true
         shots.clear()
         resultTaken = false
     }
@@ -55,8 +58,15 @@ class TargetPracticeGame {
     val complete: Boolean get() = shots.size >= TargetPracticeScoring.SHOTS_PER_GAME
     val totalPoints: Int get() = shots.sumOf { it.points }
 
-    /** Green oval radius, scaled to the target (spec: ~6 m at 140 m). */
-    fun greenRadiusM(): Double = 6.0 * targetM / 140.0
+    /**
+     * Green surface radius for the active difficulty. Fills the outermost
+     * scoring ring so the entire target face is green. Before [start] is
+     * called, falls back to the pre-start default (6 m at 140 m).
+     */
+    fun greenRadiusM(): Double {
+        val baseRadiusM = if (started) TargetPracticeScoring.outerBandRadiusM(difficulty) else 6.0
+        return baseRadiusM * targetM / 140.0
+    }
 
     /** One decoded measurement -> scored shot. Null on guard violation or completed game. */
     fun add(ballData: BallData): GameShot? {

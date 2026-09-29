@@ -1,16 +1,26 @@
 package com.hpsmiles.golfsim.games
 
 import android.graphics.Paint
+import android.graphics.Typeface
 import androidx.compose.foundation.Canvas
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
 import com.hpsmiles.golfsim.core.designsystem.GolfColors
 import com.hpsmiles.golfsim.range.PovProjector
 import com.hpsmiles.golfsim.range.RangeCamera
 import com.hpsmiles.golfsim.range.RangeScene
+
+/** Archery-inspired target face palette (outer to inner). Amber is reserved. */
+private val BullseyeOuter = Color(0xFFDCE3E9)      // white-ish
+private val BullseyeBlack = Color(0xFF2A3038)      // dark slate
+private val BullseyeBlue = Color(0xFF3C6E9C)       // muted blue
+private val BullseyeRed = Color(0xFFC23B3B)        // red
+private val BullseyeGold = Color(0xFFD4A72D)       // distinct gold, not amber
+private val BullseyeRings = listOf(BullseyeOuter, BullseyeBlack, BullseyeBlue, BullseyeRed)
 
 /** POV canvas for Target Practice: green, scoring rings + labels, pin, tracer, rest dot. */
 @Composable
@@ -28,12 +38,15 @@ fun TargetPracticeCanvas(
         val h = size.height
         with(GameScene) {
             drawGameGround(camera, w, h, labelPaint)
-            drawGreen(camera, w, h, 0.0, game.targetM, game.greenRadiusM())
+            val radiusM = game.greenRadiusM()
+            drawGreen(camera, w, h, 0.0, game.targetM, radiusM)
             val bands = TargetPracticeScoring.bands(game.difficulty)
-            // Shaded scoring rings, densest at the centre (draw largest first).
+            // Archery-style scoring bands, drawn largest first so the smaller
+            // (inner, higher-value) rings overwrite the larger ones.
             bands.asReversed().forEachIndexed { i, band ->
                 groundPath(camera, w, h, RangeScene.circleOutline(0.0, game.targetM, band.maxMissM))?.let {
-                    draw.drawPath(it, GolfColors.Teal.copy(alpha = 0.08f + 0.06f * i))
+                    val color = BullseyeRings.getOrElse(i) { BullseyeGold }
+                    draw.drawPath(it, color.copy(alpha = 0.82f))
                 }
             }
             drawRingScoreLabels(draw, camera, w, h, game.targetM, bands, labelPaint)
@@ -61,7 +74,7 @@ private fun drawRingScoreLabels(
     labelPaint.apply {
         isAntiAlias = true
         textAlign = Paint.Align.CENTER
-        color = GolfColors.Teal.toArgb()
+        typeface = Typeface.DEFAULT_BOLD
     }
     val focalPx = w * 1.10f
     val v0Px = h * 0.30f
@@ -72,21 +85,24 @@ private fun drawRingScoreLabels(
     val sinB = kotlin.math.sin(bearingRad)
 
     fun radiusForBand(band: TargetPracticeScoring.Band, prevMaxMissM: Double?): Double {
-        val inner = prevMaxMissM ?: gameGreenRadiusAt(targetM)
+        val inner = prevMaxMissM ?: 0.0
         return (inner + band.maxMissM) / 2.0
     }
 
     var prevMaxMissM: Double? = null
-    for (band in bands) {
+    bands.forEachIndexed { index, band ->
+        val color = BullseyeRings.getOrElse(bands.size - 1 - index) { BullseyeGold }
         val r = radiusForBand(band, prevMaxMissM)
         val worldX = r * cosB
         val worldY = targetM + r * sinB
-        val proj = PovProjector.project(cam, worldX, worldY, 0.0) ?: continue
+        val proj = PovProjector.project(cam, worldX, worldY, 0.0) ?: return@forEachIndexed
         val sx = centerX + (proj.u * focalPx).toFloat()
         val sy = v0Px + (proj.v * focalPx).toFloat()
         // Text size scales with the projected scale at that depth so labels
         // grow/shrink consistently as the target distance changes.
         labelPaint.textSize = (34.0 * proj.scale * focalPx).toFloat().coerceIn(14f, 28f)
+        // Light text on dark rings, dark text on light rings.
+        labelPaint.color = (if (color == BullseyeOuter) GolfColors.TextPrimary else GolfColors.Base).toArgb()
         draw.drawContext.canvas.nativeCanvas.drawText(
             "${band.points}",
             sx,
@@ -96,5 +112,3 @@ private fun drawRingScoreLabels(
         prevMaxMissM = band.maxMissM
     }
 }
-
-private fun gameGreenRadiusAt(targetM: Double): Double = 6.0 * targetM / 140.0

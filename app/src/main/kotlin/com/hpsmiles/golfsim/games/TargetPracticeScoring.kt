@@ -22,6 +22,9 @@ object TargetPracticeScoring {
         Difficulty.HARD -> listOf(Band(25, 1.5), Band(15, 3.5), Band(10, 6.0), Band(5, 10.0))
     }
 
+    /** The radius of the outermost scoring band for the given difficulty. */
+    fun outerBandRadiusM(difficulty: Difficulty): Double = bands(difficulty).last().maxMissM
+
     fun points(missM: Double, difficulty: Difficulty): Int =
         bands(difficulty).firstOrNull { missM <= it.maxMissM }?.points ?: 0
 
