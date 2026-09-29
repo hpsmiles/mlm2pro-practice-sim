@@ -6,6 +6,7 @@ import androidx.room.Room
 import androidx.room.withTransaction
 import com.hpsmiles.golfsim.core.ble.BallData
 import com.hpsmiles.golfsim.core.data.entity.ClubEntity
+import com.hpsmiles.golfsim.core.data.entity.GameResultEntity
 import com.hpsmiles.golfsim.core.data.entity.SessionEntity
 import com.hpsmiles.golfsim.core.data.record.ClubRecord
 import com.hpsmiles.golfsim.core.data.record.ClubType
@@ -35,6 +36,7 @@ class SessionRepository private constructor(private val context: Context) {
     private val sessionDao get() = db.sessionDao()
     private val shotDao get() = db.shotDao()
     private val clubDao get() = db.clubDao()
+    private val gameResultDao get() = db.gameResultDao()
 
     /** True once a write/open failure has been seen; cleared on next success. */
     val persistError = MutableStateFlow(false)
@@ -280,9 +282,42 @@ class SessionRepository private constructor(private val context: Context) {
         }
     }
 
+    fun gameResultDao() = gameResultDao
+
+    /**
+     * One summary row per completed game (M5.5 spec S7). Never throws -
+     * same contract as [appendShot]. Game shots themselves are never persisted.
+     */
+    suspend fun saveGameResult(
+        mode: String,
+        difficulty: String?,
+        distanceM: Double,
+        score: Int,
+        source: ShotSource,
+        playedAtEpochMs: Long,
+    ) {
+        try {
+            gameResultDao.insert(
+                GameResultEntity(
+                    mode = mode,
+                    difficulty = difficulty,
+                    distanceBin = (Math.round(distanceM / 10.0) * 10).toInt(),
+                    score = score,
+                    source = source.code,
+                    playedAtEpochMs = playedAtEpochMs,
+                ),
+            )
+            persistError.value = false
+        } catch (t: Throwable) {
+            if (t is CancellationException) throw t
+            Log.e(TAG, "saveGameResult failed", t)
+            persistError.value = true
+        }
+    }
+
     private fun build(): Mlm2proDatabase =
         Room.databaseBuilder(context, Mlm2proDatabase::class.java, DB_NAME)
-            .addMigrations(Mlm2proDatabase.MIGRATION_1_2)
+            .addMigrations(Mlm2proDatabase.MIGRATION_1_2, Mlm2proDatabase.MIGRATION_2_3)
             .build()
 
     /**

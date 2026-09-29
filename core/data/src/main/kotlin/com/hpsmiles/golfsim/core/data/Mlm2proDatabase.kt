@@ -5,21 +5,24 @@ import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import com.hpsmiles.golfsim.core.data.dao.ClubDao
+import com.hpsmiles.golfsim.core.data.dao.GameResultDao
 import com.hpsmiles.golfsim.core.data.dao.SessionDao
 import com.hpsmiles.golfsim.core.data.dao.ShotDao
 import com.hpsmiles.golfsim.core.data.entity.ClubEntity
+import com.hpsmiles.golfsim.core.data.entity.GameResultEntity
 import com.hpsmiles.golfsim.core.data.entity.SessionEntity
 import com.hpsmiles.golfsim.core.data.entity.ShotEntity
 
 @Database(
-    entities = [SessionEntity::class, ShotEntity::class, ClubEntity::class],
-    version = 2,
+    entities = [SessionEntity::class, ShotEntity::class, ClubEntity::class, GameResultEntity::class],
+    version = 3,
     exportSchema = true,
 )
 abstract class Mlm2proDatabase : RoomDatabase() {
     abstract fun sessionDao(): SessionDao
     abstract fun shotDao(): ShotDao
     abstract fun clubDao(): ClubDao
+    abstract fun gameResultDao(): GameResultDao
 
     companion object {
         /**
@@ -39,6 +42,23 @@ abstract class Mlm2proDatabase : RoomDatabase() {
                 db.execSQL("UPDATE clubs SET type='HYBRID' WHERE name='4H'")
                 db.execSQL("UPDATE clubs SET type='IRON' WHERE name IN ('4i','5i','6i','7i','8i','9i')")
                 db.execSQL("UPDATE clubs SET type='WEDGE' WHERE name IN ('PW','GW','SW','LW')")
+            }
+        }
+
+        /**
+         * M5.5 spec S7: game_results summary table. No DEFAULT clauses -
+         * difficulty is genuinely nullable and the rest are NOT NULL, so the
+         * entity needs no @ColumnInfo defaultValue (there is nothing to match).
+         */
+        val MIGRATION_2_3: Migration = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `game_results` (" +
+                        "`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                        "`mode` TEXT NOT NULL, `difficulty` TEXT, `distanceBin` INTEGER NOT NULL, " +
+                        "`score` INTEGER NOT NULL, `source` INTEGER NOT NULL, " +
+                        "`playedAtEpochMs` INTEGER NOT NULL)",
+                )
             }
         }
     }
