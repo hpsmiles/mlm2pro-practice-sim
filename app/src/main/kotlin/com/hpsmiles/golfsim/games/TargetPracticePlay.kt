@@ -89,23 +89,29 @@ fun TargetPracticePlay(
 
     BoxWithConstraints(modifier.fillMaxSize().background(GolfColors.Base)) {
         Row(modifier = Modifier.fillMaxSize()) {
+            // The camera clamp must cover the same box the canvas draws in so
+            // the follow cam frames the exact tracer path (GameScene.drawTracer contract).
             Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
-                val constraints = this@BoxWithConstraints.constraints
-                val camera = when (val shot = game.shots.lastOrNull()) {
-                    null -> RangeCamera.STATIC
-                    else -> FollowCam.cameraAt(
-                        shot.shot.shotResult,
-                        playFraction,
-                        GameScene.apexVMin(constraints.maxWidth.toFloat(), constraints.maxHeight.toFloat()),
+                BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+                    val wPx = constraints.maxWidth.toFloat()
+                    val hPx = constraints.maxHeight.toFloat()
+                    val apexVMin = GameScene.apexVMin(wPx, hPx)
+                    val camera = when (val shot = game.shots.lastOrNull()) {
+                        null -> RangeCamera.STATIC
+                        else -> FollowCam.cameraAt(
+                            shot.shot.shotResult,
+                            playFraction,
+                            apexVMin,
+                        )
+                    }
+                    TargetPracticeCanvas(
+                        game = game,
+                        current = game.shots.lastOrNull(),
+                        playFraction = playFraction,
+                        camera = camera,
+                        modifier = Modifier.fillMaxSize(),
                     )
                 }
-                TargetPracticeCanvas(
-                    game = game,
-                    current = game.shots.lastOrNull(),
-                    playFraction = playFraction,
-                    camera = camera,
-                    modifier = Modifier.fillMaxSize(),
-                )
 
                 // HUD: per-shot point indicators + running total.
                 Row(

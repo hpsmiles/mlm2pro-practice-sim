@@ -3,8 +3,10 @@ package com.hpsmiles.golfsim.core.data
 import android.database.sqlite.SQLiteDatabase
 import com.hpsmiles.golfsim.core.data.entity.GameModes
 import com.hpsmiles.golfsim.core.data.record.ShotSource
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -68,6 +70,19 @@ class MigrationFrom2Test {
 
         val repo = SessionRepository.open(context)
         repo.initializeAndRestore() // migration runs here; prior data must survive
+
+        // Seeded session, club, and shot must all survive the migration.
+        val summaries = repo.summaries.first()
+        assertEquals(1, summaries.size)
+        val summary = summaries.single()
+        assertEquals(1000L, summary.startedAtEpochMs)
+        assertEquals(1, summary.shotCount)
+        assertNotNull(summary.avgCarryM)
+        assertEquals(140.0, summary.avgCarryM!!, 0.01)
+        assertEquals(listOf("7i"), summary.clubNames)
+        val restoredShots = repo.observeShots(summary.id).first()
+        assertEquals(1, restoredShots.size)
+        assertEquals(140.0, restoredShots.single().carryM, 0.01)
 
         repo.saveGameResult(
             mode = GameModes.TARGET_PRACTICE,

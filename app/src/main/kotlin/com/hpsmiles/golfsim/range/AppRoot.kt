@@ -55,6 +55,7 @@ import com.hpsmiles.golfsim.core.designsystem.NavRailButton
 import com.hpsmiles.golfsim.core.designsystem.StatusStrip
 import com.hpsmiles.golfsim.games.BreakThePaneGame
 import com.hpsmiles.golfsim.games.GameMode
+import com.hpsmiles.golfsim.games.GameLeavePolicy
 import com.hpsmiles.golfsim.games.GamesScreen
 import com.hpsmiles.golfsim.games.TargetPracticeGame
 import com.hpsmiles.golfsim.history.HistoryScreen
@@ -302,12 +303,23 @@ fun AppRoot() {
     var pendingTab by remember { mutableStateOf<RangeTab?>(null) }
     var confirmLeaveGame by remember { mutableStateOf(false) }
     fun requestTab(to: RangeTab) {
-        val midGame = activeGame != GameMode.NONE &&
-            (targetPractice.shots.isNotEmpty() || breakPane.shots.isNotEmpty())
+        val active = activeGame
+        val activeShots = when (active) {
+            GameMode.TARGET_PRACTICE -> targetPractice.shots.isNotEmpty()
+            GameMode.BREAK_PANE -> breakPane.shots.isNotEmpty()
+            GameMode.NONE -> false
+        }
+        val activeComplete = when (active) {
+            GameMode.TARGET_PRACTICE -> targetPractice.complete
+            GameMode.BREAK_PANE -> breakPane.complete
+            GameMode.NONE -> true
+        }
+        val midGame = GameLeavePolicy.confirmRequired(active, activeShots, activeComplete)
         if (midGame && to != RangeTab.GAMES) {
             pendingTab = to
             confirmLeaveGame = true
         } else {
+            if (to != RangeTab.GAMES) activeGame = GameMode.NONE
             tab = to
         }
     }
