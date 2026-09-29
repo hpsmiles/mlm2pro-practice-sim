@@ -12,6 +12,7 @@ import com.hpsmiles.golfsim.core.physics.LaunchConditions
 import com.hpsmiles.golfsim.core.physics.ShotResult
 import com.hpsmiles.golfsim.core.physics.Surface
 import com.hpsmiles.golfsim.core.physics.UniformSurface
+import kotlin.math.sqrt
 
 /**
  * Owns the Range shot list plus the no-read pill counter. Lives in AppRoot so
@@ -141,6 +142,8 @@ fun ShotRecord.toDisplayShot(): DisplayShot? {
         sideM = sideM,
         apexM = apexM,
         flightTimeSec = flightTimeSec,
+        restX = sideM,
+        restY = sqrt(totalM * totalM - sideM * sideM),
     )
     return DisplayShot(bd, launch, result, timestampMs)
 }

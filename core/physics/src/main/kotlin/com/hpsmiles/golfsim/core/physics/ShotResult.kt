@@ -4,6 +4,7 @@ package com.hpsmiles.golfsim.core.physics
  * End-to-end shot outcome, SI, full precision (display converts at M3+).
  * rolloutM = totalM - carryM (can be negative — spin-back on soft greens).
  * sideM: +x is right of the target line looking down-range.
+ * restX/restY = bounce/roll end position (restX == sideM, hypot(restX, restY) == totalM).
  */
 data class ShotResult(
     val carryM: Double,
@@ -13,4 +14,6 @@ data class ShotResult(
     val apexM: Double,
     val flightTimeSec: Double,
     val samples: List<TrajectorySample> = emptyList(),
+    val restX: Double = 0.0,
+    val restY: Double = 0.0,
 )
