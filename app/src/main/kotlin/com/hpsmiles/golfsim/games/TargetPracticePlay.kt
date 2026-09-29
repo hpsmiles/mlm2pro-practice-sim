@@ -20,6 +20,7 @@ import java.util.Locale
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -43,6 +44,10 @@ fun TargetPracticePlay(
 ) {
     var playFraction by remember { mutableFloatStateOf(1f) }
     var speedMult by remember { mutableStateOf(GameSpeedMult.X15) }
+    // How many shot scores are revealed in the HUD. A shot's score only
+    // appears once its animation reaches FollowCam.endFraction (ball rolled
+    // out and camera snapped back). Reset when a new game starts.
+    var revealedCount by remember { mutableIntStateOf(0) }
 
     // Restart the flight animation each time a shot lands (tick bump).
     // Runs past 1 through the follow-cam landing hold (FollowCam.endFraction),
@@ -50,10 +55,12 @@ fun TargetPracticePlay(
     // ready view after the hold instead of parking at the landing frame
     // (user report 2026-09-29).
     LaunchedEffect(game.tick.intValue, speedMult) {
+        val shotIndex = game.shots.lastIndex
         val shot = game.shots.lastOrNull() ?: return@LaunchedEffect
         val result = shot.shot.shotResult
         if (result.samples.isEmpty()) {
             playFraction = FollowCam.endFraction(result).toFloat()
+            revealedCount = revealedCount.coerceAtLeast(shotIndex + 1)
             return@LaunchedEffect
         }
         if (result.flightTimeSec <= 0.0) return@LaunchedEffect
@@ -66,6 +73,12 @@ fun TargetPracticePlay(
             playFraction = (playFraction + ((now - last) / 1_000_000.0 / durationMs).toFloat()).coerceAtMost(end)
             last = now
         }
+        revealedCount = revealedCount.coerceAtLeast(shotIndex + 1)
+    }
+
+    // Reset revealed count when a new game begins (shots cleared).
+    LaunchedEffect(game.shots.size) {
+        if (game.shots.isEmpty()) revealedCount = 0
     }
 
     val showResultOverlay = rememberGameResultOverlayGate(
@@ -107,7 +120,8 @@ fun TargetPracticePlay(
                     )
 
                     repeat(TargetPracticeScoring.SHOTS_PER_GAME) { i ->
-                        val pts = game.shots.getOrNull(i)?.points
+                        val revealed = TargetPracticeReveal.isRevealed(i, revealedCount)
+                        val pts = if (revealed) game.shots.getOrNull(i)?.points else null
                         Box(
                             modifier = Modifier
                                 .background(if (pts != null) GolfColors.Teal55 else GolfColors.Panel)
@@ -118,7 +132,7 @@ fun TargetPracticePlay(
                         }
                     }
                     Text(
-                        text = "TOTAL ${game.totalPoints}",
+                        text = "TOTAL ${TargetPracticeReveal.revealedTotal(game.shots.toList(), revealedCount)}",
                         style = GolfTypography.MetricValue,
                         color = GolfColors.TextPrimary,
                         modifier = Modifier.padding(start = GolfSpacing.Sm),
