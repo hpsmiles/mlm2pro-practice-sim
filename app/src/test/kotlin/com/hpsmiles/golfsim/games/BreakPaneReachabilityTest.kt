@@ -15,28 +15,26 @@ import org.junit.Test
  * These assert the skill being protected: a realistic 8i can hit every row by
  * changing launch angle and can hit the side columns by starting the ball
  * offline with launch direction. Spin axis is only used to curve the ball back
- * toward the target after it has broken a side pane.
+ * toward the target after it has crossed a side pane.
  *
- * Probe values were tuned against the real engine. The original prompts
- * suggested la ~25 deg / la ~18 deg / ld ~+5 deg, but the actual thresholds at
- * target 140 m with the retuned cells (cellH 1.6 %, cellW 2.0 %) are lower:
- *   - top-row threshold ~23.2 deg
- *   - bottom-row threshold ~19.3 deg
- *   - right-column threshold ~2.4 deg launch direction
- * The chosen probes sit safely past each threshold while staying inside the
- * intended cell.
+ * The real-engine probe values below centre each shot in its row/column at
+ * target 140 m:
+ *   - high 8i, la = 24.0 deg  -> z ~14.48 m (top row centre ~14.74 m)
+ *   - flat 8i, la = 18.0 deg -> z ~10.32 m (bottom row centre ~10.26 m)
+ *   - side start, ld = +3.5 deg -> x ~+2.14 m (right column)
+ * The high/flat probes happen to pass under BOTH the old and new constants,
+ * which is acceptable; the side-column probe and the exact PaneGeom constants
+ * still guard against a revert to the wider old cells.
  */
 class BreakPaneReachabilityTest {
 
     companion object {
-        private const val TARGET_M = 140.0
-
         private const val STOCK_BALL_SPEED = 44.0
         private const val STOCK_SPIN = 6500
         private const val STOCK_LAUNCH_ANGLE = 20.0
 
-        private const val HIGH_LA = 23.3
-        private const val FLAT_LA = 19.5
+        private const val HIGH_LA = 24.0
+        private const val FLAT_LA = 18.0
         private const val RIGHT_LD = 3.5
     }
 
@@ -59,6 +57,7 @@ class BreakPaneReachabilityTest {
     )
 
     private fun cellFor(
+        targetM: Double,
         ballSpeedMps: Double = STOCK_BALL_SPEED,
         launchAngleDeg: Double = STOCK_LAUNCH_ANGLE,
         spinRpm: Int = STOCK_SPIN,
@@ -66,18 +65,23 @@ class BreakPaneReachabilityTest {
         launchDirDeg: Double = 0.0,
     ): Int {
         val result = simulate(ballSpeedMps, launchAngleDeg, spinRpm, spinAxisDeg, launchDirDeg)
-        return PaneGeom(TARGET_M).firstCrossing(result.samples)?.cell
+        return PaneGeom(targetM).firstCrossing(result.samples)?.cell
             ?: error("probe shot did not cross the pane plane")
     }
 
     @Test
-    fun `stock 8i breaks the middle cell`() {
-        assertEquals(4, cellFor())
+    fun `stock 8i breaks the middle cell at 140m`() {
+        assertEquals(4, cellFor(targetM = 140.0))
     }
 
     @Test
-    fun `high 8i breaks the top row`() {
-        val cell = cellFor(launchAngleDeg = HIGH_LA)
+    fun `stock 8i breaks the middle cell at 125m`() {
+        assertEquals(4, cellFor(targetM = 125.0))
+    }
+
+    @Test
+    fun `high 8i breaks the top row at 140m`() {
+        val cell = cellFor(targetM = 140.0, launchAngleDeg = HIGH_LA)
         assertTrue(
             "expected top row (6..8) but got cell=$cell for la=$HIGH_LA",
             cell in 6..8,
@@ -85,8 +89,8 @@ class BreakPaneReachabilityTest {
     }
 
     @Test
-    fun `flat 8i breaks the bottom row`() {
-        val cell = cellFor(launchAngleDeg = FLAT_LA)
+    fun `flat 8i breaks the bottom row at 140m`() {
+        val cell = cellFor(targetM = 140.0, launchAngleDeg = FLAT_LA)
         assertTrue(
             "expected bottom row (0..2) but got cell=$cell for la=$FLAT_LA",
             cell in 0..2,
@@ -94,8 +98,8 @@ class BreakPaneReachabilityTest {
     }
 
     @Test
-    fun `off-line start line breaks the right column`() {
-        val cell = cellFor(launchDirDeg = RIGHT_LD)
+    fun `off-line start line crosses into the right column at 140m`() {
+        val cell = cellFor(targetM = 140.0, launchDirDeg = RIGHT_LD)
         assertTrue(
             "expected right column (2,5,8) but got cell=$cell for ld=$RIGHT_LD",
             cell in listOf(2, 5, 8),
@@ -103,8 +107,8 @@ class BreakPaneReachabilityTest {
     }
 
     @Test
-    fun `stock shot does not break a side column`() {
-        val cell = cellFor()
+    fun `stock shot does not break a side column at 140m`() {
+        val cell = cellFor(targetM = 140.0)
         assertTrue("stock shot should stay in the middle column", cell in 3..5)
     }
 }
