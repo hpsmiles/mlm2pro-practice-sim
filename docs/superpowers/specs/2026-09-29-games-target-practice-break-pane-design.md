@@ -174,7 +174,7 @@ Pure JUnit4, mirroring existing patterns (`RangeSignsTest`, `FollowCamTest`, `Ra
 
 ## 11. Follow-ups recorded (out of scope)
 
-- **BounceRollModel review**: low-shot rollout appears underestimated (0.9 m for a low 8i). Revisit Penner spin-back/retention parameters in a dedicated milestone.
+- ~~**BounceRollModel review**~~ **RESOLVED 2026-09-30**: green-only spin-dominance gate added to the Penner branch (`Surface.spinDominanceGate`, blend 0 at R·ω/vh ≤ 0.80, full impulse at ≥ 1.05, forward ejection ×0.35 while not spin-dominant). Live 8i capture (2026-09-30, 5 shots: ~43-44° / ~23 m/s / ~4.3-4.6k rpm at impact) now stops with ~0-1 m forward release instead of reversing 0.7-1.6 m; wedge-class reversal (ratio ~1.07) preserved; fairway/rough M2 prototype law untouched (Tour table bit-identical). The low-shot forward-rollout part of this note remains open for the dedicated milestone.
 - History view for `game_results` (best/last per distance bin per difficulty).
 - Green firmness / stimp setting in game setup (`Surface.green(stimp)` already supports it).
 

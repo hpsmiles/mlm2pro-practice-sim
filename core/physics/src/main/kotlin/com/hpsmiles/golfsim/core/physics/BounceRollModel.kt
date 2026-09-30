@@ -2,13 +2,33 @@ package com.hpsmiles.golfsim.core.physics
 
 /**
  * Bounce loop + roll to rest on a [Surface] (spec §6; openfairway structure
- * with Penner's 2R*omega/7 spin-back impulse). Never throws; hard bounce cap
- * prevents non-termination.
+ * with Penner's 2R*omega/7 spin-back impulse). Green surfaces gate the
+ * spin-back impulse by spin dominance (R*omega vs vh) — see constants below.
+ * Never throws; hard bounce cap prevents non-termination.
  */
 object BounceRollModel {
 
     private const val FAIRWAY_COR_REFERENCE = 0.40
     private const val MAX_BOUNCES = 4
+
+    // Spin-dominance gate (gated surfaces only, green). Penner's 2R*omega/7
+    // reversal is the perfect-grip condition; real green turf shears under the
+    // ball, so the reversal impulse only applies when backspin actually
+    // dominates tangential speed. Blend ramps 0 -> 1 over the ratio window and
+    // the forward ejection is additionally damped while spin is not dominant
+    // (ball-mark shear absorbs tangential energy). Calibrated against the
+    // 2026-09-30 live 8i capture: ratio ~0.60 -> no spin-back, minimal forward
+    // release; wedge-class ratio ~1.07 -> full Penner reversal (test-pinned).
+    private const val GRIP_RATIO_ZERO = 0.80
+    private const val GRIP_RATIO_FULL = 1.05
+    private const val NON_DOMINANT_FORWARD_KEEP = 0.35
+
+    /** 0 below [GRIP_RATIO_ZERO], 1 at/above [GRIP_RATIO_FULL], linear between. */
+    internal fun gripBlend(gripRatio: Double): Double = when {
+        gripRatio <= GRIP_RATIO_ZERO -> 0.0
+        gripRatio >= GRIP_RATIO_FULL -> 1.0
+        else -> (gripRatio - GRIP_RATIO_ZERO) / (GRIP_RATIO_FULL - GRIP_RATIO_ZERO)
+    }
 
     /** Base COR parabola: 0.45 - 0.01 vn + 0.0002 vn^2, capped/zeroed. */
     internal fun baseCor(vn: Double): Double {
@@ -55,8 +75,15 @@ object BounceRollModel {
                     pennerThresh = 12.0 + 8.0 * Math.max(0.0, 1.0 - (rpmNow - 4000.0) / 4000.0)
                 }
                 newTan = if (steep && impactSpeed >= pennerThresh) {
-                    retention * impactSpeed * Math.sin(impactAngle - surface.thetaCritRad) -
-                        2.0 * BallPhysical.RADIUS_M * omegaT * surface.spinbackScale / 7.0
+                    val ejection = retention * impactSpeed * Math.sin(impactAngle - surface.thetaCritRad)
+                    val backImpulse = 2.0 * BallPhysical.RADIUS_M * omegaT * surface.spinbackScale / 7.0
+                    if (surface.spinDominanceGate && omegaT != 0.0) {
+                        val gripRatio = Math.abs(omegaT) * BallPhysical.RADIUS_M / Math.max(vh, 1e-6)
+                        val blend = gripBlend(gripRatio)
+                        ejection * (1.0 - (1.0 - NON_DOMINANT_FORWARD_KEEP) * (1.0 - blend)) - blend * backImpulse
+                    } else {
+                        ejection - backImpulse
+                    }
                 } else {
                     vh * retention
                 }

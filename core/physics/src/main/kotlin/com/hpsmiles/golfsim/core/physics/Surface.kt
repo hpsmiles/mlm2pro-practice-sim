@@ -26,6 +26,14 @@ data class Surface(
     val spinRetention: Double,
     /** Constant roll deceleration on this surface (m/s^2). */
     val rollDecelMps2: Double,
+    /**
+     * Gate the Penner spin-back impulse by spin dominance (R*omega vs vh) and
+     * damp the forward ejection when spin is not dominant. Green only: real
+     * turf shears (ball mark) instead of gripping, so a mid-iron must stop
+     * rather than reverse; fairway/rough keep the frozen M2 prototype law
+     * (spec §8 pins it bit-identical — recalibration is deliberate only).
+     */
+    val spinDominanceGate: Boolean = false,
 ) {
     fun withFirmness(firmness: Firmness): Surface = when (firmness) {
         Firmness.SOFT -> copy(
@@ -53,6 +61,7 @@ data class Surface(
             spinbackScale = 1.12,
             spinRetention = 0.85,
             rollDecelMps2 = 5.49 / stimp,
+            spinDominanceGate = true,
         )
 
         /** Fairway with M2-tuned roll mu (0.030) and spin-back scale (0.35). */
