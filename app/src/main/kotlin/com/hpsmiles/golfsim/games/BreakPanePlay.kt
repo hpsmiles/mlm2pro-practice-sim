@@ -77,26 +77,24 @@ fun BreakPanePlay(
             // Camera and canvas both use the raw clamp so the follow cam
             // frames the exact same tracer path the pane is drawn in.
             Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
-                Box(modifier = Modifier.fillMaxSize()) {
-                        val apexVMin = FollowCam.RAW_APEX_VMIN
-                        val camera = when (val shot = game.shots.lastOrNull()) {
-                            null -> RangeCamera.STATIC
-                            else -> FollowCam.cameraAt(
-                                shot.shot.shotResult,
-                                playFraction,
-                                apexVMin,
-                            )
-                        }
-                        BreakPaneCanvas(
-                            game = game,
-                            playFraction = playFraction,
-                            camera = camera,
-                            modifier = Modifier.fillMaxSize(),
-                        )
-                    }
-
+                val apexVMin = FollowCam.RAW_APEX_VMIN
+                val camera = when (val shot = game.shots.lastOrNull()) {
+                    null -> RangeCamera.STATIC
+                    else -> FollowCam.cameraAt(
+                        shot.shot.shotResult,
+                        playFraction,
+                        apexVMin,
+                    )
+                }
+                BreakPaneCanvas(
+                    game = game,
+                    playFraction = playFraction,
+                    camera = camera,
+                    modifier = Modifier.fillMaxSize(),
+                )
 
                 if (showResultOverlay && game.record.value?.outcome == RecordOutcome.NEW_RECORD) {
+
                     ConfettiBurst(modifier = Modifier.matchParentSize())
                 }
 
