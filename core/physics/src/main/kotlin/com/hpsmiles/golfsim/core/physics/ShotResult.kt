@@ -6,7 +6,8 @@ package com.hpsmiles.golfsim.core.physics
  * sideM: +x is right of the target line looking down-range.
  * restX/restY = bounce/roll end position (restX == sideM, hypot(restX, restY) == totalM).
  * groundHops = recorded bounce chain (cumulative touches relative to the
- * first ground touch) for hop-aware ground rendering.
+ * first ground touch) for hop-aware ground rendering; empty for replayed
+ * persisted shots and shots whose first impact stays on the ground.
  */
 data class ShotResult(
     val carryM: Double,

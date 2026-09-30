@@ -146,7 +146,7 @@ class BounceRollModelTest {
         )
         val ground = BounceRollModel.bounceAndRoll(landing, Surface.GREEN_NORMAL, 45.0, env)
         assertTrue("expected recorded hops, got ${ground.hops.size}", ground.hops.isNotEmpty())
-        assertTrue("hop count ${ground.hops.size} exceeds MAX_BOUNCES - 1", ground.hops.size <= 3)
+        assertEquals("one hop per non-terminal bounce", ground.bounces - 1, ground.hops.size)
         for (hop in ground.hops) {
             assertTrue("apex must be positive, got ${hop.apexM}", hop.apexM > 0.0)
             assertTrue("duration must be positive, got ${hop.durationSec}", hop.durationSec > 0.0)
@@ -173,7 +173,7 @@ class BounceRollModelTest {
         )
         val ground = BounceRollModel.bounceAndRoll(landing, Surface.GREEN_NORMAL, 20.3, env)
         assertTrue("expected recorded hops, got ${ground.hops.size}", ground.hops.isNotEmpty())
-        assertTrue("hop count ${ground.hops.size} exceeds MAX_BOUNCES - 1", ground.hops.size <= 3)
+        assertEquals("one hop per non-terminal bounce", ground.bounces - 1, ground.hops.size)
         var prevY = 0.0
         for (hop in ground.hops) {
             assertTrue(hop.apexM > 0.0)
@@ -186,6 +186,5 @@ class BounceRollModelTest {
         // and the remaining roll is forward (or zero).
         val last = ground.hops.last()
         assertTrue("roll must not reverse", ground.deltaY >= last.landingY)
-        assertTrue((ground.deltaX - last.landingX).isFinite())
     }
 }

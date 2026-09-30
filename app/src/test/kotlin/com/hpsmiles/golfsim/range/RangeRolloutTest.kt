@@ -69,6 +69,7 @@ class RangeRolloutTest {
         assertTrue("pz $maxPz exceeds hop apex", maxPz <= 0.45 + 1e-9)
         for (sample in roll) {
             assertTrue("pz must stay >= 0, got ${sample.pz}", sample.pz >= 0.0)
+            assertTrue("ground sample must postdate the flight", sample.tSec > s.flightTimeSec)
         }
     }
 
