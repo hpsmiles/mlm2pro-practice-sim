@@ -660,23 +660,32 @@ private fun RailChip(
     }
 }
 
-/** StatusStrip text mapping per the M4b plan (demo fallback first). */
-private fun describe(
+/**
+ * StatusStrip text mapping (M4b plan; failure reason per the 2026-09-30
+ * connect-failure-reason spec §5 — SEE CAPTURE removed, raw reasons live in
+ * logcat/capture). Retry labels append the reason with a space; state labels
+ * with " - " matching existing style.
+ */
+internal fun describe(
     state: ConnectionState,
     demo: Boolean,
     scanning: Boolean,
     retryLabel: String? = null,
+    failureReason: String? = null,
 ): String = when {
     demo -> "DEMO MODE - FIRE TO SHOOT"
-    retryLabel != null -> retryLabel
+    retryLabel != null ->
+        if (failureReason != null) "$retryLabel $failureReason" else retryLabel
     scanning -> "SCANNING\u2026"
     else -> when (state) {
-        ConnectionState.Disconnected -> "BLE DISCONNECTED"
+        ConnectionState.Disconnected ->
+            if (failureReason != null) "BLE DISCONNECTED - $failureReason" else "BLE DISCONNECTED"
         ConnectionState.Connecting -> "CONNECTING\u2026"
         ConnectionState.Handshaking -> "HANDSHAKING\u2026"
         ConnectionState.Armed -> "ARMED"
         ConnectionState.Disarmed -> "DISARMED - STANDBY"
-        is ConnectionState.Faulted -> "BLE FAULTED - SEE CAPTURE"
+        is ConnectionState.Faulted ->
+            if (failureReason != null) "BLE FAULTED - $failureReason" else "BLE FAULTED"
     }
 }
 
