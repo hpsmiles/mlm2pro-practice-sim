@@ -305,7 +305,7 @@ class SessionRepository private constructor(private val context: Context) {
                 GameResultEntity(
                     mode = mode,
                     difficulty = difficulty,
-                    distanceBin = (Math.round(distanceM / 10.0) * 10).toInt(),
+                    distanceBin = distanceBin(distanceM),
                     score = score,
                     source = source.code,
                     playedAtEpochMs = playedAtEpochMs,
@@ -317,6 +317,31 @@ class SessionRepository private constructor(private val context: Context) {
             Log.e(TAG, "saveGameResult failed", t)
             persistError.value = true
         }
+    }
+
+    /**
+     * Prior best for a record key (mode + difficulty + nearest-10m bin), or
+     * null when no matching row exists. MUST be read BEFORE [saveGameResult]
+     * for the same game, or it reads the row just written. Never throws — a
+     * query failure also yields null (no celebration), same contract as
+     * [appendShot].
+     */
+    suspend fun bestGameScore(
+        mode: String,
+        difficulty: String,
+        distanceM: Double,
+        lowerIsBetter: Boolean,
+    ): Int? = try {
+        val bin = distanceBin(distanceM)
+        if (lowerIsBetter) {
+            gameResultDao.bestLowScore(mode, difficulty, bin)
+        } else {
+            gameResultDao.bestHighScore(mode, difficulty, bin)
+        }
+    } catch (t: Throwable) {
+        if (t is CancellationException) throw t
+        Log.e(TAG, "bestGameScore failed", t)
+        null
     }
 
     private fun build(): Mlm2proDatabase =
@@ -362,6 +387,10 @@ class SessionRepository private constructor(private val context: Context) {
         private const val DB_NAME = "golfsim.db"
         private const val MAX_TITLE = 40
         private const val MAX_CLUB = 20
+
+        /** Target distance rounded to the nearest 10 m — the game record key. */
+        internal fun distanceBin(distanceM: Double): Int = (Math.round(distanceM / 10.0) * 10).toInt()
+
         val DEFAULT_CLUBS = listOf(
             "D" to ClubType.DRIVER,
             "3W" to ClubType.WOOD, "5W" to ClubType.WOOD,

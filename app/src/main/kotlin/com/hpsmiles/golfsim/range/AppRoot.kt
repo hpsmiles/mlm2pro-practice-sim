@@ -56,8 +56,11 @@ import com.hpsmiles.golfsim.core.designsystem.NavRailButton
 import com.hpsmiles.golfsim.core.designsystem.StatusStrip
 import com.hpsmiles.golfsim.games.BreakThePaneGame
 import com.hpsmiles.golfsim.games.GameMode
+import com.hpsmiles.golfsim.games.GameRecord
+import com.hpsmiles.golfsim.games.GameResultPayload
 import com.hpsmiles.golfsim.games.GameLeavePolicy
 import com.hpsmiles.golfsim.games.GamesScreen
+import com.hpsmiles.golfsim.games.RecordComparison
 import com.hpsmiles.golfsim.games.TargetPracticeGame
 import com.hpsmiles.golfsim.history.HistoryScreen
 import com.hpsmiles.golfsim.settings.SettingsScreen
@@ -162,6 +165,30 @@ fun AppRoot() {
     }
 
     /**
+     * 2026-09-30: a game just completed. Snapshot the PRIOR best for the
+     * record key, publish the comparison to the game holder, then persist the
+     * new row. The query must precede the insert or it reads its own write.
+     */
+    fun completeGame(
+        payload: GameResultPayload,
+        onRecord: (RecordComparison) -> Unit,
+        clockMs: () -> Long,
+        source: ShotSource,
+    ) {
+        val lowerIsBetter = GameRecord.lowerIsBetter(payload.mode)
+        val difficulty = payload.difficulty
+        scope.launch {
+            if (difficulty != null) {
+                val prevBest = sessionRepository.bestGameScore(payload.mode, difficulty, payload.targetM, lowerIsBetter)
+                onRecord(GameRecord.compare(prevBest, payload.score, lowerIsBetter))
+            }
+            sessionRepository.saveGameResult(
+                payload.mode, payload.difficulty, payload.targetM, payload.score, source, clockMs(),
+            )
+        }
+    }
+
+    /**
      * M5.5 dispatch (spec §3): a shot goes to the active game OR the range
      * session — never both. Game shots are never range-persisted; completed
      * games emit exactly one summary row via takeResult().
@@ -171,18 +198,14 @@ fun AppRoot() {
             GameMode.NONE -> persist(session.add(ballData), source)
             GameMode.TARGET_PRACTICE -> {
                 targetPractice.add(ballData)
-                targetPractice.takeResult()?.let { p ->
-                    scope.launch {
-                        sessionRepository.saveGameResult(p.mode, p.difficulty, p.targetM, p.score, source, targetPractice.clockMs())
-                    }
+                targetPractice.takeResult()?.let {
+                    completeGame(it, targetPractice::setRecord, { targetPractice.clockMs() }, source)
                 }
             }
             GameMode.BREAK_PANE -> {
                 breakPane.add(ballData)
-                breakPane.takeResult()?.let { p ->
-                    scope.launch {
-                        sessionRepository.saveGameResult(p.mode, p.difficulty, p.targetM, p.score, source, breakPane.clockMs())
-                    }
+                breakPane.takeResult()?.let {
+                    completeGame(it, breakPane::setRecord, { breakPane.clockMs() }, source)
                 }
             }
         }

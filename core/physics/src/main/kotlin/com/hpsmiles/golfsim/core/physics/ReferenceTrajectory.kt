@@ -9,7 +9,7 @@ package com.hpsmiles.golfsim.core.physics
  * Reference launch/spin profile is selected by distance bracket so every
  * requested target is comfortably within the reachable envelope:
  *   - target <= 120 m  : 21 degrees, 7500 rpm
- *   - 120 < target <= 220 m : 18 degrees, 5500 rpm
+ *   - 120 < target <= 220 m : 20 degrees, 6500 rpm
  *   - target > 220 m   : 14 degrees, 3000 rpm
  * Within each bracket the profile is fixed, so carry is monotone in ball speed
  * and the binary search is well behaved.
@@ -51,7 +51,7 @@ object ReferenceTrajectory {
 
     private fun profileFor(targetM: Double): Pair<Double, Int> = when {
         targetM <= 120.0 -> 21.0 to 7500
-        targetM <= 220.0 -> 18.0 to 5500
+        targetM <= 220.0 -> 20.0 to 6500
         else -> 14.0 to 3000
     }
 

@@ -1,8 +1,10 @@
 package com.hpsmiles.golfsim.games
 
 import androidx.compose.runtime.MutableIntState
+import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.snapshots.SnapshotStateList
 import com.hpsmiles.golfsim.core.ble.BallData
 import com.hpsmiles.golfsim.core.data.entity.GameModes
@@ -23,6 +25,9 @@ class TargetPracticeGame {
 
     val shots: SnapshotStateList<GameShot> = mutableStateListOf()
     val tick: MutableIntState = mutableIntStateOf(0)
+
+    /** High-score comparison for the last completed game; null until AppRoot loads it. */
+    val record: MutableState<RecordComparison?> = mutableStateOf(null)
 
     /** Injectable clock (ms). AppRoot can leave the default. */
     var clockMs: () -> Long = { System.currentTimeMillis() }
@@ -53,6 +58,12 @@ class TargetPracticeGame {
         started = true
         shots.clear()
         resultTaken = false
+        record.value = null
+    }
+
+    /** Publishes the high-score comparison for the just-completed game. */
+    fun setRecord(comparison: RecordComparison) {
+        record.value = comparison
     }
 
     val complete: Boolean get() = shots.size >= TargetPracticeScoring.SHOTS_PER_GAME

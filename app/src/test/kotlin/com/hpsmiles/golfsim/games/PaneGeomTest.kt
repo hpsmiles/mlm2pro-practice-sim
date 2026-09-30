@@ -8,7 +8,7 @@ import org.junit.Test
 class PaneGeomTest {
 
     private val pane = PaneGeom(140.0)
-    // 140 m: plane y=35, cellH=2.8, cellW=5.6, zRef~=11.2, bottom~=7.0.
+    // 140 m: plane y=35, cellH=2.8, cellW=5.6, zRef~=12.5, bottom~=8.3.
 
     @Test
     fun `geometry scales with target`() {
@@ -61,9 +61,9 @@ class PaneGeomTest {
     fun `first forward crossing wins when samples dip through twice`() {
         val samples = listOf(
             TrajectorySample(0.0, 0.0, 0.0, 0.0),
-            TrajectorySample(0.0, 35.0, 10.0, 1.0), // first plane crossing at row 1, middle col
-            TrajectorySample(0.0, 36.0, 16.0, 1.1), // rises steeply above the plane
-            TrajectorySample(0.0, 37.0, 10.0, 1.2), // continues forward - NOT a forward crossing
+            TrajectorySample(0.0, 35.0, pane.zRefM, 1.0), // first plane crossing: middle row/col
+            TrajectorySample(0.0, 36.0, pane.topZM + 1.0, 1.1), // rises steeply above the plane
+            TrajectorySample(0.0, 37.0, pane.zRefM, 1.2), // continues forward - NOT a forward crossing
         )
         val crossing = pane.firstCrossing(samples)!!
         assertEquals(4, crossing.cell)

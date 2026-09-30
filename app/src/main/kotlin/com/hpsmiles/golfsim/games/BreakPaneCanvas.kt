@@ -55,7 +55,20 @@ fun BreakPaneCanvas(
                 }
             }
             project(camera, w, h, 0.0, 0.0, 0.05)?.let { drawCircle(GolfColors.TextPrimary, 4f, it) }
-            game.shots.lastOrNull()?.let { drawTracer(camera, w, h, it.shot.shotResult, playFraction, GameScene.apexVMin(w, h)) }
+            game.shots.lastOrNull()?.let { shot ->
+                val result = shot.shot.shotResult
+                val apexVMin = GameScene.apexVMin(w, h)
+                drawTracer(camera, w, h, result, playFraction, apexVMin)
+                game.pane?.let { pane ->
+                    val mark = PaneIntersection.mark(result, pane.planeYM, apexVMin)
+                    if (mark != null && playFraction >= mark.revealFraction) {
+                        project(camera, w, h, mark.xM, pane.planeYM, mark.zM)?.let { pt ->
+                            drawCircle(GolfColors.TextPrimary, 6f, pt)
+                            drawCircle(color = GolfColors.Amber, radius = 6f, center = pt, style = Stroke(2f))
+                        }
+                    }
+                }
+            }
         }
     }
 }

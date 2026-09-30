@@ -113,7 +113,7 @@ class BreakThePaneGameTest {
         assertEquals(9, game.shotCount)
         val result = game.takeResult()
         assertEquals(GameModes.BREAK_PANE, result!!.mode)
-        assertEquals(null, result.difficulty)
+        assertEquals("MEDIUM", result.difficulty)
         assertEquals(9, result.score) // shots taken
         assertNull(game.takeResult())
         game.start(target)
