@@ -1,8 +1,10 @@
 package com.hpsmiles.golfsim.games
 
 import androidx.compose.runtime.MutableIntState
+import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.snapshots.SnapshotStateList
 import com.hpsmiles.golfsim.core.ble.BallData
 import com.hpsmiles.golfsim.core.data.entity.GameModes
@@ -29,6 +31,9 @@ class BreakThePaneGame {
     val brokenCells: SnapshotStateList<Int> = mutableStateListOf()
     val tick: MutableIntState = mutableIntStateOf(0)
 
+    /** High-score comparison for the last completed game; null until AppRoot loads it. */
+    val record: MutableState<RecordComparison?> = mutableStateOf(null)
+
     var clockMs: () -> Long = { System.currentTimeMillis() }
 
     /** Injectable seam, same contract as TargetPracticeGame.simulator. */
@@ -44,24 +49,33 @@ class BreakThePaneGame {
         private set
     var targetM: Double = 140.0
         private set
+    var difficulty: Difficulty = Difficulty.MEDIUM
+        private set
     var lastFeedback: String = ""
         private set
     private var resultTaken = false
 
-    fun start(targetM: Double) {
+    fun start(targetM: Double, difficulty: Difficulty = Difficulty.MEDIUM) {
         this.targetM = targetM
+        this.difficulty = difficulty
         pane = PaneGeom(targetM)
         shots.clear()
         brokenCells.clear()
         lastFeedback = ""
         resultTaken = false
+        record.value = null
     }
 
     val complete: Boolean get() = brokenCells.size == PaneCellCount
     val shotCount: Int get() = shots.size
 
-    /** Green oval radius, scaled to the target (spec section 5: ~6 m at 140 m). */
-    fun greenRadiusM(): Double = 6.0 * targetM / 140.0
+    /** Green oval radius, scaled to the target by difficulty (spec 2026-09-30 §5). */
+    fun greenRadiusM(): Double = BreakPaneGreen.radiusAt140m(difficulty) * targetM / 140.0
+
+    /** Publishes the high-score comparison for the just-completed game. */
+    fun setRecord(comparison: RecordComparison) {
+        record.value = comparison
+    }
 
     /** One decoded measurement -> evaluated shot. Null on guard violation or completed game. */
     fun add(ballData: BallData): PaneShot? {
@@ -123,7 +137,7 @@ class BreakThePaneGame {
     fun takeResult(): GameResultPayload? {
         if (!complete || resultTaken) return null
         resultTaken = true
-        return GameResultPayload(GameModes.BREAK_PANE, null, targetM, shotCount)
+        return GameResultPayload(GameModes.BREAK_PANE, difficulty.name, targetM, shotCount)
     }
 
     private companion object {
