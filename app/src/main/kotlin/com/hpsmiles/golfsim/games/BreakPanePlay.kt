@@ -4,7 +4,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -73,30 +72,29 @@ fun BreakPanePlay(
         playFraction = playFraction,
     )
 
-    BoxWithConstraints(modifier.fillMaxSize().background(GolfColors.Base)) {
+    Box(modifier = modifier.fillMaxSize().background(GolfColors.Base)) {
         Row(modifier = Modifier.fillMaxSize()) {
-            // The camera clamp must cover the same box the canvas draws in so
-            // the follow cam frames the exact tracer path (GameScene.drawTracer contract).
+            // Camera and canvas both use the raw clamp so the follow cam
+            // frames the exact same tracer path the pane is drawn in.
             Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
-                BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-                    val wPx = constraints.maxWidth.toFloat()
-                    val hPx = constraints.maxHeight.toFloat()
-                    val apexVMin = GameScene.apexVMin(wPx, hPx)
-                    val camera = when (val shot = game.shots.lastOrNull()) {
-                        null -> RangeCamera.STATIC
-                        else -> FollowCam.cameraAt(
-                            shot.shot.shotResult,
-                            playFraction,
-                            apexVMin,
+                Box(modifier = Modifier.fillMaxSize()) {
+                        val apexVMin = FollowCam.RAW_APEX_VMIN
+                        val camera = when (val shot = game.shots.lastOrNull()) {
+                            null -> RangeCamera.STATIC
+                            else -> FollowCam.cameraAt(
+                                shot.shot.shotResult,
+                                playFraction,
+                                apexVMin,
+                            )
+                        }
+                        BreakPaneCanvas(
+                            game = game,
+                            playFraction = playFraction,
+                            camera = camera,
+                            modifier = Modifier.fillMaxSize(),
                         )
                     }
-                    BreakPaneCanvas(
-                        game = game,
-                        playFraction = playFraction,
-                        camera = camera,
-                        modifier = Modifier.fillMaxSize(),
-                    )
-                }
+
 
                 if (showResultOverlay && game.record.value?.outcome == RecordOutcome.NEW_RECORD) {
                     ConfettiBurst(modifier = Modifier.matchParentSize())

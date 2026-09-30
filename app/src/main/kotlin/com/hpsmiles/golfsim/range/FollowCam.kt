@@ -68,6 +68,14 @@ object FollowCam {
     const val REFERENCE_APEX_VMIN = -0.125
 
     /**
+     * Pass as [apexVMin] to disable apex scaling (draw true height).
+     * `vApex < apexVMin` is never true for NEGATIVE_INFINITY, so
+     * [scaledSamples] returns the raw samples and [cameraAt] chases the raw
+     * path. Used by Break the Pane so the tracer matches the raw-space pane.
+     */
+    val RAW_APEX_VMIN: Double = Double.NEGATIVE_INFINITY
+
+    /**
      * Float playback fractions arrive at endFraction a few ULPs below the
      * hold boundary (the caller computes endFraction(shot).toFloat(), and
      * the roundtrip maps below the Double guard time by up to ~1e-6 s).
