@@ -244,7 +244,6 @@ fun AppRoot() {
      */
     @Suppress("MissingPermission")
     suspend fun runConnectAttempt(): Boolean {
-        if (scanning) return false
         val s = connectionState
         if (s != ConnectionState.Disconnected && s !is ConnectionState.Faulted) return false
         linkEstablishedOnce = false
@@ -262,6 +261,11 @@ fun AppRoot() {
             val manager = context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
             gattClient.connect(manager.adapter.getRemoteDevice(device.address))
             return false
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            // DISCONNECT/connect-restart cancelled this attempt mid-scan — the
+            // job owner already tore the link down; never surface a fault or
+            // report a policy failure for our own cancellation.
+            throw e
         } catch (e: Exception) {
             Log.w(Mlm2proGattClient.TAG, "connect flow failed", e)
             gattClient.reportFault(e.javaClass.simpleName) // observer routes the retry
