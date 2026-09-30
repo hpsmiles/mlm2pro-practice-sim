@@ -39,6 +39,9 @@ import com.hpsmiles.golfsim.core.designsystem.GolfTypography
 import com.hpsmiles.golfsim.core.designsystem.SectionCard
 import com.hpsmiles.golfsim.range.AddClubForm
 import java.io.File
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import kotlinx.coroutines.launch
 
 private fun chipStyle(enabled: Boolean) = if (enabled) GolfColors.Teal else GolfColors.TextMuted
@@ -47,6 +50,8 @@ private fun chipStyle(enabled: Boolean) = if (enabled) GolfColors.Teal else Golf
  * M5: BAG editor — add/rename/delete club tags (spec D3). Deleting never
  * rewrites history: persisted shots keep their snapshotted club string.
  * M4b cards (auth guidance + bench capture tooling) are unchanged.
+ * Capture exports write timestamped files (capture-yyyyMMdd-HHmmss.properties)
+ * so multiple captures are retained per bench session.
  */
 @Composable
 fun SettingsScreen(
@@ -178,7 +183,8 @@ fun SettingsScreen(
                     modifier = Modifier
                         .border(1.dp, GolfColors.Line, RoundedCornerShape(50))
                         .clickable {
-                            val file = File(context.filesDir, "capture.properties")
+                            val stamp = SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(Date())
+                            val file = File(context.filesDir, "capture-$stamp.properties")
                             file.writeText(captureLog.exportProperties(firmware = "unknown-M4b-bench"))
                             lastExportPath = file.absolutePath
                             Log.i("CaptureExport", "fixture exported: ${file.absolutePath}")
