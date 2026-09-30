@@ -8,13 +8,13 @@ import org.junit.Test
 class PaneGeomTest {
 
     private val pane = PaneGeom(140.0)
-    // 140 m: plane y=35, cellH=2.8, cellW=5.6, zRef~=12.5, bottom~=8.3.
+    // 140 m: plane y=35, cellH=2.24, cellW=2.80, zRef~=12.5, bottom~=9.14.
 
     @Test
     fun `geometry scales with target`() {
         assertEquals(35.0, pane.planeYM, 1e-9)
-        assertEquals(2.8, pane.cellHM, 1e-9)
-        assertEquals(5.6, pane.cellWM, 1e-9)
+        assertEquals(2.24, pane.cellHM, 1e-9)
+        assertEquals(2.80, pane.cellWM, 1e-9)
     }
 
     @Test
