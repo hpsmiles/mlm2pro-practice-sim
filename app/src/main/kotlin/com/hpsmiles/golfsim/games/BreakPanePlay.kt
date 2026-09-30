@@ -143,7 +143,7 @@ fun BreakPanePlay(
                             Text("Total shots: ${game.shotCount}", style = GolfTypography.MetricValue, color = GolfColors.Teal)
                             Text("Lower is better.", style = GolfTypography.Body, color = GolfColors.TextSecondary)
                             Row(horizontalArrangement = Arrangement.spacedBy(GolfSpacing.Sm)) {
-                                Button(onClick = { game.start(game.targetM) }) { Text("PLAY AGAIN") }
+                                Button(onClick = { game.start(game.targetM, game.difficulty) }) { Text("PLAY AGAIN") }
                                 OutlinedButton(onClick = onBack) { Text("BACK") }
                             }
                         }
