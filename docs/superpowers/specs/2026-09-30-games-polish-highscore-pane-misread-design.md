@@ -92,7 +92,9 @@ New `games/ConfettiBurst.kt` — a `Canvas` particle burst driven by the existin
 - Synthetic stock 8i breaks the **middle** row at both 125 m and 140 m.
 - Clean captured shots: at 125 m middle=10 / top=1 / bottom=3; at 140 m middle=8 / top=1 / bottom=5 — middle-dominant with bottom and top still reachable, so "break all 9" stays completable.
 
-No change to plane fraction (0.25), cell height (2% of target) or cell width (4%). The bracket discontinuity at 120 m is now small (21°/7500 → 20°/6500).
+No change to plane fraction (0.25) or the bracket discontinuity at 120 m (21°/7500 → 20°/6500).
+
+> **Superseded:** the pane cell dimensions in this section are replaced by `2026-09-30-bp-pane-retune-design.md` (cellH = 1.6 % of target, cellW = 2.0 % of target). The pane-alignment recalibration (20°/6500 mid bracket) and the stock-shot middle-row anchor remain in force.
 
 Tests: update any `ReferenceTrajectoryTest`/`PaneGeomTest` assertion that pins `paneCrossingHeightM` or `zRefM`; add an assertion that a representative stock iron crossing lands in the middle row.
 

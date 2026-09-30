@@ -19,8 +19,8 @@ import kotlin.math.floor
 class PaneGeom(val targetM: Double) {
 
     val planeYM: Double = 0.25 * targetM
-    val cellHM: Double = 0.02 * targetM
-    val cellWM: Double = 0.04 * targetM
+    val cellHM: Double = 0.016 * targetM
+    val cellWM: Double = 0.020 * targetM
     val zRefM: Double = ReferenceTrajectory.paneCrossingHeightM(targetM)
     val bottomZM: Double = zRefM - 1.5 * cellHM
     val topZM: Double = bottomZM + 3 * cellHM
