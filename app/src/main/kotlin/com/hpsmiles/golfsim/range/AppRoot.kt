@@ -259,7 +259,7 @@ fun AppRoot() {
             }
             if (device == null) {
                 Log.w(Mlm2proGattClient.TAG, "auto-connect: scan timeout")
-                lastFailure = ConnectFailureHints.SCAN_TIMEOUT
+                lastFailure = ConnectFailureHints.phrase(ConnectFailureHints.SCAN_TIMEOUT)
                 return true
             }
             if (autoPolicy.stopped) return false // user disconnected mid-scan
