@@ -134,60 +134,22 @@ private fun GameCard(title: String, blurb: String, onClick: () -> Unit) {
 
 @Composable
 private fun TargetPracticeSetup(onStart: (Double, Difficulty) -> Unit, onCancel: () -> Unit) {
-    var sliderM by remember { mutableStateOf(140.0) }
-    var text by remember { mutableStateOf("140") }
-    var difficulty by remember { mutableStateOf(Difficulty.MEDIUM) }
-
-    Column(verticalArrangement = Arrangement.spacedBy(GolfSpacing.Lg)) {
-        Text("TARGET PRACTICE", style = GolfTypography.ScreenTitle, color = GolfColors.Teal)
-        Slider(
-            value = sliderM.toFloat(),
-            onValueChange = {
-                sliderM = it.toDouble()
-                text = String.format(Locale.US, "%.0f", sliderM)
-            },
-            valueRange = DIST_MIN_M.toFloat()..DIST_MAX_M.toFloat(),
-        )
-        OutlinedTextField(
-            value = text,
-            onValueChange = { raw ->
-                text = raw
-                raw.toDoubleOrNull()?.let { sliderM = it.coerceIn(DIST_MIN_M, DIST_MAX_M) }
-            },
-            label = { Text("Distance (m, $DIST_MIN_M-$DIST_MAX_M)") },
-            modifier = Modifier.width(260.dp),
-        )
-        Row(horizontalArrangement = Arrangement.spacedBy(GolfSpacing.Sm)) {
-            Difficulty.entries.forEach { d ->
-                Box(
-                    modifier = Modifier
-                        .border(
-                            1.dp,
-                            if (difficulty == d) GolfColors.Teal else GolfColors.Line,
-                            RoundedCornerShape(GolfSpacing.Sm),
-                        )
-                        .clickable { difficulty = d }
-                        .padding(horizontal = GolfSpacing.Md, vertical = GolfSpacing.Xs),
-                ) {
-                    Text(d.name, style = GolfTypography.Status, color = if (difficulty == d) GolfColors.Teal else GolfColors.TextSecondary)
-                }
-            }
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(GolfSpacing.Sm)) {
-            Button(onClick = { onStart(sliderM, difficulty) }) { Text("START") }
-            OutlinedButton(onClick = onCancel) { Text("CANCEL") }
-        }
-    }
+    GameSetupScreen(title = "TARGET PRACTICE", onStart = onStart, onCancel = onCancel)
 }
 
 @Composable
 private fun BreakPaneSetup(onStart: (Double, Difficulty) -> Unit, onCancel: () -> Unit) {
+    GameSetupScreen(title = "BREAK THE PANE", onStart = onStart, onCancel = onCancel)
+}
+
+@Composable
+private fun GameSetupScreen(title: String, onStart: (Double, Difficulty) -> Unit, onCancel: () -> Unit) {
     var sliderM by remember { mutableStateOf(140.0) }
     var text by remember { mutableStateOf("140") }
     var difficulty by remember { mutableStateOf(Difficulty.MEDIUM) }
 
     Column(verticalArrangement = Arrangement.spacedBy(GolfSpacing.Lg)) {
-        Text("BREAK THE PANE", style = GolfTypography.ScreenTitle, color = GolfColors.Teal)
+        Text(title, style = GolfTypography.ScreenTitle, color = GolfColors.Teal)
         Slider(
             value = sliderM.toFloat(),
             onValueChange = {
