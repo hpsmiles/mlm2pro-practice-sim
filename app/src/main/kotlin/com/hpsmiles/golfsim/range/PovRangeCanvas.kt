@@ -287,35 +287,64 @@ fun PovRangeCanvas(
                 pts.add(i to p)
             }
             if (pts.isEmpty()) return
-            val path = Path()
-            path.moveTo(pts[0].second.x, pts[0].second.y)
-            for (j in 1 until pts.size) {
-                if (pts[j].first - pts[j - 1].first > 30) {
-                    // Frame exit gap: resume as a new sub-path, never draw
-                    // a straight line across it.
-                    path.moveTo(pts[j].second.x, pts[j].second.y)
-                } else {
-                    path.lineTo(pts[j].second.x, pts[j].second.y)
-                }
+
+            // Spec 2026-09-30: split the stroke at the landing boundary so
+            // the ground phase reads thinner and fainter than the flight.
+            val boundary = pts.indexOfFirst { samples[it.first].tSec > s.flightTimeSec }
+            val flightPts = if (boundary < 0) pts else pts.subList(0, boundary)
+            // The ground stroke keeps the last flight point so the two
+            // strokes join exactly at the touchdown.
+            val groundPts = when {
+                boundary < 0 -> emptyList()
+                boundary > 0 -> listOf(pts[boundary - 1]) + pts.subList(boundary, pts.size)
+                else -> pts.subList(boundary, pts.size)
             }
-            // Tangent lead-in: extend the arc's own first segment backwards to
-            // the bottom edge (when the arc starts low in frame), so the launch
-            // lead-in is exactly collinear with the curve — no fixed anchor
-            // point, no elbow where it joins.
-            if (pts.size >= 2 && pts[1].first == pts[0].first + 1 && pts[0].second.y > h * 0.6f) {
-                val p0 = pts[0].second
-                val p1 = pts[1].second
-                val dy = p1.y - p0.y
-                if (dy < -1f) {
-                    val u = ((h - 8f) - p0.y) / dy
-                    val qx = p0.x + u * (p1.x - p0.x)
-                    if (u > 0.02f && qx >= 0f && qx <= w) {
-                        path.moveTo(qx, h - 8f)
-                        path.lineTo(p0.x, p0.y)
+
+            fun trace(slice: List<Pair<Int, Offset>>): Path? {
+                if (slice.isEmpty()) return null
+                val path = Path()
+                path.moveTo(slice[0].second.x, slice[0].second.y)
+                for (j in 1 until slice.size) {
+                    if (slice[j].first - slice[j - 1].first > 30) {
+                        // Frame exit gap: resume as a new sub-path, never
+                        // draw a straight line across it.
+                        path.moveTo(slice[j].second.x, slice[j].second.y)
+                    } else {
+                        path.lineTo(slice[j].second.x, slice[j].second.y)
                     }
                 }
+                return path
             }
-            drawPath(path, color, style = Stroke(width = width))
+
+            val flightPath = trace(flightPts)
+            if (flightPath != null) {
+                // Tangent lead-in: extend the arc's own first segment backwards
+                // to the bottom edge (when the arc starts low in frame), so the
+                // launch lead-in is exactly collinear with the curve — no fixed
+                // anchor point, no elbow where it joins.
+                if (flightPts.size >= 2 && flightPts[1].first == flightPts[0].first + 1 && flightPts[0].second.y > h * 0.6f) {
+                    val p0 = flightPts[0].second
+                    val p1 = flightPts[1].second
+                    val dy = p1.y - p0.y
+                    if (dy < -1f) {
+                        val u = ((h - 8f) - p0.y) / dy
+                        val qx = p0.x + u * (p1.x - p0.x)
+                        if (u > 0.02f && qx >= 0f && qx <= w) {
+                            flightPath.moveTo(qx, h - 8f)
+                            flightPath.lineTo(p0.x, p0.y)
+                        }
+                    }
+                }
+                drawPath(flightPath, color, style = Stroke(width = width))
+            }
+            val groundPath = trace(groundPts)
+            if (groundPath != null) {
+                drawPath(
+                    groundPath,
+                    color.copy(alpha = color.alpha * 0.8f),
+                    style = Stroke(width = width * 0.6f),
+                )
+            }
         }
 
         // Previous shots first (under the current tracer).
