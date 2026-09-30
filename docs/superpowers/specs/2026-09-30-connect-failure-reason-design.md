@@ -35,8 +35,10 @@ New `lastFailure: String?` remember-state holding a display-ready phrase.
 **Set points:**
 
 - Scan timeout in `runConnectAttempt` (no advertisement within 10 s): set
-  `lastFailure = ConnectFailureHints.SCAN_TIMEOUT` before returning `true`
-  to the policy. Today this failure only reaches a log line.
+  `lastFailure = ConnectFailureHints.phrase(ConnectFailureHints.SCAN_TIMEOUT)`
+  (`NO MONITOR FOUND`) before returning `true` to the policy. `lastFailure`
+  is display-ready at every set point; the sentinel never reaches the strip.
+  Today this failure only reaches a log line.
 - `routeConnectionState` on `Faulted`: set
   `lastFailure = ConnectFailureHints.phrase(fault.reason)`. This covers
   connect-time faults and mid-session link drops alike, so a retry cycle
