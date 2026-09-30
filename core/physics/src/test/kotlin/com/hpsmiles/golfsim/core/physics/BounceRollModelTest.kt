@@ -131,4 +131,61 @@ class BounceRollModelTest {
             green.deltaY < fairway.deltaY,
         )
     }
+
+    /** Spec 2026-09-30: the bounce loop records one hop per FlightSolver solve. */
+    @Test
+    fun wedgeBackspinHopsBackwardOnGreen() {
+        // Same steep, fast, high-spin impact as wedgeBackspinRollsBackwardOnGreen:
+        // the Penner reversal makes the FIRST recorded touch land behind carry.
+        val landing = LandingState(
+            position = Vec3(0.0, 50.0, 0.0),
+            velocity = Vec3(0.0, 14.0, -12.0),
+            spin = Vec3(700.0, 0.0, 0.0),   // ~6685 rpm backspin
+            apexM = 10.0,
+            flightTimeSec = 3.0,
+        )
+        val ground = BounceRollModel.bounceAndRoll(landing, Surface.GREEN_NORMAL, 45.0, env)
+        assertTrue("expected recorded hops, got ${ground.hops.size}", ground.hops.isNotEmpty())
+        assertTrue("hop count ${ground.hops.size} exceeds MAX_BOUNCES - 1", ground.hops.size <= 3)
+        for (hop in ground.hops) {
+            assertTrue("apex must be positive, got ${hop.apexM}", hop.apexM > 0.0)
+            assertTrue("duration must be positive, got ${hop.durationSec}", hop.durationSec > 0.0)
+        }
+        assertTrue(
+            "expected backward first touch, got ${ground.hops.first().landingY}",
+            ground.hops.first().landingY < 0.0,
+        )
+    }
+
+    /**
+     * 2026-09-30 live 8i capture (shot-1) on a green: non-spin-dominant
+     * impact keeps the whole hop chain forward, and the final touch->rest
+     * roll reconstructs the remaining ground delta (spec invariant).
+     */
+    @Test
+    fun midIronLiveProfileHopsForwardOnGreen() {
+        val landing = LandingState(
+            position = Vec3(0.0, 0.0, 0.0),
+            velocity = Vec3(0.0, 16.60, -15.62),
+            spin = Vec3(469.0, 0.0, 0.0),   // ~4478 rpm backspin at impact
+            apexM = 20.0,
+            flightTimeSec = 5.0,
+        )
+        val ground = BounceRollModel.bounceAndRoll(landing, Surface.GREEN_NORMAL, 20.3, env)
+        assertTrue("expected recorded hops, got ${ground.hops.size}", ground.hops.isNotEmpty())
+        assertTrue("hop count ${ground.hops.size} exceeds MAX_BOUNCES - 1", ground.hops.size <= 3)
+        var prevY = 0.0
+        for (hop in ground.hops) {
+            assertTrue(hop.apexM > 0.0)
+            assertTrue(hop.durationSec > 0.0)
+            assertTrue("touches must stay forward, got ${hop.landingY}", hop.landingY > 0.0)
+            assertTrue("cumulative touches must advance, got ${hop.landingY}", hop.landingY > prevY)
+            prevY = hop.landingY
+        }
+        // Spec invariant: last recorded touch + final roll == total ground delta,
+        // and the remaining roll is forward (or zero).
+        val last = ground.hops.last()
+        assertTrue("roll must not reverse", ground.deltaY >= last.landingY)
+        assertTrue((ground.deltaX - last.landingX).isFinite())
+    }
 }

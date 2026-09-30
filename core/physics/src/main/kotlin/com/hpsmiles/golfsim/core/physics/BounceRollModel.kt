@@ -51,6 +51,7 @@ object BounceRollModel {
         var bounces = 0
         var dx = 0.0
         var dy = 0.0
+        val hops = ArrayList<GroundHop>()
 
         while (true) {
             val vh = Math.hypot(vx, vy)
@@ -137,12 +138,13 @@ object BounceRollModel {
             )
             dx += hop.position.x
             dy += hop.position.y
+            hops.add(GroundHop(dx, dy, hop.apexM, hop.flightTimeSec))
             vx = hop.velocity.x
             vy = hop.velocity.y
             vz = hop.velocity.z
             spin = hop.spin
         }
 
-        return GroundResult(dx, dy, bounces)
+        return GroundResult(dx, dy, bounces, hops)
     }
 }

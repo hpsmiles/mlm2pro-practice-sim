@@ -5,4 +5,5 @@ data class GroundResult(
     val deltaX: Double,
     val deltaY: Double,
     val bounces: Int,
+    val hops: List<GroundHop> = emptyList(),
 )
