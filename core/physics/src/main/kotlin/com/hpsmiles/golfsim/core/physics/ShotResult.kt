@@ -5,6 +5,8 @@ package com.hpsmiles.golfsim.core.physics
  * rolloutM = totalM - carryM (can be negative — spin-back on soft greens).
  * sideM: +x is right of the target line looking down-range.
  * restX/restY = bounce/roll end position (restX == sideM, hypot(restX, restY) == totalM).
+ * groundHops = recorded bounce chain (cumulative touches relative to the
+ * first ground touch) for hop-aware ground rendering.
  */
 data class ShotResult(
     val carryM: Double,
@@ -16,4 +18,5 @@ data class ShotResult(
     val samples: List<TrajectorySample> = emptyList(),
     val restX: Double = 0.0,
     val restY: Double = 0.0,
+    val groundHops: List<GroundHop> = emptyList(),
 )

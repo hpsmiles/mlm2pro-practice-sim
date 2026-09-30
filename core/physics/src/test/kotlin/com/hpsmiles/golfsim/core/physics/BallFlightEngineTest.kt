@@ -131,4 +131,17 @@ class BallFlightEngineTest {
         assertTrue(axisMinus.sideM.isFinite())
         assertEquals(axisPlus.sideM, -axisMinus.sideM, 1e-9)
     }
+
+    /** Spec 2026-09-30: the engine surfaces the recorded hop chain for rendering. */
+    @Test
+    fun groundHopsAreExposedOnShotResult() {
+        val wedge = LaunchConditions(30.0, 45.0, 9000)
+        val shot = BallFlightEngine.simulate(wedge, surfaces = UniformSurface(Surface.GREEN_NORMAL))
+        assertTrue("expected recorded hops", shot.groundHops.isNotEmpty())
+        assertTrue("hop count ${shot.groundHops.size} exceeds MAX_BOUNCES - 1", shot.groundHops.size <= 3)
+        for (hop in shot.groundHops) {
+            assertTrue(hop.apexM > 0.0)
+            assertTrue(hop.durationSec > 0.0)
+        }
+    }
 }

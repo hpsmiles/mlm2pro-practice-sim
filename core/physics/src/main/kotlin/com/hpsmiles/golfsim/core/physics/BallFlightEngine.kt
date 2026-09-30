@@ -50,6 +50,7 @@ object BallFlightEngine {
             samples = landing.samples,
             restX = endX,
             restY = endY,
+            groundHops = ground.hops,
         )
     }
 }
