@@ -39,6 +39,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.hpsmiles.golfsim.core.connect.AutoConnectPolicy
 import com.hpsmiles.golfsim.core.connect.ConnectionState
 import com.hpsmiles.golfsim.core.connect.EnvironmentConfig
 import com.hpsmiles.golfsim.core.connect.HandshakeSequencer
@@ -60,10 +61,14 @@ import com.hpsmiles.golfsim.games.GamesScreen
 import com.hpsmiles.golfsim.games.TargetPracticeGame
 import com.hpsmiles.golfsim.history.HistoryScreen
 import com.hpsmiles.golfsim.settings.SettingsScreen
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 
 private enum class RangeTab { RANGE, GAMES, SETTINGS, HISTORY }
 
@@ -204,7 +209,10 @@ fun AppRoot() {
 
     var scanning by remember { mutableStateOf(false) }
     // MODE toggle state lives here so the StatusStrip demo fallback mirrors it.
-    var demo by remember { mutableStateOf(true) }
+    // Auto-connect boot (2026-09-30 spec §1): the app boots LIVE, connects and
+    // auto-arms on its own; MODE: DEMO is an explicit opt-in for the FIRE
+    // shot simulator.
+    var demo by remember { mutableStateOf(false) }
     val demoSource = remember { com.hpsmiles.golfsim.core.ble.DemoShotSource() }
 
     // FIRE lives in the rail (2026-09-24 user request); demo firing routes to
@@ -213,47 +221,152 @@ fun AppRoot() {
         if (demo) routeShot(demoSource.nextShot(), ShotSource.DEMO)
     }
 
-    // BLE permission gate hoisted from RangeScreen (CONNECT moved to the rail).
-    var permissionDenied by remember { mutableStateOf(false) }
-    val permissionLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
-        androidx.activity.result.contract.ActivityResultContracts.RequestMultiplePermissions(),
-    ) { grants ->
-        permissionDenied = grants.values.any { !it }
-    }
+    // --- Auto-connect boot cycle (spec 2026-09-30 §2) ------------------------
+    // Pure policy decides; this block only executes its actions. All event
+    // routing happens on the main thread (collectors, launcher callback and
+    // chip onClicks), so there are no cross-thread races on the policy.
+    val autoPolicy = remember { AutoConnectPolicy() }
+    var autoRetryLabel by remember { mutableStateOf<String?>(null) }
+    // Once-per-link latch: Arm fires on the first Armed/Disarmed observation
+    // of a link; manual STANDBY afterwards never re-triggers it.
+    var linkEstablishedOnce by remember { mutableStateOf(false) }
+    var retryJob by remember { mutableStateOf<Job?>(null) }
+    var attemptJob by remember { mutableStateOf<Job?>(null) }
 
-    // M4b bench connect flow: scan for the first MLM2- device, then GATT-connect.
-    // Mlm2proScanner stops scanning when the collecting coroutine is cancelled.
-    // Lint contract: RangeScreen's CONNECT button checks/request both runtime
-    // permissions before this fires; the :app manifest declares SCAN+CONNECT.
+    var permissionDenied by remember { mutableStateOf(false) }
+
+    /**
+     * One cycle attempt: scan with a 10 s budget, then GATT-connect.
+     * Returns true only when the caller must report a failure to the policy
+     * (scan timeout — no state transition follows). Every other failure
+     * arrives later as a Faulted/Disconnected state and is routed by the
+     * observer; connect() itself is guarded against forked links.
+     */
     @Suppress("MissingPermission")
-    fun onConnectRequested() {
-        if (scanning) return
-        // Bench finding (double-tap during handshake): the `scanning` flag
-        // resets as soon as connect() returns, so a second tap mid-handshake
-        // used to start a second scan + GATT link. Refuse unless the client
-        // is actually down (Disconnected) or recoverable (Faulted).
+    suspend fun runConnectAttempt(): Boolean {
+        if (scanning) return false
         val s = connectionState
-        if (s != ConnectionState.Disconnected && s !is ConnectionState.Faulted) return
+        if (s != ConnectionState.Disconnected && s !is ConnectionState.Faulted) return false
+        linkEstablishedOnce = false
         scanning = true
-        scope.launch {
-            try {
-                val device = Mlm2proScanner(context).scan().first()
-                Log.i(Mlm2proGattClient.TAG, "scan found device=${device.address}")
-                val manager = context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
-                gattClient.connect(manager.adapter.getRemoteDevice(device.address))
-            } catch (e: Exception) {
-                // Bench diagnostics (attempt 3): this catch previously swallowed
-                // every scan/connect-flow failure silently, leaving the strip
-                // stuck on CONNECTING with no reason.
-                Log.w(Mlm2proGattClient.TAG, "connect flow failed", e)
-                gattClient.reportFault(e.javaClass.simpleName)
-            } finally {
-                scanning = false
+        try {
+            val device = withTimeoutOrNull(10_000L) {
+                Mlm2proScanner(context).scan().first()
             }
+            if (device == null) {
+                Log.w(Mlm2proGattClient.TAG, "auto-connect: scan timeout")
+                return true
+            }
+            if (autoPolicy.stopped) return false // user disconnected mid-scan
+            Log.i(Mlm2proGattClient.TAG, "scan found device=${device.address}")
+            val manager = context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
+            gattClient.connect(manager.adapter.getRemoteDevice(device.address))
+            return false
+        } catch (e: Exception) {
+            Log.w(Mlm2proGattClient.TAG, "connect flow failed", e)
+            gattClient.reportFault(e.javaClass.simpleName) // observer routes the retry
+            return false
+        } finally {
+            scanning = false
         }
     }
 
-    // BLE permission gate for the rail CONNECT chip (hoisted from RangeScreen).
+    /** Execute one policy action on the main thread. */
+    fun handleAutoAction(action: AutoConnectPolicy.Action?) {
+        when (action) {
+            is AutoConnectPolicy.Action.StartAttempt -> {
+                retryJob?.cancel(); retryJob = null
+                autoRetryLabel = null
+                attemptJob?.cancel()
+                attemptJob = scope.launch {
+                    if (runConnectAttempt()) handleAutoAction(autoPolicy.attemptFailed())
+                }
+            }
+            is AutoConnectPolicy.Action.WaitThenAttempt -> {
+                attemptJob?.cancel()
+                autoRetryLabel = "RETRYING (${action.retryNumber}/${autoPolicy.maxRetries})\u2026"
+                retryJob = scope.launch {
+                    delay(action.delayMs)
+                    autoRetryLabel = null
+                    attemptJob = scope.launch {
+                        if (runConnectAttempt()) handleAutoAction(autoPolicy.attemptFailed())
+                    }
+                }
+            }
+            // The client's ticker already arms 500 ms after READY; this is a
+            // guarded no-op belt (sequencer.arm() returns null when invalid).
+            AutoConnectPolicy.Action.Arm -> gattClient.arm()
+            AutoConnectPolicy.Action.GiveUp -> autoRetryLabel = null
+            AutoConnectPolicy.Action.Stop -> {
+                retryJob?.cancel(); retryJob = null
+                attemptJob?.cancel(); attemptJob = null
+                autoRetryLabel = null
+            }
+            null -> Unit
+        }
+    }
+
+    val permissionLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.RequestMultiplePermissions(),
+    ) { grants ->
+        val allGranted = grants.values.all { it }
+        permissionDenied = !allGranted
+        // Grant (first boot or after a deny) begins a fresh cycle immediately —
+        // no second CONNECT tap (spec §1). Same behavior for a CONNECT tap that
+        // had to request permissions first.
+        if (allGranted) handleAutoAction(autoPolicy.manualConnect())
+    }
+
+    /** Route client state transitions into policy events (spec §2 observer). */
+    fun routeConnectionState(s: ConnectionState) {
+        when (s) {
+            is ConnectionState.Armed, is ConnectionState.Disarmed ->
+                if (!linkEstablishedOnce) {
+                    linkEstablishedOnce = true
+                    handleAutoAction(autoPolicy.linkEstablished())
+                }
+            is ConnectionState.Faulted ->
+                if (linkEstablishedOnce) {
+                    linkEstablishedOnce = false
+                    handleAutoAction(autoPolicy.linkDropped())
+                } else {
+                    handleAutoAction(autoPolicy.attemptFailed())
+                }
+            is ConnectionState.Disconnected ->
+                if (linkEstablishedOnce) {
+                    linkEstablishedOnce = false
+                    handleAutoAction(autoPolicy.linkDropped())
+                }
+            ConnectionState.Connecting, ConnectionState.Handshaking -> Unit
+        }
+    }
+
+    LaunchedEffect(gattClient, autoPolicy) {
+        gattClient.state.collect { routeConnectionState(it) }
+    }
+
+    // Boot: connect as soon as the app opens (spec §1). Missing permissions
+    // are requested immediately; the launcher callback starts the cycle on
+    // grant. Runs once per composition lifetime (key Unit).
+    LaunchedEffect(Unit) {
+        val scanGranted = androidx.core.content.ContextCompat.checkSelfPermission(
+            context, android.Manifest.permission.BLUETOOTH_SCAN,
+        ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+        val connectGranted = androidx.core.content.ContextCompat.checkSelfPermission(
+            context, android.Manifest.permission.BLUETOOTH_CONNECT,
+        ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+        if (scanGranted && connectGranted) {
+            handleAutoAction(autoPolicy.start())
+        } else {
+            permissionLauncher.launch(
+                arrayOf(
+                    android.Manifest.permission.BLUETOOTH_SCAN,
+                    android.Manifest.permission.BLUETOOTH_CONNECT,
+                ),
+            )
+        }
+    }
+
     fun connectTapped() {
         val scanGranted = androidx.core.content.ContextCompat.checkSelfPermission(
             context, android.Manifest.permission.BLUETOOTH_SCAN,
@@ -263,7 +376,7 @@ fun AppRoot() {
         ) == android.content.pm.PackageManager.PERMISSION_GRANTED
         if (scanGranted && connectGranted) {
             permissionDenied = false
-            onConnectRequested()
+            handleAutoAction(autoPolicy.manualConnect())
         } else {
             permissionLauncher.launch(
                 arrayOf(
@@ -371,7 +484,13 @@ fun AppRoot() {
                         RailChip(
                             label = "DISCONNECT",
                             border = GolfColors.Line,
-                            onClick = { disconnectClient(gattClient) },
+                            onClick = {
+                                // Stop the cycle BEFORE tearing the link down so a
+                                // pending wait/attempt cannot resurrect the connection.
+                                handleAutoAction(autoPolicy.userDisconnect())
+                                linkEstablishedOnce = false
+                                disconnectClient(gattClient)
+                            },
                         )
                     }
 
@@ -469,7 +588,11 @@ fun AppRoot() {
             val persistError by sessionRepository.persistError.collectAsState()
             StatusStrip(
                 armed = demo || connectionState is ConnectionState.Armed,
-                info = if (persistError) "DB WRITE FAILING" else describe(connectionState, demo = demo, scanning = scanning),
+                info = if (persistError) {
+                    "DB WRITE FAILING"
+                } else {
+                    describe(connectionState, demo = demo, scanning = scanning, retryLabel = autoRetryLabel)
+                },
             )
         }
 
@@ -534,8 +657,14 @@ private fun RailChip(
 }
 
 /** StatusStrip text mapping per the M4b plan (demo fallback first). */
-private fun describe(state: ConnectionState, demo: Boolean, scanning: Boolean): String = when {
+private fun describe(
+    state: ConnectionState,
+    demo: Boolean,
+    scanning: Boolean,
+    retryLabel: String? = null,
+): String = when {
     demo -> "DEMO MODE - FIRE TO SHOOT"
+    retryLabel != null -> retryLabel
     scanning -> "SCANNING\u2026"
     else -> when (state) {
         ConnectionState.Disconnected -> "BLE DISCONNECTED"
