@@ -113,6 +113,10 @@ fun TargetPracticePlay(
                     )
                 }
 
+                if (showResultOverlay && game.record.value?.outcome == RecordOutcome.NEW_RECORD) {
+                    ConfettiBurst(modifier = Modifier.matchParentSize())
+                }
+
                 // HUD: per-shot point indicators + running total.
                 Row(
                     modifier = Modifier.align(Alignment.TopStart).padding(GolfSpacing.Sm),
@@ -166,6 +170,18 @@ fun TargetPracticePlay(
                                 style = GolfTypography.MetricValue,
                                 color = GolfColors.Teal,
                             )
+                            game.record.value?.let { rec ->
+                                Text(
+                                    text = GameRecord.headline(rec, lowerIsBetter = false),
+                                    style = GolfTypography.MetricValue,
+                                    color = if (rec.outcome == RecordOutcome.NEW_RECORD) GolfColors.Teal else GolfColors.TextSecondary,
+                                )
+                                Text(
+                                    text = GameRecord.detail(rec, lowerIsBetter = false),
+                                    style = GolfTypography.Body,
+                                    color = GolfColors.TextSecondary,
+                                )
+                            }
                             Row(horizontalArrangement = Arrangement.spacedBy(GolfSpacing.Sm)) {
                                 Button(onClick = { game.start(game.targetM, game.difficulty) }) {
                                     Text("PLAY AGAIN")
