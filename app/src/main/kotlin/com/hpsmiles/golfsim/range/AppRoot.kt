@@ -470,8 +470,12 @@ fun AppRoot() {
                     // CONNECT live at the BOTTOM of the rail, under a flexible
                     // spacer; ARM/STANDBY + DISCONNECT follow beneath them.
                     Spacer(Modifier.weight(1f))
-                    RailChip("FIRE", border = GolfColors.Amber, labelColor = GolfColors.Amber,
-                        onClick = { fireDemo() })
+                    // FIRE only makes sense in DEMO (2026-09-30 user request):
+                    // in LIVE mode shots arrive from the monitor, so hide it.
+                    if (demo) {
+                        RailChip("FIRE", border = GolfColors.Amber, labelColor = GolfColors.Amber,
+                            onClick = { fireDemo() })
+                    }
                     RailChip(
                         label = if (demo) "MODE: DEMO" else "MODE: LIVE",
                         border = if (demo) GolfColors.Line else GolfColors.Teal,
