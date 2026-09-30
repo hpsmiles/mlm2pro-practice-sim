@@ -8,6 +8,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
 import com.hpsmiles.golfsim.core.designsystem.GolfColors
+import com.hpsmiles.golfsim.range.FollowCam
 import com.hpsmiles.golfsim.range.PovProjector
 import com.hpsmiles.golfsim.range.RangeCamera
 
@@ -57,7 +58,7 @@ fun BreakPaneCanvas(
             project(camera, w, h, 0.0, 0.0, 0.05)?.let { drawCircle(GolfColors.TextPrimary, 4f, it) }
             game.shots.lastOrNull()?.let { shot ->
                 val result = shot.shot.shotResult
-                val apexVMin = GameScene.apexVMin(w, h)
+                val apexVMin = FollowCam.RAW_APEX_VMIN
                 drawTracer(camera, w, h, result, playFraction, apexVMin)
                 game.pane?.let { pane ->
                     val mark = PaneIntersection.mark(result, pane.planeYM, apexVMin)
