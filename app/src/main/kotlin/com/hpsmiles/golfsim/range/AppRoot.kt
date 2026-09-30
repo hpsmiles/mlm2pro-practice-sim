@@ -227,6 +227,11 @@ fun AppRoot() {
     // chip onClicks), so there are no cross-thread races on the policy.
     val autoPolicy = remember { AutoConnectPolicy() }
     var autoRetryLabel by remember { mutableStateOf<String?>(null) }
+    // Last failure cause, display-ready (spec 2026-09-30 connect-failure-reason
+    // §3): set on scan timeout and on every Faulted; cleared when a new attempt
+    // starts, the link establishes, or the user disconnects. GiveUp keeps it so
+    // the final BLE DISCONNECTED label explains itself.
+    var lastFailure by remember { mutableStateOf<String?>(null) }
     // Once-per-link latch: Arm fires on the first Armed/Disarmed observation
     // of a link; manual STANDBY afterwards never re-triggers it.
     var linkEstablishedOnce by remember { mutableStateOf(false) }
@@ -254,6 +259,7 @@ fun AppRoot() {
             }
             if (device == null) {
                 Log.w(Mlm2proGattClient.TAG, "auto-connect: scan timeout")
+                lastFailure = ConnectFailureHints.SCAN_TIMEOUT
                 return true
             }
             if (autoPolicy.stopped) return false // user disconnected mid-scan
@@ -281,6 +287,7 @@ fun AppRoot() {
             is AutoConnectPolicy.Action.StartAttempt -> {
                 retryJob?.cancel(); retryJob = null
                 autoRetryLabel = null
+                lastFailure = null
                 attemptJob?.cancel()
                 attemptJob = scope.launch {
                     if (runConnectAttempt()) handleAutoAction(autoPolicy.attemptFailed())
@@ -305,6 +312,7 @@ fun AppRoot() {
                 retryJob?.cancel(); retryJob = null
                 attemptJob?.cancel(); attemptJob = null
                 autoRetryLabel = null
+                lastFailure = null
             }
             null -> Unit
         }
@@ -327,15 +335,18 @@ fun AppRoot() {
             is ConnectionState.Armed, is ConnectionState.Disarmed ->
                 if (!linkEstablishedOnce) {
                     linkEstablishedOnce = true
+                    lastFailure = null
                     handleAutoAction(autoPolicy.linkEstablished())
                 }
-            is ConnectionState.Faulted ->
+            is ConnectionState.Faulted -> {
+                lastFailure = ConnectFailureHints.phrase(s.reason)
                 if (linkEstablishedOnce) {
                     linkEstablishedOnce = false
                     handleAutoAction(autoPolicy.linkDropped())
                 } else {
                     handleAutoAction(autoPolicy.attemptFailed())
                 }
+            }
             is ConnectionState.Disconnected ->
                 if (linkEstablishedOnce) {
                     linkEstablishedOnce = false
@@ -595,7 +606,13 @@ fun AppRoot() {
                 info = if (persistError) {
                     "DB WRITE FAILING"
                 } else {
-                    describe(connectionState, demo = demo, scanning = scanning, retryLabel = autoRetryLabel)
+                    describe(
+                        connectionState,
+                        demo = demo,
+                        scanning = scanning,
+                        retryLabel = autoRetryLabel,
+                        failureReason = lastFailure,
+                    )
                 },
             )
         }
