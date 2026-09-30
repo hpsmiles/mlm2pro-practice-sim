@@ -17,4 +17,18 @@ interface GameResultDao {
 
     @Query("SELECT * FROM game_results ORDER BY playedAtEpochMs DESC, id DESC")
     fun observeAll(): Flow<List<GameResultEntity>>
+
+    /** Prior-best score (higher is better) for a record key, or null when none. */
+    @Query(
+        "SELECT MAX(score) FROM game_results " +
+            "WHERE mode = :mode AND difficulty = :difficulty AND distanceBin = :distanceBin",
+    )
+    suspend fun bestHighScore(mode: String, difficulty: String, distanceBin: Int): Int?
+
+    /** Prior-best score (lower is better) for a record key, or null when none. */
+    @Query(
+        "SELECT MIN(score) FROM game_results " +
+            "WHERE mode = :mode AND difficulty = :difficulty AND distanceBin = :distanceBin",
+    )
+    suspend fun bestLowScore(mode: String, difficulty: String, distanceBin: Int): Int?
 }

@@ -18,7 +18,7 @@ object GameModes {
 data class GameResultEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val mode: String,
-    /** EASY/MEDIUM/HARD; null for Break the Pane. */
+    /** EASY/MEDIUM/HARD. Always set; legacy Break-the-Pane rows may be null. */
     val difficulty: String?,
     /** Target distance rounded to the nearest 10 m. */
     val distanceBin: Int,

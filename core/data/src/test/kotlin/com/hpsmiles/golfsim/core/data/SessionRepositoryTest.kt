@@ -344,6 +344,34 @@ class SessionRepositoryTest {
     }
 
     @Test
+    fun `bestGameScore returns the prior best per key and never the new row`() = runTest {
+        val repo = newRepo()
+        repo.initializeAndRestore()
+        // Two TP rows at the same key (140 m -> bin 140), plus a different key.
+        repo.saveGameResult("TARGET_PRACTICE", "MEDIUM", 140.0, 90, ShotSource.LIVE, 1L)
+        repo.saveGameResult("TARGET_PRACTICE", "MEDIUM", 140.0, 80, ShotSource.LIVE, 2L)
+        repo.saveGameResult("TARGET_PRACTICE", "HARD", 140.0, 120, ShotSource.LIVE, 3L)
+        repo.saveGameResult("BREAK_PANE", "MEDIUM", 140.0, 12, ShotSource.LIVE, 4L)
+        repo.saveGameResult("BREAK_PANE", "MEDIUM", 140.0, 9, ShotSource.LIVE, 5L)
+
+        assertEquals(90, repo.bestGameScore("TARGET_PRACTICE", "MEDIUM", 140.0, lowerIsBetter = false))
+        assertEquals(120, repo.bestGameScore("TARGET_PRACTICE", "HARD", 140.0, lowerIsBetter = false))
+        assertEquals(9, repo.bestGameScore("BREAK_PANE", "MEDIUM", 140.0, lowerIsBetter = true))
+        // No matching row -> null (first score), never a celebration.
+        assertNull(repo.bestGameScore("BREAK_PANE", "HARD", 140.0, lowerIsBetter = true))
+    }
+
+    @Test
+    fun `best score keys on the nearest-10m distance bin`() = runTest {
+        val repo = newRepo()
+        repo.initializeAndRestore()
+        // 141 and 144 both bin to 140; 155 bins to 160 (a different key).
+        repo.saveGameResult("TARGET_PRACTICE", "MEDIUM", 141.0, 100, ShotSource.LIVE, 1L)
+        assertEquals(100, repo.bestGameScore("TARGET_PRACTICE", "MEDIUM", 144.0, lowerIsBetter = false))
+        assertNull(repo.bestGameScore("TARGET_PRACTICE", "MEDIUM", 155.0, lowerIsBetter = false))
+    }
+
+    @Test
     fun `renameClub rejects blank, commas, duplicates and self-renames`() = runTest {
         val repo = newRepo()
         repo.initializeAndRestore() // seeds the default bag — the pin needs 7i to exist
