@@ -85,8 +85,8 @@ fun GamesScreen(
         pickerState == "SETUP_BP" -> {
             Column(modifier = modifier.fillMaxSize().background(GolfColors.Base).padding(GolfSpacing.Xl)) {
                 BreakPaneSetup(
-                    onStart = { target ->
-                        breakPane.start(target)
+                    onStart = { target, difficulty ->
+                        breakPane.start(target, difficulty)
                         onActiveGameChange(GameMode.BREAK_PANE)
                         pickerState = "PLAYING"
                     },
@@ -181,9 +181,10 @@ private fun TargetPracticeSetup(onStart: (Double, Difficulty) -> Unit, onCancel:
 }
 
 @Composable
-private fun BreakPaneSetup(onStart: (Double) -> Unit, onCancel: () -> Unit) {
+private fun BreakPaneSetup(onStart: (Double, Difficulty) -> Unit, onCancel: () -> Unit) {
     var sliderM by remember { mutableStateOf(140.0) }
     var text by remember { mutableStateOf("140") }
+    var difficulty by remember { mutableStateOf(Difficulty.MEDIUM) }
 
     Column(verticalArrangement = Arrangement.spacedBy(GolfSpacing.Lg)) {
         Text("BREAK THE PANE", style = GolfTypography.ScreenTitle, color = GolfColors.Teal)
@@ -205,7 +206,23 @@ private fun BreakPaneSetup(onStart: (Double) -> Unit, onCancel: () -> Unit) {
             modifier = Modifier.width(260.dp),
         )
         Row(horizontalArrangement = Arrangement.spacedBy(GolfSpacing.Sm)) {
-            Button(onClick = { onStart(sliderM) }) { Text("START") }
+            Difficulty.entries.forEach { d ->
+                Box(
+                    modifier = Modifier
+                        .border(
+                            1.dp,
+                            if (difficulty == d) GolfColors.Teal else GolfColors.Line,
+                            RoundedCornerShape(GolfSpacing.Sm),
+                        )
+                        .clickable { difficulty = d }
+                        .padding(horizontal = GolfSpacing.Md, vertical = GolfSpacing.Xs),
+                ) {
+                    Text(d.name, style = GolfTypography.Status, color = if (difficulty == d) GolfColors.Teal else GolfColors.TextSecondary)
+                }
+            }
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(GolfSpacing.Sm)) {
+            Button(onClick = { onStart(sliderM, difficulty) }) { Text("START") }
             OutlinedButton(onClick = onCancel) { Text("CANCEL") }
         }
     }
