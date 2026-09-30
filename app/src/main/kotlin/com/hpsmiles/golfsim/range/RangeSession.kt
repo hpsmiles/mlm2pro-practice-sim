@@ -88,7 +88,11 @@ class RangeSession {
                 shots.add(shot)
             }
         }
-        misreadCount.intValue = restored.misreadCount
+        // Do NOT seed the live pill from the persisted count: a stale nonzero
+        // count from the prior open session rendered as a "no read" pill right
+        // around connection at launch (spec 2026-09-30 §7). The persisted count
+        // still feeds History via RestoredSession.
+        misreadCount.intValue = 0
         lastMisreadMs = 0L
         return skipped
     }
