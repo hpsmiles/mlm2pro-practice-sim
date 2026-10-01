@@ -18,7 +18,10 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
@@ -34,6 +37,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -105,6 +109,7 @@ fun RangeScreen(
     var historyLimit by remember { mutableFloatStateOf(8f) }
     val currentShot = session.shots.lastOrNull()
     var showClubPicker by remember { mutableStateOf(false) }
+    var showGreenPicker by remember { mutableStateOf(false) }
 
     // Follow cam (spec 2026-09-25): the per-frame camera from the pure
     // phase machine; computed inside the canvas slot below because the
@@ -157,7 +162,7 @@ fun RangeScreen(
         // Range canvas with overlays. Left of the range there is exactly one
         // column: AppRoot's NavRail (2026-09-24 user request).
         Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
-            BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+            BoxWithConstraints(modifier = Modifier.fillMaxSize().clipToBounds()) {
                 // Same top-8% line the canvas derives (v0 = 0.30h, focal =
                 // 1.10w), so the follow cam chases the exact drawn
                 // (apex-clamped) flight on this geometry.
@@ -172,6 +177,7 @@ fun RangeScreen(
                     PovRangeCanvas(
                         currentShot?.shotResult, previousShots, playFraction, showTracer, showHistory,
                         camera = camera,
+                        customGreen = session.customGreen.value,
                         modifier = Modifier.fillMaxSize(),
                     )
                 } else {
@@ -254,6 +260,15 @@ fun RangeScreen(
                         .padding(horizontal = GolfSpacing.Sm, vertical = 2.dp),
                 )
                 ActiveClubButton(activeClubName) { showClubPicker = true }
+                Text(
+                    "GREEN: ${session.customGreen.value?.let { "${it.distanceM.toInt()} M" } ?: "OFF"}",
+                    color = GolfColors.TextSecondary,
+                    style = ChipFont,
+                    modifier = Modifier
+                        .clickable { showGreenPicker = !showGreenPicker }
+                        .border(1.dp, GolfColors.Line, RoundedCornerShape(50))
+                        .padding(horizontal = GolfSpacing.Sm, vertical = 2.dp),
+                )
             }
             Row(
                 modifier = Modifier.align(Alignment.TopCenter).padding(GolfSpacing.Sm),
@@ -279,6 +294,21 @@ fun RangeScreen(
                     onDismiss = { showClubPicker = false },
                     onSelectClub = onSelectClub,
                     onAddClub = onAddClub,
+                )
+            }
+            // Item 3 (2026-10-01): practice-green setup overlay.
+            if (showGreenPicker) {
+                GreenSetupOverlay(
+                    current = session.customGreen.value,
+                    onSet = { dist, radius ->
+                        session.setGreen(dist, radius)
+                        showGreenPicker = false
+                    },
+                    onClear = {
+                        session.clearGreen()
+                        showGreenPicker = false
+                    },
+                    onDismiss = { showGreenPicker = false },
                 )
             }
             // FIRE / MODE / CONNECT moved to AppRoot's rail (2026-09-24).
@@ -376,5 +406,82 @@ private fun ActiveClubButton(clubName: String?, onClick: () -> Unit) {
             color = GolfColors.TextMuted,
             modifier = Modifier.padding(top = 2.dp),
         )
+    }
+}
+
+/**
+ * Item 3 (2026-10-01): user-defined practice green — distance + radius, or
+ * CLEAR for no green (plain fairway). Mirrors GameSetupScreen's slider+field
+ * sync pattern and ClubPickerOverlay's scrim-dismiss mechanic.
+ */
+@Composable
+private fun GreenSetupOverlay(
+    current: RangeScene.Green?,
+    onSet: (Double, Double) -> Unit,
+    onClear: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val distMin = 20.0
+    val distMax = 320.0
+    val radiusMin = 3.0
+    val radiusMax = 20.0
+
+    var distM by remember { mutableStateOf(current?.distanceM ?: 100.0) }
+    var distText by remember { mutableStateOf(String.format(Locale.US, "%.0f", current?.distanceM ?: 100.0)) }
+    var radiusM by remember { mutableStateOf(current?.radiusM ?: 8.0) }
+    var radiusText by remember { mutableStateOf(String.format(Locale.US, "%.0f", current?.radiusM ?: 8.0)) }
+
+    // Scrim covers the range area; tap outside dismisses (same mechanic as
+    // ClubPickerOverlay).
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(GolfColors.Base.copy(alpha = 0.6f))
+            .clickable(onClick = onDismiss),
+        contentAlignment = Alignment.Center,
+    ) {
+        SectionCard(title = "PRACTICE GREEN", modifier = Modifier.padding(GolfSpacing.Xl)) {
+            Column(verticalArrangement = Arrangement.spacedBy(GolfSpacing.Md)) {
+                Slider(
+                    value = distM.toFloat(),
+                    onValueChange = {
+                        distM = it.toDouble()
+                        distText = String.format(Locale.US, "%.0f", distM)
+                    },
+                    valueRange = distMin.toFloat()..distMax.toFloat(),
+                )
+                OutlinedTextField(
+                    value = distText,
+                    onValueChange = { raw ->
+                        distText = raw
+                        raw.toDoubleOrNull()?.let { distM = it.coerceIn(distMin, distMax) }
+                    },
+                    label = { Text("Distance (m, 20-320)") },
+                    modifier = Modifier.width(260.dp),
+                )
+                Slider(
+                    value = radiusM.toFloat(),
+                    onValueChange = {
+                        radiusM = it.toDouble()
+                        radiusText = String.format(Locale.US, "%.0f", radiusM)
+                    },
+                    valueRange = radiusMin.toFloat()..radiusMax.toFloat(),
+                )
+                OutlinedTextField(
+                    value = radiusText,
+                    onValueChange = { raw ->
+                        radiusText = raw
+                        raw.toDoubleOrNull()?.let { radiusM = it.coerceIn(radiusMin, radiusMax) }
+                    },
+                    label = { Text("Radius (m, 3-20)") },
+                    modifier = Modifier.width(260.dp),
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(GolfSpacing.Sm)) {
+                    Button(onClick = { onSet(distM, radiusM) }) { Text("SET GREEN") }
+                    OutlinedButton(onClick = onClear) { Text("CLEAR") }
+                    OutlinedButton(onClick = onDismiss) { Text("CANCEL") }
+                }
+            }
+        }
     }
 }

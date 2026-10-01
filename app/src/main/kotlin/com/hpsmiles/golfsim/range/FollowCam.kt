@@ -85,8 +85,17 @@ object FollowCam {
      */
     private const val HOLD_END_EPS_SEC = 1e-6
 
+    /**
+     * Hold length for a shot: the fixed [LAND_HOLD_SEC] baseline, stretched
+     * when the ground phase needs longer (2026-10-01: un-compressed rollout
+     * playback — MAX_DURATION_SEC 6.0 — so long run-outs no longer compress
+     * into a fast-forward; the hold simply lasts as long as the roll).
+     */
+    private fun holdSec(shot: ShotResult): Double =
+        maxOf(LAND_HOLD_SEC, RangeRollout.durationSec(shot) + 0.4)
+
     /** The playback fraction runs 0..endFraction; values > 1 cover the hold. */
-    fun endFraction(shot: ShotResult): Double = 1.0 + LAND_HOLD_SEC / shot.flightTimeSec
+    fun endFraction(shot: ShotResult): Double = 1.0 + holdSec(shot) / shot.flightTimeSec
 
     /**
      * Frame-adjusted trajectory the canvas draws: big apexes are scaled
@@ -131,7 +140,7 @@ object FollowCam {
         if (t <= 0.0 || shot.samples.isEmpty()) return RangeCamera.STATIC
 
         val timeSec = playFraction.toDouble() * t
-        if (timeSec >= t + LAND_HOLD_SEC - HOLD_END_EPS_SEC) return RangeCamera.STATIC // snapped back
+        if (timeSec >= t + holdSec(shot) - HOLD_END_EPS_SEC) return RangeCamera.STATIC // snapped back
 
         val overlook = overlookRig(shot)
 

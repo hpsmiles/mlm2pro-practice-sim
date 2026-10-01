@@ -551,7 +551,15 @@ fun AppRoot() {
                             label = "END SESSION",
                             border = GolfColors.Amber,
                             labelColor = GolfColors.Amber,
-                            onClick = { scope.launch { sessionRepository.endSession() } },
+                            onClick = {
+                                scope.launch {
+                                    sessionRepository.endSession()
+                                    // Clear the in-memory list too, or the range
+                                    // keeps showing the ended session's shots and
+                                    // its SESSION summary (user report 2026-10-01).
+                                    session.clearForEndedSession()
+                                }
+                            },
                         )
                     }
                 }

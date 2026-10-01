@@ -1,7 +1,6 @@
 package com.hpsmiles.golfsim.range
 
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class RangeSignsTest {
@@ -14,12 +13,10 @@ class RangeSignsTest {
     }
 
     @Test
-    fun `signs sit just outside the fairway edge and clear of the greens`() {
+    fun `signs sit just outside the fairway edge`() {
         RangeSigns.signPlan().forEach { s ->
             val expected = RangeScene.fairwayHalfWidth(s.distanceM.toDouble()) + RangeSigns.EDGE_OFFSET_M
             assertEquals(expected, kotlin.math.abs(s.xM), 1e-9)
-            // The greens sit at ±12 m with fringe radius 9.5 (max extent 21.5).
-            assertTrue("sign ${s.distanceM} overlaps a green", kotlin.math.abs(s.xM) > 21.5)
         }
     }
 }

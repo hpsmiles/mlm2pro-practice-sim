@@ -25,6 +25,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.unit.dp
 import com.hpsmiles.golfsim.core.designsystem.GolfColors
 import com.hpsmiles.golfsim.core.designsystem.GolfSpacing
@@ -76,7 +77,7 @@ fun BreakPanePlay(
         Row(modifier = Modifier.fillMaxSize()) {
             // Camera and canvas both use the raw clamp so the follow cam
             // frames the exact same tracer path the pane is drawn in.
-            Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
+            Box(modifier = Modifier.weight(1f).fillMaxHeight().clipToBounds()) {
                 val apexVMin = FollowCam.RAW_APEX_VMIN
                 val camera = when (val shot = game.shots.lastOrNull()) {
                     null -> RangeCamera.STATIC

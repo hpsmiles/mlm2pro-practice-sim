@@ -70,12 +70,14 @@ object GameScene {
     private val FringeTurf = Color(0xFF16291F)
 
     /**
-     * Game ground: same sky, fairway, mow stripes, distance boards, and
-     * horizon haze as the range, but no practice grid or target ovals.
+     * Game ground: same sky, fairway, mow stripes, distance boards, hitting
+     * mat, and horizon haze as the range, but no practice grid or target
+     * ovals. Item 4 (2026-10-01): the range mat renders in every mode.
      */
     fun DrawScope.drawGameGround(cam: RangeCamera, w: Float, h: Float, labelPaint: Paint) {
         with(RangeDecorations) {
             drawRangeGround(cam, w, h)
+            drawRangeMat(cam, w, h)
             drawRangeSigns(cam, w, h, labelPaint)
         }
     }

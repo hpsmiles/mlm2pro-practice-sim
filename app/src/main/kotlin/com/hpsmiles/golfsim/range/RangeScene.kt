@@ -53,12 +53,6 @@ object RangeScene {
         }
     }
 
-    val greens = listOf(
-        Green(-12.0, 75.0, 7.0, 9.5),
-        Green(0.0, 100.0, 7.0, 9.5),
-        Green(12.0, 150.0, 7.0, 9.5),
-    )
-
     /** Topography seam — flat this phase (spec non-goal: no topography yet). */
     fun groundHeight(x: Double, y: Double): Double = 0.0
 

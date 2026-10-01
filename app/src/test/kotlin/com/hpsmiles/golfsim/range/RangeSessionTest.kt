@@ -119,4 +119,17 @@ class RangeSessionTest {
         session.dismissMisreads()
         assertEquals(0, session.misreadCount.intValue)
     }
+
+    @Test
+    fun `clearForEndedSession empties shots and misreads but keeps the green`() {
+        val session = RangeSession()
+        session.add(fade())
+        session.markMisread(atMs = 1_000L)
+        session.setGreen(distanceM = 90.0, radiusM = 8.0)
+        session.clearForEndedSession()
+        assertEquals(0, session.shots.size)
+        assertEquals(0, session.misreadCount.intValue)
+        // The custom green is a setup choice, not session data — it survives.
+        assertNotNull(session.customGreen.value)
+    }
 }

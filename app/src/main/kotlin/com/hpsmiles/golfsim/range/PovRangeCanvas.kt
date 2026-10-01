@@ -6,7 +6,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -25,9 +24,6 @@ private val FRINGE = Color(0xFF2F6E35)
 // Previous-shot tracer lines: faded teal per the M3 design language
 // (history = teal, live moment = amber).
 private val HISTORY_LINE = GolfColors.Teal.copy(alpha = 0.35f)
-
-/** The mat is skipped once the camera is this close to it (chase sweep). */
-private const val MAT_MIN_DRAW_DEPTH_M = 6.0
 
 /**
  * Player-perspective range view. Painted "Tour Broadcast" scene (rough base,
@@ -55,6 +51,7 @@ fun PovRangeCanvas(
     showHistory: Boolean,
     modifier: Modifier = Modifier,
     camera: RangeCamera = RangeCamera.STATIC,
+    customGreen: RangeScene.Green? = null,
 ) {
     // Plan-verbatim correction: use android.graphics.Paint directly for
     // native text (androidx Paint.asFrameworkPaint() was wrong in the draft).
@@ -100,17 +97,19 @@ fun PovRangeCanvas(
             return path to PovProjector.nearFadeFactor(nearest).toFloat()
         }
 
-        // Greens: fringe ring first, putting surface on top.
-        for (green in RangeScene.greens) {
-            if (green.distanceM < 8.0) continue // near edge would sit at/behind the camera
-            val fringe = localGroundPath(
-                RangeScene.circleOutline(green.lateralM, green.distanceM, green.fringeRadiusM),
-            ) ?: continue
-            drawPath(fringe.first, FRINGE.copy(alpha = fringe.second))
-            val surface = localGroundPath(
-                RangeScene.circleOutline(green.lateralM, green.distanceM, green.radiusM),
-            ) ?: continue
-            drawPath(surface.first, GREEN_SURFACE.copy(alpha = surface.second))
+        // User-defined green (item 3): fringe ring first, putting surface on
+        // top. No green set -> plain fairway, nothing drawn.
+        customGreen?.let { green ->
+            if (green.distanceM >= 8.0) { // near edge would sit at/behind the camera
+                val fringe = localGroundPath(
+                    RangeScene.circleOutline(green.lateralM, green.distanceM, green.fringeRadiusM),
+                )
+                if (fringe != null) drawPath(fringe.first, FRINGE.copy(alpha = fringe.second))
+                val surface = localGroundPath(
+                    RangeScene.circleOutline(green.lateralM, green.distanceM, green.radiusM),
+                )
+                if (surface != null) drawPath(surface.first, GREEN_SURFACE.copy(alpha = surface.second))
+            }
         }
 
         // Practice grid painted on the ground, under the ball/tracers and
@@ -155,36 +154,6 @@ fun PovRangeCanvas(
             drawRangeSigns(camera, w, h, labelPaint)
         }
 
-        // Teal target ovals at (lateral, distance) metres.
-        val targets = listOf(-12f to 75f, 0f to 100f, 12f to 150f)
-        val targetRadiusM = 5f
-        for ((lateralM, distM) in targets) {
-            // Cull when the near edge is behind the camera plane; distances
-            // are monotonic, so the far edge is behind too.
-            if (groundDepth((distM - targetRadiusM).toDouble()) <= 0.0) continue
-            val centre = PovProjector.project(camera, lateralM.toDouble(), distM.toDouble(), 0.0) ?: continue
-            val cx = centerX + centre.u * focalPx
-            val cy = v0Px + centre.v * focalPx
-            // Ground circle: horizontal radius from the projection scale;
-            // vertical extent from the near/far edge band difference.
-            val rx = (targetRadiusM * centre.scale * focalPx).toFloat()
-            val nearV = PovProjector.bandV(camera, (distM - targetRadiusM).toDouble())
-            val farV = PovProjector.bandV(camera, (distM + targetRadiusM).toDouble())
-            val ry = (((nearV - farV) / 2.0) * focalPx).toFloat()
-            drawOval(
-                color = GolfColors.Teal,
-                topLeft = Offset((cx - rx).toFloat(), (cy - ry).toFloat()),
-                size = androidx.compose.ui.geometry.Size(rx * 2f, ry * 2f),
-                style = Stroke(width = 1.5f),
-            )
-            drawOval(
-                color = GolfColors.Teal.copy(alpha = 0.4f),
-                topLeft = Offset((cx - rx / 2f).toFloat(), (cy - ry / 2f).toFloat()),
-                size = androidx.compose.ui.geometry.Size(rx, ry),
-                style = Stroke(width = 1f),
-            )
-        }
-
         // Waiting = no shot, before impact, or after the follow cam has cut
         // back (the hold is over — the monitor is ready for the next shot).
         val endF = currentShot?.let {
@@ -193,64 +162,11 @@ fun PovRangeCanvas(
         val waiting = currentShot == null || playFraction <= 0f || playFraction >= endF
         val ballRadiusM = 0.02135
 
-        // Range mat (spec 2026-09-25): rubber base + turf strip under the
-        // ball, projected through the per-frame camera — it sweeps past
-        // during the chase. Unlike groundPath there is no near-vertex
-        // filter (the near edge must be allowed to fall below the frame
-        // bottom); instead the mat is skipped entirely once the camera is
-        // within MAT_MIN_DRAW_DEPTH_M of any corner, so it never blows up
-        // across the frame mid-sweep.
-        fun matPath(vertices: List<Pair<Double, Double>>): Path? {
-            val clear = vertices.all { (x, y) ->
-                val dy = y - camera.y
-                val dz = RangeScene.groundHeight(x, y) - camera.z
-                (dy * cosPitch - dz * sinPitch) > MAT_MIN_DRAW_DEPTH_M
-            }
-            if (!clear) return null
-            val path = Path()
-            var first = true
-            for ((x, y) in vertices) {
-                val p = worldToScreen(camera, v0Px, focalPx, centerX, x, y, RangeScene.groundHeight(x, y))
-                    ?: return null
-                if (first) { path.moveTo(p.x, p.y); first = false } else path.lineTo(p.x, p.y)
-            }
-            path.close()
-            return path
+        // Range mat: shared painter, identical projection to before (item 4:
+        // the same mat now also renders in both games via GameScene).
+        with(RangeDecorations) {
+            drawRangeMat(camera, w, h)
         }
-
-        val matBase = matPath(
-            listOf(
-                RangeMat.BASE_X_MIN to RangeMat.BASE_Y_MIN,
-                RangeMat.BASE_X_MAX to RangeMat.BASE_Y_MIN,
-                RangeMat.BASE_X_MAX to RangeMat.BASE_Y_MAX,
-                RangeMat.BASE_X_MIN to RangeMat.BASE_Y_MAX,
-            ),
-        )
-        if (matBase != null) {
-            drawPath(matBase, RangeMat.BASE)
-            drawPath(matBase, RangeMat.BASE_EDGE, style = Stroke(width = 2f))
-        }
-        val matStrip = matPath(
-            listOf(
-                RangeMat.STRIP_X_MIN to RangeMat.STRIP_Y_MIN,
-                RangeMat.STRIP_X_MAX to RangeMat.STRIP_Y_MIN,
-                RangeMat.STRIP_X_MAX to RangeMat.STRIP_Y_MAX,
-                RangeMat.STRIP_X_MIN to RangeMat.STRIP_Y_MAX,
-            ),
-        )
-        if (matStrip != null) {
-            drawPath(matStrip, RangeMat.STRIP)
-            drawPath(matStrip, RangeMat.STRIP_EDGE, style = Stroke(width = 1.5f))
-        }
-        val matLine = matPath(
-            listOf(
-                -RangeMat.LINE_HALF_WIDTH_M to RangeMat.STRIP_Y_MIN,
-                RangeMat.LINE_HALF_WIDTH_M to RangeMat.STRIP_Y_MIN,
-                RangeMat.LINE_HALF_WIDTH_M to RangeMat.STRIP_Y_MAX,
-                -RangeMat.LINE_HALF_WIDTH_M to RangeMat.STRIP_Y_MAX,
-            ),
-        )
-        if (matLine != null) drawPath(matLine, RangeMat.HITTING_LINE)
 
         // The launch anchor: the tracer attaches here while the ball is too
         // close to project inside the frame, so the ball is visible leaving.
@@ -405,9 +321,18 @@ fun PovRangeCanvas(
                 drawCircle(GolfColors.Amber, radius = 6.sp.toPx(), center = headPos)
             }
 
-            // Landing dot plus ring once the flight has completed.
+            // Landing dot plus ring once the flight has completed. Anchored at
+            // the flight's actual landing point (last flight sample) — with the
+            // side-spin ground kick the ball lands short of (sideM, carryM),
+            // and the mark must join the tracer/ball (user report 2026-10-01).
             if (playFraction >= 1f) {
-                val landing = worldToScreen(camera, v0Px, focalPx, centerX, s.sideM, s.carryM, 0.0)
+                val landingEnd = s.samples.lastOrNull()
+                val landing = worldToScreen(
+                    camera, v0Px, focalPx, centerX,
+                    landingEnd?.px ?: s.sideM,
+                    landingEnd?.py ?: s.carryM,
+                    0.0,
+                )
                 if (landing != null) {
                     drawCircle(
                         GolfColors.AmberHalo,

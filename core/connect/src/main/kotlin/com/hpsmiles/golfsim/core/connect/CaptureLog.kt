@@ -19,7 +19,10 @@ class CaptureLog {
         val decryptedHex: String?,
     )
 
-    var enabled: Boolean = false
+    // Default ON during the M5.7 tablet-testing phase (user request 2026-10-01):
+    // every shed session should accumulate a capture log without a Settings
+    // visit. Flip back to false before release.
+    var enabled: Boolean = true
 
     private val entriesInternal = mutableListOf<CapturedNotification>()
 
