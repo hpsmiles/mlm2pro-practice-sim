@@ -1,7 +1,9 @@
 package com.hpsmiles.golfsim.range
 
+import androidx.compose.runtime.State
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.snapshots.SnapshotStateList
 import com.hpsmiles.golfsim.core.ble.BallData
 import com.hpsmiles.golfsim.core.data.record.RestoredSession
@@ -9,9 +11,11 @@ import com.hpsmiles.golfsim.core.data.record.ShotRecord
 import com.hpsmiles.golfsim.core.physics.BallFlightEngine
 import com.hpsmiles.golfsim.core.physics.Environment
 import com.hpsmiles.golfsim.core.physics.Firmness
+import com.hpsmiles.golfsim.core.physics.GreenZoneSurfaceProvider
 import com.hpsmiles.golfsim.core.physics.LaunchConditions
 import com.hpsmiles.golfsim.core.physics.ShotResult
 import com.hpsmiles.golfsim.core.physics.Surface
+import com.hpsmiles.golfsim.core.physics.SurfaceProvider
 import com.hpsmiles.golfsim.core.physics.UniformSurface
 import kotlin.math.sqrt
 
@@ -30,6 +34,27 @@ class RangeSession {
     val shots: SnapshotStateList<DisplayShot> = mutableStateListOf()
     val tick = mutableIntStateOf(0)
     val misreadCount = mutableIntStateOf(0)
+
+    /**
+     * Item 3 (2026-10-01): optional user-defined practice green. Session-scoped,
+     * NEVER persisted — a restart starts with no green. Null = no green: the
+     * range is plain (firm) fairway.
+     */
+    private val _customGreen = mutableStateOf<RangeScene.Green?>(null)
+    val customGreen: State<RangeScene.Green?> get() = _customGreen
+
+    fun setGreen(distanceM: Double, radiusM: Double) {
+        _customGreen.value = RangeScene.Green(
+            lateralM = 0.0,
+            distanceM = distanceM,
+            radiusM = radiusM,
+            fringeRadiusM = radiusM * 1.35,
+        )
+    }
+
+    fun clearGreen() {
+        _customGreen.value = null
+    }
 
     /** Injectable clock (ms). AppRoot can leave the default. */
     var clockMs: () -> Long = { System.currentTimeMillis() }
@@ -61,7 +86,7 @@ class RangeSession {
         val result = BallFlightEngine.simulate(
             launch,
             Environment(),
-            UniformSurface(RANGE_SURFACE),
+            surfaceProviderFor(_customGreen.value),
         )
         val shot = DisplayShot(ballData, launch, result, clockMs())
         shots.add(shot)
@@ -123,6 +148,17 @@ class RangeSession {
         const val MISREAD_COALESCE_MS = 500L
     }
 }
+
+/**
+ * Item 3 (2026-10-01): the range simulates on the user's green oval when one
+ * is set (green inside the oval, firm fairway outside — same pattern as the
+ * games' GreenZoneSurfaceProvider wiring), and on plain firm fairway otherwise.
+ */
+internal fun surfaceProviderFor(green: RangeScene.Green?): SurfaceProvider =
+    green?.let {
+        GreenZoneSurfaceProvider(it.lateralM, it.distanceM, it.radiusM, fairway = RangeSession.RANGE_SURFACE)
+    }
+        ?: UniformSurface(RangeSession.RANGE_SURFACE)
 
 /**
  * Rebuilds a persisted shot as a scalar-backed resting DisplayShot (empty
