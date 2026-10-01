@@ -88,11 +88,12 @@ fun ClubPickerOverlay(
                 val real = clubs.filter { !it.isTemp }
                 val test = clubs.filter { it.isTemp }
                 Column(
-                    // 408dp = 5 tile rows (5x72 + 4x spacing): the default bag
-                    // plus one row of TEST clubs without scrolling (user request
-                    // 2026-10-01); longer bags still scroll + auto-scroll on add.
+                    // 460dp: 5 tile rows + the TEST section header, so the
+                    // default bag plus a row of TEST clubs fits without the
+                    // bottom row clipping (user re-test 2026-10-01); longer
+                    // bags still scroll + auto-scroll on add.
                     modifier = Modifier
-                        .heightIn(max = 408.dp)
+                        .heightIn(max = 460.dp)
                         .verticalScroll(listScroll),
                     verticalArrangement = Arrangement.spacedBy(GolfSpacing.Md),
                 ) {
