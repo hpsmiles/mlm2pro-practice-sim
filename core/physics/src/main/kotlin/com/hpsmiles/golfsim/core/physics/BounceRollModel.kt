@@ -11,6 +11,15 @@ object BounceRollModel {
     private const val FAIRWAY_COR_REFERENCE = 0.40
     private const val MAX_BOUNCES = 4
 
+    // Shallow skid-and-release (item 2, 2026-10-01): punch shots land shallow
+    // with moderate spin and must skid/release instead of dying in the lossy
+    // low-retention bounce branch. Extra tangential retention ramps with
+    // shallowness (0 at thetaCrit, max at a graze) and fades to nothing at
+    // wedge-class spin (8000 rpm = the retention ramp reference), so high-spin
+    // wedges keep checking up. Steep impacts take the Penner branch untouched.
+    private const val SHALLOW_SKID_MAX = 0.30
+    private const val SHALLOW_SKID_SPIN_RPM = 8000.0
+
     // Spin-dominance gate (gated surfaces only, green). Penner's 2R*omega/7
     // reversal is the perfect-grip condition; real green turf shears under the
     // ball, so the reversal impulse only applies when backspin actually
@@ -86,7 +95,11 @@ object BounceRollModel {
                         ejection - backImpulse
                     }
                 } else {
-                    vh * retention
+                    // Shallow skid-and-release boost (item 2, 2026-10-01).
+                    val shallow = ((surface.thetaCritRad - impactAngle) / surface.thetaCritRad)
+                        .coerceIn(0.0, 1.0)
+                    val lowSpin = (1.0 - rpmNow / SHALLOW_SKID_SPIN_RPM).coerceIn(0.0, 1.0)
+                    vh * (retention + SHALLOW_SKID_MAX * shallow * lowSpin)
                 }
                 val velScale: Double = when {
                     vn < 12.0 -> 0.5 * vn / 12.0
