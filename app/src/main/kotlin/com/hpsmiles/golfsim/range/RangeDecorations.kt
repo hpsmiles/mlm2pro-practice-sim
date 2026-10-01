@@ -140,6 +140,78 @@ object RangeDecorations {
         }
     }
 
+    /** The mat is skipped once the camera is this close to it (chase sweep). */
+    private const val MAT_MIN_DRAW_DEPTH_M = 6.0
+
+    /**
+     * Range mat (spec 2026-09-25): rubber base + turf strip + hitting line
+     * under the ball, projected through [cam]. Item 4 (2026-10-01): shared by
+     * the range AND both games so every mode shows the hitting mat. Unlike
+     * [groundPath] there is no near-vertex filter (the near edge must be
+     * allowed to fall below the frame bottom); instead the mat is skipped
+     * entirely once the camera is within MAT_MIN_DRAW_DEPTH_M of any corner.
+     */
+    fun DrawScope.drawRangeMat(cam: RangeCamera, w: Float, h: Float) {
+        val focalPx = w * 1.10f
+        val v0Px = h * 0.30f
+        val centerX = w / 2f
+        val cosPitch = kotlin.math.cos(cam.pitchRad)
+        val sinPitch = kotlin.math.sin(cam.pitchRad)
+
+        fun matPath(vertices: List<Pair<Double, Double>>): Path? {
+            val clear = vertices.all { (x, y) ->
+                val dy = y - cam.y
+                val dz = RangeScene.groundHeight(x, y) - cam.z
+                (dy * cosPitch - dz * sinPitch) > MAT_MIN_DRAW_DEPTH_M
+            }
+            if (!clear) return null
+            val path = Path()
+            var first = true
+            for ((x, y) in vertices) {
+                val p = PovProjector.project(cam, x, y, RangeScene.groundHeight(x, y)) ?: return null
+                val sx = (centerX + p.u * focalPx).toFloat()
+                val sy = (v0Px + p.v * focalPx).toFloat()
+                if (first) { path.moveTo(sx, sy); first = false } else path.lineTo(sx, sy)
+            }
+            path.close()
+            return path
+        }
+
+        val matBase = matPath(
+            listOf(
+                RangeMat.BASE_X_MIN to RangeMat.BASE_Y_MIN,
+                RangeMat.BASE_X_MAX to RangeMat.BASE_Y_MIN,
+                RangeMat.BASE_X_MAX to RangeMat.BASE_Y_MAX,
+                RangeMat.BASE_X_MIN to RangeMat.BASE_Y_MAX,
+            ),
+        )
+        if (matBase != null) {
+            drawPath(matBase, RangeMat.BASE)
+            drawPath(matBase, RangeMat.BASE_EDGE, style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2f))
+        }
+        val matStrip = matPath(
+            listOf(
+                RangeMat.STRIP_X_MIN to RangeMat.STRIP_Y_MIN,
+                RangeMat.STRIP_X_MAX to RangeMat.STRIP_Y_MIN,
+                RangeMat.STRIP_X_MAX to RangeMat.STRIP_Y_MAX,
+                RangeMat.STRIP_X_MIN to RangeMat.STRIP_Y_MAX,
+            ),
+        )
+        if (matStrip != null) {
+            drawPath(matStrip, RangeMat.STRIP)
+            drawPath(matStrip, RangeMat.STRIP_EDGE, style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.5f))
+        }
+        val matLine = matPath(
+            listOf(
+                -RangeMat.LINE_HALF_WIDTH_M to RangeMat.STRIP_Y_MIN,
+                RangeMat.LINE_HALF_WIDTH_M to RangeMat.STRIP_Y_MIN,
+                RangeMat.LINE_HALF_WIDTH_M to RangeMat.STRIP_Y_MAX,
+                -RangeMat.LINE_HALF_WIDTH_M to RangeMat.STRIP_Y_MAX,
+            ),
+        )
+        if (matLine != null) drawPath(matLine, RangeMat.HITTING_LINE)
+    }
+
     /** Same screen mapping the games already use for their ground paths. */
     private fun worldToScreen(
         cam: RangeCamera,
