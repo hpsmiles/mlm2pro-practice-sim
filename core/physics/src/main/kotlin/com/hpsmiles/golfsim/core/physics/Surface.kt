@@ -67,7 +67,13 @@ data class Surface(
             spinDominanceGate = true,
         )
 
-        /** Fairway with M2-tuned roll mu (0.030) and spin-back scale (0.35). */
+        /**
+         * Fairway keeps the M2 tour-calibrated roll mu (0.030): the TrackMan
+         * tour-average rollout pins (TourAveragesTest) were fitted against it.
+         * Checked-up run-out is bounded by BounceRollModel's steep-arrival
+         * roll brake instead (2026-10-01 FlightScope calibration), not by a
+         * slipperier fairway.
+         */
         val FAIRWAY_NORMAL: Surface = Surface(
             name = "fairway",
             cor = 0.40,
