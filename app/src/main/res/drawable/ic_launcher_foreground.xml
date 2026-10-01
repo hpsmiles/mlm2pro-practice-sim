@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Golf launcher foreground: green over a dark-green course. Content sits
+     inside the 66dp adaptive-icon safe zone (center 54,54). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Hole (under the flag pole) -->
+    <path
+        android:fillColor="#0B2E1F"
+        android:pathData="M58,65 a4,1.2 0 1,0 8,0 a4,1.2 0 1,0 -8,0" />
+
+    <!-- Flag pole -->
+    <path
+        android:strokeColor="#E8E4D8"
+        android:strokeWidth="2.5"
+        android:strokeLineCap="round"
+        android:pathData="M62,32 L62,64" />
+
+    <!-- Red flag -->
+    <path
+        android:fillColor="#D9534F"
+        android:pathData="M62,32 L48,37.5 L62,43 Z" />
+
+    <!-- Tee -->
+    <path
+        android:fillColor="#D9A441"
+        android:pathData="M46,68 L54,68 L52.5,74 L47.5,74 Z" />
+
+    <!-- Ball -->
+    <path
+        android:fillColor="#F5F2EA"
+        android:pathData="M42.5,63.5 a7.5,7.5 0 1,0 15,0 a7.5,7.5 0 1,0 -15,0" />
+
+    <!-- Dimples -->
+    <path
+        android:fillColor="#D8D4C8"
+        android:pathData="M47,61 a1.2,1.2 0 1,0 2.4,0 a1.2,1.2 0 1,0 -2.4,0" />
+    <path
+        android:fillColor="#D8D4C8"
+        android:pathData="M52,60.5 a1.2,1.2 0 1,0 2.4,0 a1.2,1.2 0 1,0 -2.4,0" />
+    <path
+        android:fillColor="#D8D4C8"
+        android:pathData="M49.5,64.5 a1.2,1.2 0 1,0 2.4,0 a1.2,1.2 0 1,0 -2.4,0" />
+</vector>

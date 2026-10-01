@@ -141,6 +141,19 @@ class RangeSession {
         misreadCount.intValue = 0
     }
 
+    /**
+     * In-memory reset when the user ends the session (user report 2026-10-01):
+     * the repository closes the session, but without this the range kept
+     * rendering the ended session's shots and the SESSION summary panel kept
+     * showing its stats. The custom green is intentionally kept — it is a
+     * setup choice, not session data.
+     */
+    fun clearForEndedSession() {
+        shots.clear()
+        misreadCount.intValue = 0
+        lastMisreadMs = 0L
+    }
+
     internal companion object {
         /** Range turf (item 2, 2026-10-01): firm fairway — punch shots must release, not die. */
         val RANGE_SURFACE: Surface = Surface.FAIRWAY_NORMAL.withFirmness(Firmness.FIRM)
