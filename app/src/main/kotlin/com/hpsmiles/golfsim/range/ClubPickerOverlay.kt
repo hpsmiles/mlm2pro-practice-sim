@@ -18,10 +18,12 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -50,6 +52,20 @@ fun ClubPickerOverlay(
     onAddClub: suspend (String, ClubType, Boolean) -> Boolean,
 ) {
     var adding by remember { mutableStateOf(false) }
+    // The list column caps at 324dp and new clubs append at the end, so a
+    // fresh tile rendered below the fold read as "the club never appeared"
+    // (user report 2026-10-01). Hoisted scroll state + auto-scroll on growth.
+    val listScroll = rememberScrollState()
+    var prevClubCount by remember { mutableStateOf(0) }
+    LaunchedEffect(clubs.size) {
+        if (clubs.size > prevClubCount) {
+            // Wait one frame so the grown column is laid out and maxValue is
+            // current, then glide to the newly appended tile.
+            withFrameNanos { }
+            listScroll.animateScrollTo(listScroll.maxValue)
+        }
+        prevClubCount = clubs.size
+    }
 
     Box(
         modifier = Modifier
@@ -74,7 +90,7 @@ fun ClubPickerOverlay(
                 Column(
                     modifier = Modifier
                         .heightIn(max = 324.dp)
-                        .verticalScroll(rememberScrollState()),
+                        .verticalScroll(listScroll),
                     verticalArrangement = Arrangement.spacedBy(GolfSpacing.Md),
                 ) {
                     (listOf<ClubRecord?>(null) + real).chunked(4).forEach { row ->
