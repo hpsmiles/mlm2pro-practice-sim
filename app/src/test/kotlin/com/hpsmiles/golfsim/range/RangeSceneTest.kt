@@ -26,14 +26,13 @@ class RangeSceneTest {
     }
 
     @Test
-    fun `greens and fringes at target positions`() {
-        assertEquals(3, RangeScene.greens.size)
-        val g = RangeScene.greens.first { abs(it.lateralM) < 1e-9 }
-        assertEquals(100.0, g.distanceM, 1e-9)
-        assertEquals(7.0, g.radiusM, 1e-9)
-        assertEquals(9.5, g.fringeRadiusM, 1e-9)
-        assertTrue(g.isFringe(g.lateralM + 8.0, g.distanceM))   // 8 m off-centre: fringe
-        assertFalse(g.isFringe(g.lateralM + 5.0, g.distanceM))  // inside surface
+    fun `green oval membership geometry`() {
+        val g = RangeScene.Green(0.0, 100.0, 7.0, 9.5)
+        assertTrue(g.isSurface(0.0, 100.0))
+        assertFalse(g.isSurface(0.0, 110.0))
+        assertTrue(g.isFringe(0.0, 108.0))
+        assertFalse(g.isFringe(0.0, 105.0))
+        assertFalse(g.isSurface(0.0, 60.0))
     }
 
     @Test

@@ -6,7 +6,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -55,6 +54,7 @@ fun PovRangeCanvas(
     showHistory: Boolean,
     modifier: Modifier = Modifier,
     camera: RangeCamera = RangeCamera.STATIC,
+    customGreen: RangeScene.Green? = null,
 ) {
     // Plan-verbatim correction: use android.graphics.Paint directly for
     // native text (androidx Paint.asFrameworkPaint() was wrong in the draft).
@@ -100,17 +100,19 @@ fun PovRangeCanvas(
             return path to PovProjector.nearFadeFactor(nearest).toFloat()
         }
 
-        // Greens: fringe ring first, putting surface on top.
-        for (green in RangeScene.greens) {
-            if (green.distanceM < 8.0) continue // near edge would sit at/behind the camera
-            val fringe = localGroundPath(
-                RangeScene.circleOutline(green.lateralM, green.distanceM, green.fringeRadiusM),
-            ) ?: continue
-            drawPath(fringe.first, FRINGE.copy(alpha = fringe.second))
-            val surface = localGroundPath(
-                RangeScene.circleOutline(green.lateralM, green.distanceM, green.radiusM),
-            ) ?: continue
-            drawPath(surface.first, GREEN_SURFACE.copy(alpha = surface.second))
+        // User-defined green (item 3): fringe ring first, putting surface on
+        // top. No green set -> plain fairway, nothing drawn.
+        customGreen?.let { green ->
+            if (green.distanceM >= 8.0) { // near edge would sit at/behind the camera
+                val fringe = localGroundPath(
+                    RangeScene.circleOutline(green.lateralM, green.distanceM, green.fringeRadiusM),
+                )
+                if (fringe != null) drawPath(fringe.first, FRINGE.copy(alpha = fringe.second))
+                val surface = localGroundPath(
+                    RangeScene.circleOutline(green.lateralM, green.distanceM, green.radiusM),
+                )
+                if (surface != null) drawPath(surface.first, GREEN_SURFACE.copy(alpha = surface.second))
+            }
         }
 
         // Practice grid painted on the ground, under the ball/tracers and
@@ -153,36 +155,6 @@ fun PovRangeCanvas(
 
         with(RangeDecorations) {
             drawRangeSigns(camera, w, h, labelPaint)
-        }
-
-        // Teal target ovals at (lateral, distance) metres.
-        val targets = listOf(-12f to 75f, 0f to 100f, 12f to 150f)
-        val targetRadiusM = 5f
-        for ((lateralM, distM) in targets) {
-            // Cull when the near edge is behind the camera plane; distances
-            // are monotonic, so the far edge is behind too.
-            if (groundDepth((distM - targetRadiusM).toDouble()) <= 0.0) continue
-            val centre = PovProjector.project(camera, lateralM.toDouble(), distM.toDouble(), 0.0) ?: continue
-            val cx = centerX + centre.u * focalPx
-            val cy = v0Px + centre.v * focalPx
-            // Ground circle: horizontal radius from the projection scale;
-            // vertical extent from the near/far edge band difference.
-            val rx = (targetRadiusM * centre.scale * focalPx).toFloat()
-            val nearV = PovProjector.bandV(camera, (distM - targetRadiusM).toDouble())
-            val farV = PovProjector.bandV(camera, (distM + targetRadiusM).toDouble())
-            val ry = (((nearV - farV) / 2.0) * focalPx).toFloat()
-            drawOval(
-                color = GolfColors.Teal,
-                topLeft = Offset((cx - rx).toFloat(), (cy - ry).toFloat()),
-                size = androidx.compose.ui.geometry.Size(rx * 2f, ry * 2f),
-                style = Stroke(width = 1.5f),
-            )
-            drawOval(
-                color = GolfColors.Teal.copy(alpha = 0.4f),
-                topLeft = Offset((cx - rx / 2f).toFloat(), (cy - ry / 2f).toFloat()),
-                size = androidx.compose.ui.geometry.Size(rx, ry),
-                style = Stroke(width = 1f),
-            )
         }
 
         // Waiting = no shot, before impact, or after the follow cam has cut
