@@ -21,7 +21,11 @@ import kotlin.math.sqrt
 object RangeRollout {
     private const val DECEL_MPS2 = 5.0
     private const val MIN_DURATION_SEC = 0.3
-    private const val MAX_DURATION_SEC = 6.0
+    // 9.0 (user report 2026-10-01: "still a little fast on the 2nd bounce"):
+    // a 4-bounce long-shot chain is ~7-8 s raw; at 6.0 it still compressed
+    // ~1.3x. The hold stretches to the ground duration, so allow full 1:1
+    // playback for any realistic chain.
+    private const val MAX_DURATION_SEC = 9.0
     private const val STEP_SEC = 0.05
 
     /**

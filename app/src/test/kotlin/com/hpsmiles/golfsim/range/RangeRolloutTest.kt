@@ -139,8 +139,9 @@ class RangeRolloutTest {
     fun longRolloutsAreCapped() {
         val s = shot(rolloutM = 30.0)
         val roll = RangeRollout.samples(s)
-        // 30 m roll: start-speed cap wants 7.5 s, clamped to the 6.0 s max.
-        assertEquals(6.0, RangeRollout.durationSec(s), 1e-9)
+        // 30 m roll: start-speed cap wants 7.5 s; the 9.0 s playback window
+        // no longer clamps it, so it plays 1:1.
+        assertEquals(7.5, RangeRollout.durationSec(s), 1e-9)
         assertEquals(s.flightTimeSec + RangeRollout.durationSec(s), roll.last().tSec, 1e-9)
     }
 
