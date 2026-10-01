@@ -13,15 +13,31 @@ import kotlin.math.sqrt
  * parabolic arc per hop (real cumulative touch points, apex height and air
  * time) followed by a flat quadratic ease-out roll to the exact rest
  * position. Without hops the legacy single flat roll from carry to totalM is
- * kept unchanged. The whole ground phase is uniformly time-scaled into the
- * follow-cam hold window (capped at 2.3 s, just under LAND_HOLD_SEC = 2.5 s).
+ * kept unchanged. The ground phase plays un-compressed when it fits the
+ * follow-cam hold (MAX_DURATION_SEC); the hold itself stretches to the
+ * ground duration (FollowCam.holdSec), so only extreme run-outs are scaled.
  * No Android deps; same inputs always produce the same samples.
  */
 object RangeRollout {
     private const val DECEL_MPS2 = 5.0
     private const val MIN_DURATION_SEC = 0.3
-    private const val MAX_DURATION_SEC = 2.3
+    private const val MAX_DURATION_SEC = 6.0
     private const val STEP_SEC = 0.05
+
+    /**
+     * Visual start-speed cap for the ease-out roll (user report 2026-10-01:
+     * "first bounce looks right, then it seems to shoot"). A quadratic
+     * ease-out starts at 2 x distance / duration — for a 16 m roll that was
+     * ~22 m/s the instant the ball left the last bounce. Capping the start
+     * speed at 8 m/s stretches the roll duration instead (T = 2d/v0), so the
+     * ball glides away from the bounce and bleeds speed visibly.
+     */
+    private const val ROLL_START_CAP_MPS = 8.0
+
+    /** Ease-out roll duration: physics-based, stretched to honour the
+     *  start-speed cap. */
+    private fun rollDurationSec(dRollM: Double): Double =
+        maxOf(sqrt(2.0 * dRollM / DECEL_MPS2), 2.0 * dRollM / ROLL_START_CAP_MPS)
 
     /**
      * Ground-phase anchor: the flight's actual landing point (last flight
@@ -68,8 +84,7 @@ object RangeRollout {
     fun durationSec(shot: ShotResult): Double {
         if (shot.groundHops.isEmpty()) {
             if (shot.rolloutM <= 0.0) return 0.0
-            val raw = sqrt(2.0 * shot.rolloutM / DECEL_MPS2)
-            return raw.coerceIn(MIN_DURATION_SEC, MAX_DURATION_SEC)
+            return rollDurationSec(shot.rolloutM).coerceIn(MIN_DURATION_SEC, MAX_DURATION_SEC)
         }
         return scaledSegments(shot).sumOf { it.durationSec }
     }
@@ -146,7 +161,7 @@ object RangeRollout {
             py = ty
         }
         val dRoll = hypot(shot.sideM - px, shot.totalM - py)
-        raw.add(Segment(px, py, shot.sideM, shot.totalM, 0.0, sqrt(2.0 * dRoll / DECEL_MPS2), easeOut = true))
+        raw.add(Segment(px, py, shot.sideM, shot.totalM, 0.0, rollDurationSec(dRoll), easeOut = true))
 
         val rawTotal = raw.sumOf { it.durationSec }
         val scale = if (rawTotal > 0.0) {

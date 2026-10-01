@@ -77,7 +77,9 @@ class RangeRolloutTest {
 
     @Test
     fun hopTimingIsMonotonicAndCapped() {
-        // Hop air times totalling ~5 s are uniformly scaled down to the 2.3 s cap.
+        // Hop air times (3.6 s total) plus the start-speed-capped roll play
+        // un-compressed: chain ends at (3, 103), roll dRoll = hypot(3, 1),
+        // raw total 3.6 + max(sqrt(2*3.1623/5), 3.1623/4) = 4.7247 s.
         val s = hopShot(
             carryM = 100.0,
             totalM = 104.0,
@@ -85,7 +87,7 @@ class RangeRolloutTest {
             GroundHop(2.0, 2.0, 0.3, 1.2),
             GroundHop(3.0, 3.0, 0.15, 1.0),
         )
-        assertEquals(2.3, RangeRollout.durationSec(s), 1e-9)
+        assertEquals(4.7247, RangeRollout.durationSec(s), 1e-3)
         val roll = RangeRollout.samples(s)
         var prevT = Double.NEGATIVE_INFINITY
         for (sample in roll) {
@@ -137,7 +139,8 @@ class RangeRolloutTest {
     fun longRolloutsAreCapped() {
         val s = shot(rolloutM = 30.0)
         val roll = RangeRollout.samples(s)
-        assertEquals(2.3, RangeRollout.durationSec(s), 1e-9)
+        // 30 m roll: start-speed cap wants 7.5 s, clamped to the 6.0 s max.
+        assertEquals(6.0, RangeRollout.durationSec(s), 1e-9)
         assertEquals(s.flightTimeSec + RangeRollout.durationSec(s), roll.last().tSec, 1e-9)
     }
 
