@@ -34,6 +34,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -157,7 +158,7 @@ fun RangeScreen(
         // Range canvas with overlays. Left of the range there is exactly one
         // column: AppRoot's NavRail (2026-09-24 user request).
         Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
-            BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+            BoxWithConstraints(modifier = Modifier.fillMaxSize().clipToBounds()) {
                 // Same top-8% line the canvas derives (v0 = 0.30h, focal =
                 // 1.10w), so the follow cam chases the exact drawn
                 // (apex-clamped) flight on this geometry.

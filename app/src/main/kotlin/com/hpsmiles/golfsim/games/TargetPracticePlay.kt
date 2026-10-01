@@ -27,6 +27,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.unit.dp
 import com.hpsmiles.golfsim.core.designsystem.GolfColors
 import com.hpsmiles.golfsim.core.designsystem.GolfSpacing
@@ -92,7 +93,7 @@ fun TargetPracticePlay(
             // The camera clamp must cover the same box the canvas draws in so
             // the follow cam frames the exact tracer path (GameScene.drawTracer contract).
             Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
-                BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+                BoxWithConstraints(modifier = Modifier.fillMaxSize().clipToBounds()) {
                     val wPx = constraints.maxWidth.toFloat()
                     val hPx = constraints.maxHeight.toFloat()
                     val apexVMin = GameScene.apexVMin(wPx, hPx)
