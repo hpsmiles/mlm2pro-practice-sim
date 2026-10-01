@@ -321,9 +321,18 @@ fun PovRangeCanvas(
                 drawCircle(GolfColors.Amber, radius = 6.sp.toPx(), center = headPos)
             }
 
-            // Landing dot plus ring once the flight has completed.
+            // Landing dot plus ring once the flight has completed. Anchored at
+            // the flight's actual landing point (last flight sample) — with the
+            // side-spin ground kick the ball lands short of (sideM, carryM),
+            // and the mark must join the tracer/ball (user report 2026-10-01).
             if (playFraction >= 1f) {
-                val landing = worldToScreen(camera, v0Px, focalPx, centerX, s.sideM, s.carryM, 0.0)
+                val landingEnd = s.samples.lastOrNull()
+                val landing = worldToScreen(
+                    camera, v0Px, focalPx, centerX,
+                    landingEnd?.px ?: s.sideM,
+                    landingEnd?.py ?: s.carryM,
+                    0.0,
+                )
                 if (landing != null) {
                     drawCircle(
                         GolfColors.AmberHalo,

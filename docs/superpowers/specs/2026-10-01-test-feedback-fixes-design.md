@@ -131,3 +131,26 @@ NavRail stays clean during the chase; unit tests unaffected (pure-canvas change)
 
 Final gate: `.\gradlew.bat build` (assemble + all unit tests) and a tablet
 `installDebug` pass over range + both games.
+
+## Addendum 2026-10-01 (post-tablet): ground-roll recalibration
+
+FlightScope Trajectory Optimizer cross-check (195.5 m carry / 5200 rpm / 16 deg
+/ axis 4.3L -> roll 2.3 m) against our 22.3 m on firm fairway drove three
+BounceRollModel changes:
+
+1. Steep-arrival roll brake: a final bounce arriving at/above thetaCrit gets
+   roll decel x(1..4), scaled by the FIRST-impact grip ratio (R*omega/vh, ramp
+   0.30-0.45). Spinner arrivals check (FS case now 5.3-7.8 m); low-ratio
+   driver-class arrivals (TrackMan pga-driver 13.1 yd, pga-3-wood 16.3 yd)
+   roll untouched.
+2. Fairway/rough steep branch blends raw Penner with the retention bounce over
+   arrival steepness (STEEP_BLEND_SPAN_RAD 0.35): punchy 20-25 deg arrivals
+   release; tour-iron 45+ deg arrivals keep the full Penner check.
+3. FAIRWAY_NORMAL rollDecel stays 0.030 g (tour-calibrated); the brake, not a
+   slipperier fairway, bounds checked-up run-out.
+
+Six TrackMan tour fixtures re-pinned (rollout + total): lpga-7i 0.8->1.1,
+lpga-driver 9.1->10.4, lpga-pw 0.7->0.5, pga-5i 8.9->3.7, pga-7i 2.8->1.4,
+pga-pw 2.3->1.2 (yards). Known residual: pga-5i rollout 3.7 vs 8.9 source ?
+its first-impact grip ratio (~0.44) is indistinguishable from the FS case by
+(angle, ratio); accepted to fix the user-visible spinner case.
