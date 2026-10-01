@@ -8,6 +8,7 @@ import com.hpsmiles.golfsim.core.data.record.RestoredSession
 import com.hpsmiles.golfsim.core.data.record.ShotRecord
 import com.hpsmiles.golfsim.core.physics.BallFlightEngine
 import com.hpsmiles.golfsim.core.physics.Environment
+import com.hpsmiles.golfsim.core.physics.Firmness
 import com.hpsmiles.golfsim.core.physics.LaunchConditions
 import com.hpsmiles.golfsim.core.physics.ShotResult
 import com.hpsmiles.golfsim.core.physics.Surface
@@ -60,7 +61,7 @@ class RangeSession {
         val result = BallFlightEngine.simulate(
             launch,
             Environment(),
-            UniformSurface(Surface.FAIRWAY_NORMAL),
+            UniformSurface(RANGE_SURFACE),
         )
         val shot = DisplayShot(ballData, launch, result, clockMs())
         shots.add(shot)
@@ -115,7 +116,10 @@ class RangeSession {
         misreadCount.intValue = 0
     }
 
-    private companion object {
+    internal companion object {
+        /** Range turf (item 2, 2026-10-01): firm fairway — punch shots must release, not die. */
+        val RANGE_SURFACE: Surface = Surface.FAIRWAY_NORMAL.withFirmness(Firmness.FIRM)
+
         const val MISREAD_COALESCE_MS = 500L
     }
 }
