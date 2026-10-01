@@ -21,7 +21,9 @@ class SurfaceTest {
 
     @Test
     fun firmnessScalesRollDecel() {
-        assertEquals(0.2943 * 0.60, Surface.FAIRWAY_NORMAL.withFirmness(Firmness.FIRM).rollDecelMps2, 1e-6)
+        // 2026-10-01 tablet feedback: firm mu ratio x0.60 -> x0.75 (x0.60
+        // rolled like glass; punch run-out blew past realistic).
+        assertEquals(0.2943 * 0.75, Surface.FAIRWAY_NORMAL.withFirmness(Firmness.FIRM).rollDecelMps2, 1e-6)
         assertEquals(0.2943 * 1.40, Surface.FAIRWAY_NORMAL.withFirmness(Firmness.SOFT).rollDecelMps2, 1e-6)
     }
 

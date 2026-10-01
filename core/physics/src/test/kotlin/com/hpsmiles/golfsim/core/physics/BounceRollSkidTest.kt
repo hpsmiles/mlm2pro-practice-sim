@@ -27,9 +27,12 @@ class BounceRollSkidTest {
 
     @Test
     fun `shallow punch-class impact releases on firm fairway`() {
-        // 6000 rpm / 7 deg / vh 25 m/s measured 42.3 m before the skid fix.
+        // 6000 rpm / 7 deg / vh 25 m/s. Tablet-tuned 2026-10-01: skid boost
+        // lifts run-out above the no-boost baseline (~34 m at x0.75 firm mu)
+        // but must NOT blow past realistic (~60 m with the first tuning).
         val punch = BounceRollModel.bounceAndRoll(landing(Math.toRadians(7.0), 6000.0), firm, 10.0, Environment())
-        assertTrue("punch run-out must exceed 55 m, got ${rollDistance(punch)}", rollDistance(punch) > 55.0)
+        val roll = rollDistance(punch)
+        assertTrue("punch run-out ${roll} must stay in the tuned 35-45 m band", roll > 35.0 && roll < 45.0)
     }
 
     @Test
@@ -46,7 +49,7 @@ class BounceRollSkidTest {
     fun `high-spin wedge keeps checking up on shallow impacts`() {
         // On NORMAL fairway (firm's retention floor swamps spin differences).
         val wedge = BounceRollModel.bounceAndRoll(landing(Math.toRadians(7.0), 9000.0), Surface.FAIRWAY_NORMAL, 10.0, Environment())
-        val punch = BounceRollModel.bounceAndRoll(landing(Math.toRadians(7.0), 6000.0), Surface.FAIRWAY_NORMAL, 10.0, Environment())
+        val punch = BounceRollModel.bounceAndRoll(landing(Math.toRadians(7.0), 6000.0), firm, 10.0, Environment())
         assertTrue(
             "wedge (${rollDistance(wedge)}) must out-check punch (${rollDistance(punch)})",
             rollDistance(wedge) < rollDistance(punch),

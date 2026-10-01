@@ -49,7 +49,10 @@ data class Surface(
             cor = cor * 1.08,
             thetaCritRad = thetaCritRad * (0.25 / 0.29),
             spinbackScale = spinbackScale * (0.60 / 0.78),
-            rollDecelMps2 = rollDecelMps2 * 0.60,
+            // 2026-10-01 tablet feedback: x0.60 made firm turf roll like glass
+            // (punch run-out blew past realistic); x0.75 keeps firm faster
+            // than normal without the excessive release.
+            rollDecelMps2 = rollDecelMps2 * 0.75,
         )
     }
 

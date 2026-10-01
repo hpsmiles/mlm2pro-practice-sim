@@ -17,7 +17,7 @@ object BounceRollModel {
     // shallowness (0 at thetaCrit, max at a graze) and fades to nothing at
     // wedge-class spin (8000 rpm = the retention ramp reference), so high-spin
     // wedges keep checking up. Steep impacts take the Penner branch untouched.
-    private const val SHALLOW_SKID_MAX = 0.30
+    private const val SHALLOW_SKID_MAX = 0.12
     private const val SHALLOW_SKID_SPIN_RPM = 8000.0
 
     // Item 1 (2026-10-01): vertical-axis (yaw) spin — the sidespin that curves
@@ -26,8 +26,10 @@ object BounceRollModel {
     // direction. Per BallFlightEngine, +spinAxisDeg (right curve) gives
     // spin.z < 0, so the kick uses -spin.z ("+" = kick right). Capped and
     // scaled by the surface's spinbackScale (greens bite harder than fairway).
-    private const val SIDE_KICK_GAIN = 0.0008
-    private const val SIDE_KICK_CAP_MPS = 0.65
+    // 2026-10-01 tablet feedback: the first tuning (0.0008 / cap 0.65) read as
+    // zig-zag side bounces; halved so the curve is a gentle drift, not a kink.
+    private const val SIDE_KICK_GAIN = 0.0004
+    private const val SIDE_KICK_CAP_MPS = 0.35
 
     // Spin-dominance gate (gated surfaces only, green). Penner's 2R*omega/7
     // reversal is the perfect-grip condition; real green turf shears under the
