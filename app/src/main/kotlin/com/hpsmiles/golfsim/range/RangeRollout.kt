@@ -14,14 +14,27 @@ import kotlin.math.sqrt
  * time) followed by a flat quadratic ease-out roll to the exact rest
  * position. Without hops the legacy single flat roll from carry to totalM is
  * kept unchanged. The whole ground phase is uniformly time-scaled into the
- * follow-cam hold window (capped at 1.8 s, well under LAND_HOLD_SEC = 2.5 s).
+ * follow-cam hold window (capped at 2.3 s, just under LAND_HOLD_SEC = 2.5 s).
  * No Android deps; same inputs always produce the same samples.
  */
 object RangeRollout {
-    private const val DECEL_MPS2 = 3.5
+    private const val DECEL_MPS2 = 5.0
     private const val MIN_DURATION_SEC = 0.3
-    private const val MAX_DURATION_SEC = 1.8
+    private const val MAX_DURATION_SEC = 2.3
     private const val STEP_SEC = 0.05
+
+    /**
+     * Ground-phase anchor: the flight's actual landing point (last flight
+     * sample). With the side-spin ground kick the ball lands at
+     * (sideM - deltaX, carryM), so anchoring the ground chain at the rest
+     * x would teleport sideways at touchdown; anchoring at the last flight
+     * sample keeps the tracer joined to the ball. Falls back to the drawn
+     * carry position for replayed shots without flight samples.
+     */
+    private fun anchor(shot: ShotResult): Pair<Double, Double> {
+        val last = shot.samples.lastOrNull() ?: return Pair(shot.sideM, shot.carryM)
+        return Pair(last.px, last.py)
+    }
 
     /** One ground-phase segment from (startX, startY) to (endX, endY). */
     private class Segment(
@@ -71,13 +84,14 @@ object RangeRollout {
             if (shot.rolloutM <= 0.0) return emptyList()
             val t = shot.flightTimeSec
             val duration = durationSec(shot)
+            val (ax, ay) = anchor(shot)
             val out = ArrayList<TrajectorySample>()
             var step = 1
             var time = t + STEP_SEC
             while (time < t + duration) {
                 val tau = (time - t) / duration
-                val y = shot.carryM + shot.rolloutM * (2.0 * tau - tau * tau)
-                out.add(TrajectorySample(shot.sideM, y, 0.0, time))
+                val y = ay + shot.rolloutM * (2.0 * tau - tau * tau)
+                out.add(TrajectorySample(ax, y, 0.0, time))
                 step++
                 time = t + step * STEP_SEC
             }
@@ -116,16 +130,17 @@ object RangeRollout {
 
     /**
      * The hop chain as uniformly time-scaled segments: first touch at the
-     * drawn carry point (sideM, carryM), each hop to its cumulative landing,
-     * then the final ease-out roll to the exact rest position (sideM, totalM).
+     * flight's landing point, each hop to its cumulative landing, then the
+     * final ease-out roll to the exact rest position (sideM, totalM).
      */
     private fun scaledSegments(shot: ShotResult): List<Segment> {
         val raw = ArrayList<Segment>(shot.groundHops.size + 1)
-        var px = shot.sideM
-        var py = shot.carryM
+        val (ax, ay) = anchor(shot)
+        var px = ax
+        var py = ay
         for (hop in shot.groundHops) {
-            val tx = shot.sideM + hop.landingX
-            val ty = shot.carryM + hop.landingY
+            val tx = ax + hop.landingX
+            val ty = ay + hop.landingY
             raw.add(Segment(px, py, tx, ty, hop.apexM, hop.durationSec, easeOut = false))
             px = tx
             py = ty

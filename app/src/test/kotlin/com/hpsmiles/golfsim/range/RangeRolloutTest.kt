@@ -3,9 +3,11 @@ package com.hpsmiles.golfsim.range
 
 import com.hpsmiles.golfsim.core.physics.GroundHop
 import com.hpsmiles.golfsim.core.physics.ShotResult
+import com.hpsmiles.golfsim.core.physics.TrajectorySample
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import kotlin.math.hypot
 
 /**
  * Pins the synthetic post-landing ground roll (spec 2026-09-25): the ball
@@ -75,7 +77,7 @@ class RangeRolloutTest {
 
     @Test
     fun hopTimingIsMonotonicAndCapped() {
-        // Hop air times totalling ~5 s are uniformly scaled down to the 1.8 s cap.
+        // Hop air times totalling ~5 s are uniformly scaled down to the 2.3 s cap.
         val s = hopShot(
             carryM = 100.0,
             totalM = 104.0,
@@ -83,7 +85,7 @@ class RangeRolloutTest {
             GroundHop(2.0, 2.0, 0.3, 1.2),
             GroundHop(3.0, 3.0, 0.15, 1.0),
         )
-        assertEquals(1.8, RangeRollout.durationSec(s), 1e-9)
+        assertEquals(2.3, RangeRollout.durationSec(s), 1e-9)
         val roll = RangeRollout.samples(s)
         var prevT = Double.NEGATIVE_INFINITY
         for (sample in roll) {
@@ -135,8 +137,43 @@ class RangeRolloutTest {
     fun longRolloutsAreCapped() {
         val s = shot(rolloutM = 30.0)
         val roll = RangeRollout.samples(s)
-        assertEquals(1.8, RangeRollout.durationSec(s), 1e-9)
+        assertEquals(2.3, RangeRollout.durationSec(s), 1e-9)
         assertEquals(s.flightTimeSec + RangeRollout.durationSec(s), roll.last().tSec, 1e-9)
+    }
+
+    @Test
+    fun hopChainAnchorsAtTheFlightLandingPoint() {
+        // Sliced shot: the flight's last sample ends LEFT of the rest x
+        // because the ground kick displaces the run sideways after touchdown.
+        // The ground phase must join that landing point, not teleport to the
+        // rest-side anchor.
+        val landing = TrajectorySample(-2.0, 100.0, 0.0, 5.0)
+        val s = ShotResult(
+            carryM = 100.0,
+            rolloutM = 3.0,
+            totalM = 103.0,
+            sideM = 0.0,
+            apexM = 20.0,
+            flightTimeSec = 5.0,
+            samples = listOf(
+                TrajectorySample(-2.0, 99.5, 0.4, 4.95),
+                landing,
+            ),
+            restX = 0.0,
+            restY = 103.0,
+            groundHops = listOf(GroundHop(2.0, 2.0, 0.30, 0.60)),
+        )
+        val roll = RangeRollout.samples(s)
+        assertTrue(roll.isNotEmpty())
+        val first = roll.first()
+        val jumpM = hypot(first.px - landing.px, first.py - landing.py)
+        assertTrue("first ground sample must join the landing point, jump ${jumpM}m", jumpM < 1.0)
+        // The chain must not double back: forward roll only past touchdown.
+        for (sample in roll) {
+            assertTrue("py ${sample.py} dips below landing", sample.py >= landing.py - 1e-9)
+        }
+        assertEquals(s.sideM, roll.last().px, 1e-9)
+        assertEquals(s.totalM, roll.last().py, 1e-9)
     }
 
     @Test
