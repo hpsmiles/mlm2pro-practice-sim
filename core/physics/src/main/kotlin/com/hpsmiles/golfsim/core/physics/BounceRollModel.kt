@@ -20,6 +20,15 @@ object BounceRollModel {
     private const val SHALLOW_SKID_MAX = 0.30
     private const val SHALLOW_SKID_SPIN_RPM = 8000.0
 
+    // Item 1 (2026-10-01): vertical-axis (yaw) spin — the sidespin that curves
+    // the ball in flight — must also shape the ground phase. Friction on a
+    // yawing ball deflects each bounce and the final roll toward the curve
+    // direction. Per BallFlightEngine, +spinAxisDeg (right curve) gives
+    // spin.z < 0, so the kick uses -spin.z ("+" = kick right). Capped and
+    // scaled by the surface's spinbackScale (greens bite harder than fairway).
+    private const val SIDE_KICK_GAIN = 0.0008
+    private const val SIDE_KICK_CAP_MPS = 0.65
+
     // Spin-dominance gate (gated surfaces only, green). Penner's 2R*omega/7
     // reversal is the perfect-grip condition; real green turf shears under the
     // ball, so the reversal impulse only applies when backspin actually
@@ -128,10 +137,20 @@ object BounceRollModel {
             val sgn = Math.signum(newTan)
             vx = hx * mag * sgn
             vy = hy * mag * sgn
+            // Side-spin ground kick: deflect the new horizontal velocity toward
+            // the curve direction. Right of travel (hx, hy) is (hy, -hx).
+            val yawRight = -spin.z
+            if (yawRight != 0.0) {
+                val kick = (yawRight * SIDE_KICK_GAIN * vh * surface.spinbackScale)
+                    .coerceIn(-SIDE_KICK_CAP_MPS, SIDE_KICK_CAP_MPS)
+                vx += hy * kick
+                vy -= hx * kick
+            }
             vz = vzNew
-            spin = Vec3(tAx, tAy, 0.0).times(
-                (if (fromFlight) mag / BallPhysical.RADIUS_M else Math.abs(omegaT)) * surface.spinRetention
-            )
+            // Preserve the yaw component across bounces (decayed by spin
+            // retention); the tangential components keep the existing law.
+            val spinScale = (if (fromFlight) mag / BallPhysical.RADIUS_M else Math.abs(omegaT)) * surface.spinRetention
+            spin = Vec3(tAx * spinScale, tAy * spinScale, spin.z * surface.spinRetention)
             fromFlight = false
             bounces++
 
@@ -140,8 +159,10 @@ object BounceRollModel {
                 val a = surface.rollDecelMps2
                 if (vroll > 0.1) {
                     val droll = vroll * vroll / (2 * a)
-                    dx += hx * droll
-                    dy += hy * droll
+                    // Roll follows the kicked direction (side-spin curve carries
+                    // through the run-out), not the pre-bounce travel line.
+                    dx += (vx / vroll) * droll
+                    dy += (vy / vroll) * droll
                 }
                 break
             }

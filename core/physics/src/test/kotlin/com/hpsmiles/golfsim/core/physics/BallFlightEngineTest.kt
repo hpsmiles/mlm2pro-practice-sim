@@ -104,8 +104,10 @@ class BallFlightEngineTest {
         assertTrue(shot.sideM.isFinite() && shot.sideM != 0.0)
         assertTrue(shot.carryM.isFinite() && shot.carryM > 0.0)
         // Measured pins (negative-control derived): crosswind+draw pushes the
-        // -3 deg-aimed shot +13.77 m right of the centerline; carry 231.42 m.
-        assertEquals(13.7661, shot.sideM, 0.05)
+        // -3 deg-aimed shot +14.07 m right of the centerline; carry 231.42 m.
+        // sideM re-pinned 2026-10-01 (item 1): side-spin ground kick now
+        // deflects the bounce/roll (+0.30 m vs the pre-kick 13.7661 pin).
+        assertEquals(14.0695, shot.sideM, 0.05)
         assertEquals(231.42, shot.carryM, 0.05)
 
         val mirror = BallFlightEngine.simulate(
