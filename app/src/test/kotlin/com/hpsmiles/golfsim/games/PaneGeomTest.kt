@@ -8,13 +8,14 @@ import org.junit.Test
 class PaneGeomTest {
 
     private val pane = PaneGeom(140.0)
-    // 140 m: plane y=35, cellH=2.24, cellW=2.80, zRef~=12.5, bottom~=9.14.
+    // 140 m: plane y=28, cellH=2.24, cellW=2.80.
 
     @Test
     fun `geometry scales with target`() {
-        assertEquals(35.0, pane.planeYM, 1e-9)
-        assertEquals(2.24, pane.cellHM, 1e-9)
+        assertEquals(28.0, pane.planeYM, 1e-9)   // 0.20 x 140 (was 0.25 -> 35.0)
+        assertEquals(2.24, pane.cellHM, 1e-9)    // cell sizes unchanged (item 5 keeps cells)
         assertEquals(2.80, pane.cellWM, 1e-9)
+        assertEquals(0.20, PaneGeom.PLANE_FRACTION, 1e-9)
     }
 
     @Test
@@ -49,7 +50,7 @@ class PaneGeomTest {
     fun `crossing below pane reports point with null cell`() {
         val samples = listOf(
             TrajectorySample(0.0, 0.0, 0.0, 0.0),
-            TrajectorySample(0.0, 35.0, 2.0, 1.0),
+            TrajectorySample(0.0, pane.planeYM, 2.0, 1.0),
             TrajectorySample(0.0, 100.0, 0.0, 2.0),
         )
         val crossing = pane.firstCrossing(samples)!!
@@ -61,7 +62,7 @@ class PaneGeomTest {
     fun `first forward crossing wins when samples dip through twice`() {
         val samples = listOf(
             TrajectorySample(0.0, 0.0, 0.0, 0.0),
-            TrajectorySample(0.0, 35.0, pane.zRefM, 1.0), // first plane crossing: middle row/col
+            TrajectorySample(0.0, pane.planeYM, pane.zRefM, 1.0), // first plane crossing: middle row/col
             TrajectorySample(0.0, 36.0, pane.topZM + 1.0, 1.1), // rises steeply above the plane
             TrajectorySample(0.0, 37.0, pane.zRefM, 1.2), // continues forward - NOT a forward crossing
         )

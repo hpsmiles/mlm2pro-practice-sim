@@ -7,9 +7,10 @@ import kotlin.math.floor
 
 /**
  * Break-the-Pane geometry, pure config + crossing math (spec section 5).
- * Pane floats at y = 25% of target, centred on the aim line. Cells are
- * 2% of target tall / 4% wide; the middle row is centred on the
- * ReferenceTrajectory crossing height so all rows stay reachable by flighting.
+ * Pane floats at y = 20% of target (item 5, 2026-10-01), centred on the aim
+ * line. Cells are 2% of target tall / 4% wide; the middle row is centred on
+ * the ReferenceTrajectory crossing height so all rows stay reachable by
+ * flighting.
  *
  * Cell indices: row (bottom-up) * 3 + col (left-right) -> 0..8, middle = 4.
  * Boundary rule: inclusive upward -- a point exactly on a row top belongs to
@@ -18,10 +19,15 @@ import kotlin.math.floor
  */
 class PaneGeom(val targetM: Double) {
 
-    val planeYM: Double = 0.25 * targetM
+    companion object {
+        /** Pane distance as a fraction of the target (item 5, 2026-10-01: 25% -> 20%). */
+        const val PLANE_FRACTION = 0.20
+    }
+
+    val planeYM: Double = PLANE_FRACTION * targetM
     val cellHM: Double = 0.016 * targetM
     val cellWM: Double = 0.020 * targetM
-    val zRefM: Double = ReferenceTrajectory.paneCrossingHeightM(targetM)
+    val zRefM: Double = ReferenceTrajectory.paneCrossingHeightM(targetM, PLANE_FRACTION)
     val bottomZM: Double = zRefM - 1.5 * cellHM
     val topZM: Double = bottomZM + 3 * cellHM
     val leftXM: Double = -1.5 * cellWM
