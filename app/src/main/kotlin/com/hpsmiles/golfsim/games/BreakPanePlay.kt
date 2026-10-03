@@ -94,11 +94,6 @@ fun BreakPanePlay(
                     modifier = Modifier.fillMaxSize(),
                 )
 
-                if (showResultOverlay && game.record.value?.outcome == RecordOutcome.NEW_RECORD) {
-
-                    ConfettiBurst(modifier = Modifier.matchParentSize())
-                }
-
                 // HUD: pane-state minimap (3x3, filled teal = broken), shots counter, feedback.
                 Column(
                     modifier = Modifier.align(Alignment.TopStart).padding(GolfSpacing.Sm),
@@ -161,6 +156,11 @@ fun BreakPanePlay(
                             }
                         }
                     }
+                }
+
+                // Celebrate a NEW high score on top of the HUD and result card.
+                if (showResultOverlay && game.record.value?.outcome == RecordOutcome.NEW_RECORD) {
+                    ConfettiBurst(modifier = Modifier.matchParentSize())
                 }
             }
 

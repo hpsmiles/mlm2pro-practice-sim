@@ -54,6 +54,8 @@ import com.hpsmiles.golfsim.core.designsystem.GolfTypography
 import com.hpsmiles.golfsim.core.designsystem.NavRail
 import com.hpsmiles.golfsim.core.designsystem.NavRailButton
 import com.hpsmiles.golfsim.core.designsystem.StatusStrip
+import com.hpsmiles.golfsim.core.physics.GreenCondition
+import com.hpsmiles.golfsim.core.physics.TurfCondition
 import com.hpsmiles.golfsim.games.BreakThePaneGame
 import com.hpsmiles.golfsim.games.GameMode
 import com.hpsmiles.golfsim.games.GameRecord
@@ -63,7 +65,9 @@ import com.hpsmiles.golfsim.games.GamesScreen
 import com.hpsmiles.golfsim.games.RecordComparison
 import com.hpsmiles.golfsim.games.TargetPracticeGame
 import com.hpsmiles.golfsim.history.HistoryScreen
+import com.hpsmiles.golfsim.settings.GreenConditionStore
 import com.hpsmiles.golfsim.settings.SettingsScreen
+import com.hpsmiles.golfsim.settings.TurfConditionStore
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
@@ -110,6 +114,37 @@ fun AppRoot() {
     fun selectClub(name: String?) {
         activeClubName = name
         activeClubStore.set(name)
+    }
+
+    val greenConditionStore = remember { GreenConditionStore(context) }
+    var greenCondition by remember { mutableStateOf(greenConditionStore.get()) }
+
+    fun selectGreenCondition(condition: GreenCondition) {
+        greenCondition = condition
+        greenConditionStore.set(condition)
+    }
+
+    val turfConditionStore = remember { TurfConditionStore(context) }
+    var turfCondition by remember { mutableStateOf(turfConditionStore.get()) }
+
+    fun selectTurfCondition(condition: TurfCondition) {
+        turfCondition = condition
+        turfConditionStore.set(condition)
+    }
+
+    // Keep the simulated surfaces in sync with Settings > GREEN / TURF for the
+    // range oval and both games (their default simulators read these fields).
+    LaunchedEffect(greenCondition) {
+        val surface = greenCondition.surface()
+        session.greenSurface = surface
+        targetPractice.greenSurface = surface
+        breakPane.greenSurface = surface
+    }
+    LaunchedEffect(turfCondition) {
+        val surface = turfCondition.surface()
+        session.turfSurface = surface
+        targetPractice.fairwaySurface = surface
+        breakPane.fairwaySurface = surface
     }
 
     // Post-merge fix (final-review follow-up): the Room-backed getter-flow
@@ -586,6 +621,10 @@ fun AppRoot() {
                     RangeTab.SETTINGS -> {
                         SettingsScreen(
                             captureLog = captureLog,
+                            greenCondition = greenCondition,
+                            onGreenConditionChange = ::selectGreenCondition,
+                            turfCondition = turfCondition,
+                            onTurfConditionChange = ::selectTurfCondition,
                             clubs = clubRecords,
                             onAddClub = sessionRepository::addClub,
                             onRenameClub = { id, name ->

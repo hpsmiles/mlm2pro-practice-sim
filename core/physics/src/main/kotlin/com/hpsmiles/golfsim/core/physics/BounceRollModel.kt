@@ -4,12 +4,14 @@ package com.hpsmiles.golfsim.core.physics
  * Bounce loop + roll to rest on a [Surface] (spec §6; openfairway structure
  * with Penner's 2R*omega/7 spin-back impulse). Green surfaces gate the
  * spin-back impulse by spin dominance (R*omega vs vh) — see constants below.
+ * thetaCrit is the fixed-beta family (Biber 2023 fixed fits: 12.9deg artificial
+ * turf / 18.4deg tee turf), not the speed x angle beta = kP*s*phi form.
  * Never throws; hard bounce cap prevents non-termination.
  */
 object BounceRollModel {
 
     private const val FAIRWAY_COR_REFERENCE = 0.40
-    private const val MAX_BOUNCES = 4
+    private const val MAX_BOUNCES = 8
 
     // Shallow skid-and-release (item 2, 2026-10-01): punch shots land shallow
     // with moderate spin and must skid/release instead of dying in the lossy
@@ -19,17 +21,6 @@ object BounceRollModel {
     // wedges keep checking up. Steep impacts take the Penner branch untouched.
     private const val SHALLOW_SKID_MAX = 0.12
     private const val SHALLOW_SKID_SPIN_RPM = 8000.0
-
-    // Steep-arrival roll brake (2026-10-01 FlightScope calibration): a ball
-    // that arrived at/above thetaCrit AND with enough grip-able backspin is
-    // sitting in its pitch-mark — turf plow brakes the run-out hard. The
-    // brake scales with the FIRST-impact spin ratio (R*omega/vh): spinner
-    // arrivals (ratio ~0.44+, FlightScope case 195.5m/2.3m roll) get the
-    // full x4, low-ratio driver-class arrivals (ratio ~0.18-0.24, TrackMan
-    // pga-driver 13.1m / pga-3-wood 16.3m pins) roll untouched.
-    private const val STEEP_ARRIVAL_ROLL_BRAKE = 4.0
-    private const val BRAKE_RATIO_ZERO = 0.30
-    private const val BRAKE_RATIO_FULL = 0.45
 
     // Item 1 (2026-10-01): vertical-axis (yaw) spin — the sidespin that curves
     // the ball in flight — must also shape the ground phase. Friction on a
@@ -54,6 +45,11 @@ object BounceRollModel {
     private const val GRIP_RATIO_FULL = 1.05
     private const val NON_DOMINANT_FORWARD_KEEP = 0.35
 
+    // Biber et al. 2023: backward bounce is uncommon and sub-metre to ~1 m;
+    // balls that grip lift off slipping. Cap the first-bounce reversal so the
+    // end-to-end backup (backward hop + roll) stays within the observed ~1.5 m.
+    private const val REVERSE_CAP_MPS = 1.2
+
     // Fairway/rough steep-branch blend (2026-10-01 FlightScope calibration):
     // impact angle — not spin ratio — separates the two real behaviors.
     // Just past thetaCrit (a punchy 20-25deg arrival, ratio ~0.44) the ball
@@ -61,6 +57,11 @@ object BounceRollModel {
     // 45deg+) bury in the ball mark and take the raw Penner check (TrackMan
     // tour pins: pga-7i 2.8, lpga-7i 0.8). Ramp spans 0.35 rad (~20deg).
     private const val STEEP_BLEND_SPAN_RAD = 0.35
+
+    // Deep-steep arrivals (tour irons, 40deg+) still retain a floor of the
+    // skid/retention share: TrackMan 2023 tour 7i rolls 3-5% of carry; the
+    // saturated raw Penner check gave 0.8-1.4%.
+    private const val STEEP_BLEND_CAP = 0.55
 
     /** 0 below [GRIP_RATIO_ZERO], 1 at/above [GRIP_RATIO_FULL], linear between. */
     internal fun gripBlend(gripRatio: Double): Double = when {
@@ -90,8 +91,6 @@ object BounceRollModel {
         var bounces = 0
         var dx = 0.0
         var dy = 0.0
-        var lastSteepArrival = false
-        var arrivalGripRatio = 0.0
         val hops = ArrayList<GroundHop>()
 
         while (true) {
@@ -105,15 +104,6 @@ object BounceRollModel {
             val tAy = -hx
             val omegaT = spin.x * tAx + spin.y * tAy
             val rpmNow = Math.abs(omegaT) * 60.0 / (2.0 * Math.PI)
-            if (fromFlight) {
-                // First-impact grip: drives the steep-arrival roll brake.
-                arrivalGripRatio = if (vh > 1e-6) {
-                    Math.abs(omegaT) * BallPhysical.RADIUS_M / vh
-                } else {
-                    0.0
-                }
-            }
-
             var retention: Double
             var cor: Double
             var newTan: Double
@@ -130,7 +120,8 @@ object BounceRollModel {
                     if (surface.spinDominanceGate && omegaT != 0.0) {
                         val gripRatio = Math.abs(omegaT) * BallPhysical.RADIUS_M / Math.max(vh, 1e-6)
                         val blend = gripBlend(gripRatio)
-                        ejection * (1.0 - (1.0 - NON_DOMINANT_FORWARD_KEEP) * (1.0 - blend)) - blend * backImpulse
+                        val nt = ejection * (1.0 - (1.0 - NON_DOMINANT_FORWARD_KEEP) * (1.0 - blend)) - blend * backImpulse
+                        if (nt < -REVERSE_CAP_MPS) -REVERSE_CAP_MPS else nt
                     } else {
                         // Fairway/rough: blend the raw Penner law with the
                         // retention bounce over arrival steepness. The raw law
@@ -138,7 +129,7 @@ object BounceRollModel {
                         // 21.6deg / ratio-0.44 punch) by letting backImpulse
                         // cancel the ejection; tour irons need it intact.
                         val angleBlend = ((impactAngle - surface.thetaCritRad) / STEEP_BLEND_SPAN_RAD)
-                            .coerceIn(0.0, 1.0)
+                            .coerceIn(0.0, STEEP_BLEND_CAP)
                         (1.0 - angleBlend) * (vh * retention) + angleBlend * (ejection - backImpulse)
                     }
                 } else {
@@ -194,13 +185,7 @@ object BounceRollModel {
 
             if (vz < 0.05 || bounces >= MAX_BOUNCES) {
                 val vroll = Math.hypot(vx, vy)
-                // Steep-arrival roll brake, scaled by first-impact grip —
-                // see STEEP_ARRIVAL_ROLL_BRAKE.
-                val gripFactor = ((arrivalGripRatio - BRAKE_RATIO_ZERO) /
-                    (BRAKE_RATIO_FULL - BRAKE_RATIO_ZERO)).coerceIn(0.0, 1.0)
-                val brake = 1.0 + (STEEP_ARRIVAL_ROLL_BRAKE - 1.0) * gripFactor
-                val a = surface.rollDecelMps2 *
-                    (if (lastSteepArrival) brake else 1.0)
+                val a = surface.rollDecelMps2
                 if (vroll > 0.1) {
                     val droll = vroll * vroll / (2 * a)
                     // Roll follows the kicked direction (side-spin curve carries
@@ -210,8 +195,6 @@ object BounceRollModel {
                 }
                 break
             }
-
-            lastSteepArrival = impactAngle >= surface.thetaCritRad
 
             val hop = FlightSolver.solve(
                 Vec3(vx, vy, vz), spin, launchAngleDeg, environment, FlightSolver.HOP_TAU_SEC,

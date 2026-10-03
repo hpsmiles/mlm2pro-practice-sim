@@ -15,16 +15,16 @@ class SurfaceTest {
 
     @Test
     fun fairwayAndRoughDecelAreMuAnchored() {
-        assertEquals(0.2943, Surface.FAIRWAY_NORMAL.rollDecelMps2, 1e-6)   // 0.030 * 9.81
-        assertEquals(0.93195, Surface.ROUGH_NORMAL.rollDecelMps2, 1e-6)   // 0.095 * 9.81
+        assertEquals(1.00, Surface.FAIRWAY_NORMAL.rollDecelMps2, 1e-6)     // literature-anchored
+        assertEquals(3.1392, Surface.ROUGH_NORMAL.rollDecelMps2, 1e-6)    // 0.32 * 9.81
     }
 
     @Test
     fun firmnessScalesRollDecel() {
         // 2026-10-01 tablet feedback: firm mu ratio x0.60 -> x0.75 (x0.60
         // rolled like glass; punch run-out blew past realistic).
-        assertEquals(0.2943 * 0.75, Surface.FAIRWAY_NORMAL.withFirmness(Firmness.FIRM).rollDecelMps2, 1e-6)
-        assertEquals(0.2943 * 1.40, Surface.FAIRWAY_NORMAL.withFirmness(Firmness.SOFT).rollDecelMps2, 1e-6)
+        assertEquals(1.00 * 0.75, Surface.FAIRWAY_NORMAL.withFirmness(Firmness.FIRM).rollDecelMps2, 1e-6)
+        assertEquals(1.00 * 1.40, Surface.FAIRWAY_NORMAL.withFirmness(Firmness.SOFT).rollDecelMps2, 1e-6)
     }
 
     @Test

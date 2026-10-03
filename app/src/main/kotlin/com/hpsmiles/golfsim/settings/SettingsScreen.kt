@@ -37,6 +37,8 @@ import com.hpsmiles.golfsim.core.designsystem.GolfColors
 import com.hpsmiles.golfsim.core.designsystem.GolfSpacing
 import com.hpsmiles.golfsim.core.designsystem.GolfTypography
 import com.hpsmiles.golfsim.core.designsystem.SectionCard
+import com.hpsmiles.golfsim.core.physics.GreenCondition
+import com.hpsmiles.golfsim.core.physics.TurfCondition
 import com.hpsmiles.golfsim.range.AddClubForm
 import java.io.File
 import java.text.SimpleDateFormat
@@ -56,6 +58,10 @@ private fun chipStyle(enabled: Boolean) = if (enabled) GolfColors.Teal else Golf
 @Composable
 fun SettingsScreen(
     captureLog: CaptureLog = CaptureLog(),
+    greenCondition: GreenCondition = GreenCondition.NORMAL,
+    onGreenConditionChange: (GreenCondition) -> Unit = {},
+    turfCondition: TurfCondition = TurfCondition.FIRM,
+    onTurfConditionChange: (TurfCondition) -> Unit = {},
     clubs: List<ClubRecord> = emptyList(),
     onAddClub: suspend (String, ClubType, Boolean) -> Boolean = { _, _, _ -> false },
     onRenameClub: suspend (Long, String) -> Boolean = { _, _ -> false },
@@ -154,6 +160,30 @@ fun SettingsScreen(
                 onAdded = {},
             )
         }
+        SectionCard("GREEN") {
+            Text(
+                text = "Green surface for the range target and both games. Softer greens hold approach shots; firmer greens release and roll out.",
+                style = GolfTypography.Body,
+                color = GolfColors.TextSecondary,
+                modifier = Modifier.fillMaxWidth().padding(bottom = GolfSpacing.Sm),
+            )
+            PickerList(
+                rows = GreenCondition.entries.map { Triple(it.label, it.blurb, it == greenCondition) },
+                onSelect = { onGreenConditionChange(GreenCondition.entries[it]) },
+            )
+        }
+        SectionCard("TURF") {
+            Text(
+                text = "Fairway surface everywhere the ball is not on a green. Firmer turf runs out faster.",
+                style = GolfTypography.Body,
+                color = GolfColors.TextSecondary,
+                modifier = Modifier.fillMaxWidth().padding(bottom = GolfSpacing.Sm),
+            )
+            PickerList(
+                rows = TurfCondition.entries.map { Triple(it.label, it.blurb, it == turfCondition) },
+                onSelect = { onTurfConditionChange(TurfCondition.entries[it]) },
+            )
+        }
         SectionCard("DEBUG - NOTIFICATION CAPTURE (BENCH)") {
             Row(modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
                 Text(
@@ -250,5 +280,41 @@ fun SettingsScreen(
                 TextButton(onClick = { renameTarget = null }) { Text("CANCEL") }
             },
         )
+    }
+}
+
+/**
+ * Shared settings picker: a vertical list of selectable rows (label + blurb),
+ * teal-highlighted when selected. Used by the GREEN and TURF cards.
+ */
+@Composable
+private fun PickerList(
+    rows: List<Triple<String, String, Boolean>>,
+    onSelect: (Int) -> Unit,
+) {
+    rows.forEachIndexed { index, (label, blurb, selected) ->
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 2.dp)
+                .border(
+                    1.dp,
+                    if (selected) GolfColors.Teal else GolfColors.Line,
+                    RoundedCornerShape(GolfSpacing.Sm),
+                )
+                .clickable { onSelect(index) }
+                .padding(horizontal = GolfSpacing.Md, vertical = GolfSpacing.Sm),
+        ) {
+            Text(
+                text = label,
+                style = GolfTypography.Body,
+                color = if (selected) GolfColors.Teal else GolfColors.TextPrimary,
+            )
+            Text(
+                text = blurb,
+                style = GolfTypography.Status,
+                color = GolfColors.TextMuted,
+            )
+        }
     }
 }

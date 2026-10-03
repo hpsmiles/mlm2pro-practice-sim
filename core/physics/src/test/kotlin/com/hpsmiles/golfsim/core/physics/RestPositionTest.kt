@@ -28,11 +28,11 @@ class RestPositionTest {
 
     @Test
     fun `engine rest matches spec 140m table - stock 8i lands about 20m short of pin`() {
-        // Spec §2 calc table: 44 m/s / 21° / 7500 rpm → carry 118.1, rest ~20.5 m from a 140 m pin.
+        // Spec §2 calc table: 44 m/s / 21° / 7500 rpm → carry 118.1, rest ~19.5 m from a 140 m pin.
         val surfaces = GreenZoneSurfaceProvider(centerX = 0.0, centerY = 140.0, radiusM = 6.0)
         val result = BallFlightEngine.simulate(stock8i(), Environment(), surfaces)
         assertEquals(118.1, result.carryM, 0.5)
         val restFromPin = hypot(result.restX, result.restY - 140.0)
-        assertEquals(20.5, restFromPin, 1.0)
+        assertEquals(19.5, restFromPin, 1.0)
     }
 }

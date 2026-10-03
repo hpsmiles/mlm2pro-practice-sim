@@ -16,28 +16,32 @@ import kotlin.random.Random
 
 /**
  * One-shot confetti burst for a NEW high score (spec 2026-09-30 §3.4). Drawn
- * with the games' manual withFrameNanos loop (no Animatable), ~2.5 s, gravity
- * + horizontal drift. Amber stays reserved for the live tracer, so the
- * palette is teal / white / gold.
+ * with the games' manual withFrameNanos loop (no Animatable), ~2.8 s, gravity
+ * + horizontal drift + a delayed second wave. Amber stays reserved for the live
+ * tracer, so the palette is teal / white / gold.
  */
 @Composable
 fun ConfettiBurst(
     modifier: Modifier = Modifier,
-    durationMs: Float = 2500f,
-    particleCount: Int = 64,
+    durationMs: Float = 2800f,
+    particleCount: Int = 128,
 ) {
     val palette = remember {
         listOf(GolfColors.Teal, GolfColors.TextPrimary, Color(0xFFF0D64A), GolfColors.Teal55)
     }
     val particles = remember {
         val rnd = Random(System.nanoTime())
-        List(particleCount) {
+        List(particleCount) { i ->
+            val secondWave = i >= particleCount * 2 / 3
             Particle(
-                startX = rnd.nextFloat(),
+                startX = 0.25f + rnd.nextFloat() * 0.5f,
+                startY = 0.32f + rnd.nextFloat() * 0.18f,
                 drift = -1f + rnd.nextFloat() * 2f,
-                speed = 0.6f + rnd.nextFloat() * 0.9f,
+                speed = 0.7f + rnd.nextFloat() * 0.8f,
+                rise = 0.10f + rnd.nextFloat() * 0.20f,
                 color = palette[rnd.nextInt(palette.size)],
-                size = 5f + rnd.nextFloat() * 7f,
+                size = 8f + rnd.nextFloat() * 14f,
+                delay = if (secondWave) 0.15f + rnd.nextFloat() * 0.20f else 0f,
             )
         }
     }
@@ -56,11 +60,13 @@ fun ConfettiBurst(
         val h = size.height
         val p = t
         if (p >= 1f) return@Canvas
-        val alpha = (1f - p).coerceIn(0f, 1f)
         particles.forEach { c ->
-            val cx = w * c.startX + c.drift * w * 0.30f * c.speed * p
-            val cy = h * 0.12f + 0.5f * 1400f * c.speed * p * p
-            if (cy > h + 24f) return@forEach
+            if (p < c.delay) return@forEach
+            val lp = (p - c.delay) / (1f - c.delay)
+            val alpha = (1f - lp).coerceIn(0f, 1f)
+            val cx = w * c.startX + c.drift * w * 0.35f * c.speed * lp
+            val cy = h * c.startY - h * c.rise * lp + 0.5f * 1400f * c.speed * lp * lp
+            if (cy > h + 32f) return@forEach
             drawCircle(c.color.copy(alpha = alpha), c.size, Offset(cx, cy))
         }
     }
@@ -68,8 +74,11 @@ fun ConfettiBurst(
 
 private data class Particle(
     val startX: Float,
+    val startY: Float,
     val drift: Float,
     val speed: Float,
+    val rise: Float,
     val color: Color,
     val size: Float,
+    val delay: Float,
 )

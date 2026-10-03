@@ -104,11 +104,12 @@ class BallFlightEngineTest {
         assertTrue(shot.sideM.isFinite() && shot.sideM != 0.0)
         assertTrue(shot.carryM.isFinite() && shot.carryM > 0.0)
         // Measured pins (negative-control derived): crosswind+draw pushes the
-        // -3 deg-aimed shot +13.92 m right of the centerline; carry 231.42 m.
+        // -3 deg-aimed shot +13.49 m right of the centerline; carry 231.42 m.
         // sideM re-pinned 2026-10-01 (item 1): side-spin ground kick now
-        // deflects the bounce/roll; re-pinned again after the tablet-feedback
-        // retune (gentler kick) — pre-kick pin was 13.7661.
-        assertEquals(13.9177, shot.sideM, 0.05)
+        // deflects the bounce/roll; re-pinned 2026-10-03 after the realistic
+        // rollout recalibration (roll decel changed the kick-integration path)
+        // — previous pin was 13.9177.
+        assertEquals(13.49, shot.sideM, 0.05)
         assertEquals(231.42, shot.carryM, 0.05)
 
         val mirror = BallFlightEngine.simulate(
@@ -141,7 +142,7 @@ class BallFlightEngineTest {
         val wedge = LaunchConditions(30.0, 45.0, 9000)
         val shot = BallFlightEngine.simulate(wedge, surfaces = UniformSurface(Surface.GREEN_NORMAL))
         assertTrue("expected recorded hops", shot.groundHops.isNotEmpty())
-        assertTrue("hop count ${shot.groundHops.size} exceeds MAX_BOUNCES - 1", shot.groundHops.size <= 3)
+        assertTrue("hop count ${shot.groundHops.size} exceeds MAX_BOUNCES - 1", shot.groundHops.size <= 7)
         for (hop in shot.groundHops) {
             assertTrue(hop.apexM > 0.0)
             assertTrue(hop.durationSec > 0.0)

@@ -13,6 +13,7 @@ import com.hpsmiles.golfsim.core.physics.Environment
 import com.hpsmiles.golfsim.core.physics.GreenZoneSurfaceProvider
 import com.hpsmiles.golfsim.core.physics.LaunchConditions
 import com.hpsmiles.golfsim.core.physics.ShotResult
+import com.hpsmiles.golfsim.core.physics.Surface
 import com.hpsmiles.golfsim.range.DisplayShot
 import kotlin.math.hypot
 
@@ -36,12 +37,18 @@ class BreakThePaneGame {
 
     var clockMs: () -> Long = { System.currentTimeMillis() }
 
+    /** Green surface used by the default simulator (Settings > GREEN). */
+    var greenSurface: Surface = Surface.GREEN_NORMAL
+
+    /** Fairway surface used off the green (Settings > TURF). */
+    var fairwaySurface: Surface = Surface.FAIRWAY_NORMAL
+
     /** Injectable seam, same contract as TargetPracticeGame.simulator. */
     var simulator: (LaunchConditions) -> ShotResult = { launch ->
         BallFlightEngine.simulate(
             launch,
             Environment(),
-            GreenZoneSurfaceProvider(0.0, targetM, greenRadiusM()),
+            GreenZoneSurfaceProvider(0.0, targetM, greenRadiusM(), green = greenSurface, fairway = fairwaySurface),
         )
     }
 

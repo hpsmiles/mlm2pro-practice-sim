@@ -8,8 +8,12 @@ import org.junit.Test
 class CaptureLogTest {
 
     @Test
-    fun disabledByDefaultRecordsNothing() {
+    fun whenDisabledRecordsNothing() {
+        // CaptureLog now defaults ON during the M5.7 tablet-testing phase
+        // (see CaptureLog.enabled), so disable it explicitly here to exercise
+        // the "disabled records nothing" contract.
         val log = CaptureLog()
+        log.enabled = false
         log.record(uuid = "02E525FD", encrypted = byteArrayOf(1, 2), decrypted = null)
         assertTrue(log.entries().isEmpty())
     }

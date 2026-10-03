@@ -23,9 +23,15 @@ fun rememberGameResultOverlayGate(
     playFraction: Float,
 ): Boolean {
     var ready by remember { mutableStateOf(false) }
+    // Guards against a stale high playFraction from a previous shot flipping
+    // ready=true before the current shot's animation has actually started.
+    // We require observed progress (playFraction < end) before reaching end
+    // is treated as genuine completion.
+    var sawInProgress by remember { mutableStateOf(false) }
 
     LaunchedEffect(complete, lastShotResult) {
         // A new completion starts hidden until the animation reaches endFraction.
+        sawInProgress = false
         if (!complete) {
             ready = false
         } else {
@@ -48,7 +54,9 @@ fun rememberGameResultOverlayGate(
             return@LaunchedEffect
         }
         val end = FollowCam.endFraction(result).toFloat()
-        if (playFraction >= end) {
+        if (playFraction < end) {
+            sawInProgress = true
+        } else if (sawInProgress) {
             ready = true
         }
     }

@@ -114,10 +114,6 @@ fun TargetPracticePlay(
                     )
                 }
 
-                if (showResultOverlay && game.record.value?.outcome == RecordOutcome.NEW_RECORD) {
-                    ConfettiBurst(modifier = Modifier.matchParentSize())
-                }
-
                 // HUD: per-shot point indicators + running total.
                 Row(
                     modifier = Modifier.align(Alignment.TopStart).padding(GolfSpacing.Sm),
@@ -191,6 +187,11 @@ fun TargetPracticePlay(
                             }
                         }
                     }
+                }
+
+                // Celebrate a NEW high score on top of the HUD and result card.
+                if (showResultOverlay && game.record.value?.outcome == RecordOutcome.NEW_RECORD) {
+                    ConfettiBurst(modifier = Modifier.matchParentSize())
                 }
             }
 

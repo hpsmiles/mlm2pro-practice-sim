@@ -27,12 +27,12 @@ class BounceRollSkidTest {
 
     @Test
     fun `shallow punch-class impact releases on firm fairway`() {
-        // 6000 rpm / 7 deg / vh 25 m/s. Tablet-tuned 2026-10-01: skid boost
-        // lifts run-out above the no-boost baseline (~34 m at x0.75 firm mu)
-        // but must NOT blow past realistic (~60 m with the first tuning).
+        // 6000 rpm / 7 deg / vh 25 m/s. 2026-10-03 recalibration: the realistic
+        // fairway decel (1.0 m/s^2) keeps this skid-run-out in the ~8-18 m band
+        // (was inflated to 35-45 m by the old mu=0.030 law).
         val punch = BounceRollModel.bounceAndRoll(landing(Math.toRadians(7.0), 6000.0), firm, 10.0, Environment())
         val roll = rollDistance(punch)
-        assertTrue("punch run-out ${roll} must stay in the tuned 35-45 m band", roll > 35.0 && roll < 45.0)
+        assertTrue("punch run-out ${roll} must stay in the tuned 8-18 m band", roll > 8.0 && roll < 18.0)
     }
 
     @Test

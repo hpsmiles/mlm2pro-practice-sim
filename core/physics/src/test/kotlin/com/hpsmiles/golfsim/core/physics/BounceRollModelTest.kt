@@ -24,7 +24,7 @@ class BounceRollModelTest {
     }
 
     @Test
-    fun bounceLoopIsCappedAtFour() {
+    fun bounceLoopStaysWithinCap() {
         val landing = LandingState(
             position = Vec3(0.0, 0.0, 0.0),
             velocity = Vec3(0.0, 25.0, -20.0),
@@ -33,7 +33,7 @@ class BounceRollModelTest {
             flightTimeSec = 5.0,
         )
         val ground = BounceRollModel.bounceAndRoll(landing, Surface.FAIRWAY_NORMAL, 12.0, env)
-        assertTrue(ground.bounces in 1..4)
+        assertTrue(ground.bounces in 1..8)
         assertTrue(ground.deltaY.isFinite())
     }
 
@@ -186,5 +186,62 @@ class BounceRollModelTest {
         // and the remaining roll is forward (or zero).
         val last = ground.hops.last()
         assertTrue("roll must not reverse", ground.deltaY >= last.landingY)
+    }
+
+    /**
+     * Rollout recalibration 2026-10-03 (Biber 2023 + TrackMan 2023): a low,
+     * low-spin knuckle drive lands shallow-fast and must release, but a
+     * realistic firm-fairway decel keeps run-out inside a sane band — not the
+     * ~77% of carry the old mu=0.030 fairway law produced.
+     */
+    @Test
+    fun lowDriveRunOutStaysRealistic() {
+        val drive = LaunchConditions(
+            ballSpeedMps = 175.0 * 0.44704, // 175 mph
+            launchAngleDeg = 5.0,
+            spinRpm = 1400,
+        )
+        val shot = BallFlightEngine.simulate(
+            drive,
+            surfaces = UniformSurface(Surface.FAIRWAY_NORMAL.withFirmness(Firmness.FIRM)),
+        )
+        val ratio = shot.rolloutM / shot.carryM
+        assertTrue(
+            "knuckle drive rollout ratio ${"%.3f".format(ratio)} outside [0.20, 0.55]",
+            ratio in 0.20..0.55,
+        )
+    }
+
+    /** A gap wedge must back up only slightly on a receptive green (Biber: sub-metre to ~1 m). */
+    @Test
+    fun gapWedgeBacksUpOnlySlightlyOnGreen() {
+        val gw = LaunchConditions(ballSpeedMps = 90.0 * 0.44704, launchAngleDeg = 23.5, spinRpm = 10_000)
+        val shot = BallFlightEngine.simulate(gw, surfaces = UniformSurface(Surface.GREEN_NORMAL))
+        assertTrue(
+            "GW rollout ${"%.2f".format(shot.rolloutM)} m outside [-1.8, -0.3]",
+            shot.rolloutM in -1.8..-0.3,
+        )
+    }
+
+    /** A tour mid-iron must stop within a metre on the green. */
+    @Test
+    fun midIronStopsOnGreen() {
+        val sevenIron = LaunchConditions(ballSpeedMps = 123.0 * 0.44704, launchAngleDeg = 16.3, spinRpm = 7124)
+        val shot = BallFlightEngine.simulate(sevenIron, surfaces = UniformSurface(Surface.GREEN_NORMAL))
+        assertTrue(
+            "7i green rollout ${"%.2f".format(shot.rolloutM)} m outside [0.0, 1.0]",
+            shot.rolloutM in 0.0..1.0,
+        )
+    }
+
+    /** Even a high-spin wedge's backward run must stay bounded (~1.5 m total). */
+    @Test
+    fun highSpinWedgeBackupBounded() {
+        val wedge = LaunchConditions(ballSpeedMps = 66.0 * 0.44704, launchAngleDeg = 32.0, spinRpm = 11_000)
+        val shot = BallFlightEngine.simulate(wedge, surfaces = UniformSurface(Surface.GREEN_NORMAL))
+        assertTrue(
+            "high-spin wedge backup ${"%.2f".format(shot.rolloutM)} m exceeds -1.8",
+            shot.rolloutM >= -1.8,
+        )
     }
 }

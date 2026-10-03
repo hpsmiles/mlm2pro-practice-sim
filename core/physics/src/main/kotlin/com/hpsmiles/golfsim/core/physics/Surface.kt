@@ -12,7 +12,9 @@ package com.hpsmiles.golfsim.core.physics
  * shallow-bounce law (spec §5 amendment), so nothing consumes it (YAGNI).
  *
  * Green roll is stimp-anchored: decel = 5.49/stimp m/s^2 (USGA Stimpmeter
- * release speed 1.83 m/s). Fairway/rough roll: decel = mu x g.
+ * release speed 1.83 m/s). Fairway/rough roll uses a literature-anchored
+ * constant decel (fairway 1.00 m/s^2; rough 0.32*g): the old openfairway
+ * mu=0.030 value was ~3.4x too low and even below the stimp-11 green.
  */
 data class Surface(
     val name: String,
@@ -59,7 +61,7 @@ data class Surface(
     companion object {
         fun green(stimp: Double = 11.0): Surface = Surface(
             name = "green",
-            cor = 0.45,
+            cor = 0.30,
             thetaCritRad = 0.36,
             spinbackScale = 1.12,
             spinRetention = 0.85,
@@ -80,7 +82,7 @@ data class Surface(
             thetaCritRad = 0.29,
             spinbackScale = 0.35,
             spinRetention = 0.75,
-            rollDecelMps2 = 0.030 * BallPhysical.GRAVITY_MPS2,
+            rollDecelMps2 = 1.00,
         )
 
         val ROUGH_NORMAL: Surface = Surface(
@@ -89,7 +91,7 @@ data class Surface(
             thetaCritRad = 0.35,
             spinbackScale = 0.70,
             spinRetention = 0.75,
-            rollDecelMps2 = 0.095 * BallPhysical.GRAVITY_MPS2,
+            rollDecelMps2 = 0.32 * BallPhysical.GRAVITY_MPS2,
         )
 
         val GREEN_NORMAL: Surface = green(stimp = 11.0)

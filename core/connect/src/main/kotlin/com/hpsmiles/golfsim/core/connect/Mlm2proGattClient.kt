@@ -343,7 +343,13 @@ class Mlm2proGattClient(
             }
             is Mlm2proMessage.Event -> {
                 // ShotDetected/Ready/battery: state kept; sequencer owns protocol.
-                if (msg.event is Mlm2proEvent.MisreadAlert) onMisread?.invoke()
+                // Gate EVENTS misread alerts: handshake emits a single 0x05-0x00
+                // "misread" frame around ~1.75 s with no accompanying MEASUREMENT.
+                // That artifact arrives while the sequencer is still READY/CONFIG,
+                // so only surface it as a user-facing misread once truly armed.
+                if (msg.event is Mlm2proEvent.MisreadAlert && sequencer.state == HandshakeState.ARMED) {
+                    onMisread?.invoke()
+                }
             }
             else -> Unit
         }

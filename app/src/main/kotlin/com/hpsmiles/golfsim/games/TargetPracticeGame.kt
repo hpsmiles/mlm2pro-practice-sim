@@ -13,6 +13,7 @@ import com.hpsmiles.golfsim.core.physics.Environment
 import com.hpsmiles.golfsim.core.physics.GreenZoneSurfaceProvider
 import com.hpsmiles.golfsim.core.physics.LaunchConditions
 import com.hpsmiles.golfsim.core.physics.ShotResult
+import com.hpsmiles.golfsim.core.physics.Surface
 import com.hpsmiles.golfsim.range.DisplayShot
 
 /**
@@ -33,6 +34,15 @@ class TargetPracticeGame {
     var clockMs: () -> Long = { System.currentTimeMillis() }
 
     /**
+     * Green surface used by the default simulator (Settings > GREEN). AppRoot
+     * keeps this in sync with the user's selection; JVM tests can leave it.
+     */
+    var greenSurface: Surface = Surface.GREEN_NORMAL
+
+    /** Fairway surface used off the green (Settings > TURF). */
+    var fairwaySurface: Surface = Surface.FAIRWAY_NORMAL
+
+    /**
      * Injectable simulation seam. The default closure calls [greenRadiusM]
      * every shot so the rollout surface matches the visual green as the
      * difficulty changes (amendment 4: green now fills the outermost ring).
@@ -41,7 +51,7 @@ class TargetPracticeGame {
         BallFlightEngine.simulate(
             launch,
             Environment(),
-            GreenZoneSurfaceProvider(0.0, targetM, greenRadiusM()),
+            GreenZoneSurfaceProvider(0.0, targetM, greenRadiusM(), green = greenSurface, fairway = fairwaySurface),
         )
     }
 

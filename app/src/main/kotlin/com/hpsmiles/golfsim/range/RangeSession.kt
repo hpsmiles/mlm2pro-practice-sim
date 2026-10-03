@@ -59,6 +59,18 @@ class RangeSession {
     /** Injectable clock (ms). AppRoot can leave the default. */
     var clockMs: () -> Long = { System.currentTimeMillis() }
 
+    /**
+     * Green surface for the range's target oval (Settings > GREEN), kept in
+     * sync by AppRoot. Defaults to the historical normal green.
+     */
+    var greenSurface: Surface = Surface.GREEN_NORMAL
+
+    /**
+     * Fairway surface used off the green (Settings > TURF), kept in sync by
+     * AppRoot. Defaults to the historical firm range surface.
+     */
+    var turfSurface: Surface = RANGE_SURFACE
+
     // 0L (epoch) not Long.MIN_VALUE: `atMs - Long.MIN_VALUE` overflows and
     // would swallow the very first misread on any normal clock.
     private var lastMisreadMs = 0L
@@ -86,7 +98,7 @@ class RangeSession {
         val result = BallFlightEngine.simulate(
             launch,
             Environment(),
-            surfaceProviderFor(_customGreen.value),
+            surfaceProviderFor(_customGreen.value, greenSurface, turfSurface),
         )
         val shot = DisplayShot(ballData, launch, result, clockMs())
         shots.add(shot)
@@ -167,11 +179,21 @@ class RangeSession {
  * is set (green inside the oval, firm fairway outside — same pattern as the
  * games' GreenZoneSurfaceProvider wiring), and on plain firm fairway otherwise.
  */
-internal fun surfaceProviderFor(green: RangeScene.Green?): SurfaceProvider =
+internal fun surfaceProviderFor(
+    green: RangeScene.Green?,
+    greenSurface: Surface = Surface.GREEN_NORMAL,
+    fairwaySurface: Surface = RangeSession.RANGE_SURFACE,
+): SurfaceProvider =
     green?.let {
-        GreenZoneSurfaceProvider(it.lateralM, it.distanceM, it.radiusM, fairway = RangeSession.RANGE_SURFACE)
+        GreenZoneSurfaceProvider(
+            it.lateralM,
+            it.distanceM,
+            it.radiusM,
+            green = greenSurface,
+            fairway = fairwaySurface,
+        )
     }
-        ?: UniformSurface(RangeSession.RANGE_SURFACE)
+        ?: UniformSurface(fairwaySurface)
 
 /**
  * Rebuilds a persisted shot as a scalar-backed resting DisplayShot (empty
