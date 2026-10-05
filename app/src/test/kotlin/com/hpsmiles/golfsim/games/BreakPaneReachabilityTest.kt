@@ -58,6 +58,7 @@ class BreakPaneReachabilityTest {
 
     private fun cellFor(
         targetM: Double,
+        paneDistanceM: Double? = null,
         ballSpeedMps: Double = STOCK_BALL_SPEED,
         launchAngleDeg: Double = STOCK_LAUNCH_ANGLE,
         spinRpm: Int = STOCK_SPIN,
@@ -65,7 +66,7 @@ class BreakPaneReachabilityTest {
         launchDirDeg: Double = 0.0,
     ): Int {
         val result = simulate(ballSpeedMps, launchAngleDeg, spinRpm, spinAxisDeg, launchDirDeg)
-        return PaneGeom(targetM).firstCrossing(result.samples)?.cell
+        return PaneGeom(targetM, paneDistanceM).firstCrossing(result.samples)?.cell
             ?: error("probe shot did not cross the pane plane")
     }
 
@@ -110,5 +111,28 @@ class BreakPaneReachabilityTest {
     fun `stock shot does not break a side column at 140m`() {
         val cell = cellFor(targetM = 140.0)
         assertTrue("stock shot should stay in the middle column", cell in 3..5)
+    }
+
+    @Test
+    fun `stock 8i crosses the pane at the 10 percent custom distance`() {
+        // Target 125 keeps the stock 8i (20 deg / 6500 rpm) inside the reference trajectory's
+        // profile bracket, so the shot approximates the target-carrying reference the
+        // middle-row anchor assumes.
+        val cell = cellFor(targetM = 125.0, paneDistanceM = 12.5) // 10% of 125
+        assertTrue("expected middle column (3..5) but got cell=$cell", cell in 3..5)
+    }
+
+    @Test
+    fun `stock 8i crosses the pane at the 50 percent custom distance`() {
+        val cell = cellFor(targetM = 125.0, paneDistanceM = 62.5) // 50% of 125
+        assertTrue("expected middle column (3..5) but got cell=$cell", cell in 3..5)
+    }
+
+    @Test
+    fun `under-carrying club still crosses the pane near the player`() {
+        // 140 m target with the same 8i (~119 m carry): near the player (10% plane) the
+        // trajectory has not diverged from the reference yet, so the shot still crosses mid-pane.
+        val cell = cellFor(targetM = 140.0, paneDistanceM = 14.0) // 10% of 140
+        assertTrue("expected middle column (3..5) but got cell=$cell", cell in 3..5)
     }
 }
