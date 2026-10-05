@@ -168,9 +168,9 @@ object FollowCam {
         // (at touchdown head = last flight sample, so descentRig(..., 1.0)
         // equals the fixed overlook exactly — continuity preserved).
         if (t <= FOLLOW_DELAY_SEC + BLEND_SEC) {
-            val hold = holdUntilSec ?: 0.0
+            val holdT = holdUntilSec ?: 0.0
             return when {
-                timeSec < hold -> RangeCamera.STATIC
+                timeSec < holdT -> RangeCamera.STATIC
                 timeSec < t -> overlook
                 else -> descentRig(sampleAt(drawn, timeSec), overlook, 1.0)
             }

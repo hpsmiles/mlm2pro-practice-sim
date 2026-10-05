@@ -42,7 +42,7 @@ object ReferenceTrajectory {
     }
 
     /** z height where the stock shot for [targetM] crosses the pane plane (y = fraction x target). */
-    fun paneCrossingHeightM(targetM: Double, planeFraction: Double = 0.25): Double {
+    fun paneCrossingHeightM(targetM: Double, planeFraction: Double = 0.20): Double {
         val shot = stockShot(targetM)
         val planeY = targetM * planeFraction
         return FlightCrossing.firstForwardCrossing(shot.samples, planeY)?.second

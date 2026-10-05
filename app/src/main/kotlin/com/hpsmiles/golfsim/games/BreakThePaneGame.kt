@@ -58,6 +58,7 @@ class BreakThePaneGame {
         private set
     var difficulty: Difficulty = Difficulty.MEDIUM
         private set
+    /** Custom pane plane distance (m), null = default 20%; survives PLAY AGAIN via explicit pass-through. */
     var paneDistanceM: Double? = null
         private set
     var lastFeedback: String = ""

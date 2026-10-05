@@ -118,6 +118,9 @@ class BreakPaneReachabilityTest {
         // Target 125 keeps the stock 8i (20 deg / 6500 rpm) inside the reference trajectory's
         // profile bracket, so the shot approximates the target-carrying reference the
         // middle-row anchor assumes.
+        // We assert the middle column plus an in-band crossing only; the exact row is
+        // calibration-sensitive, so the probes fail on anchoring regressions without
+        // pinning row centering.
         val cell = cellFor(targetM = 125.0, paneDistanceM = 12.5) // 10% of 125
         assertTrue("expected middle column (3..5) but got cell=$cell", cell in 3..5)
     }

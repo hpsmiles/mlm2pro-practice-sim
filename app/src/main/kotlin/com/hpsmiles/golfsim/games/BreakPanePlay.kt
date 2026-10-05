@@ -50,6 +50,8 @@ fun BreakPanePlay(
     val lastShot = game.shots.lastOrNull()
     // One traversal per shot: tSec gates the camera, revealFraction gates the glass cue
     // (same quantity the canvas uses for the intersection dot, so they stay in sync).
+    // Pane only mutates inside start(), always paired with shots.clear() (a snapshot write),
+    // so this remember key pair can't go stale.
     val paneMark = remember(lastShot, game.pane) {
         val result = lastShot?.shot?.shotResult
         val pane = game.pane

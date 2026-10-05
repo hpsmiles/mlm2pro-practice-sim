@@ -8,7 +8,9 @@ import com.hpsmiles.golfsim.R
 /**
  * Thin SoundPool wrapper for the three Break-the-Pane cues (2026-10-05 spec).
  * No-ops when disabled or until clips finish loading (SoundPool.play is a
- * silent no-op before load completes, so nothing blocks playback).
+ * silent no-op before load completes, so nothing blocks playback). A failed
+ * load — load() returning 0 — makes that cue a permanent silent no-op too
+ * (compile-time R.raw resources make this near-unreachable).
  */
 class GameAudio(context: Context) {
 

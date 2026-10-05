@@ -200,8 +200,9 @@ fun SettingsScreen(
             }
             Text(
                 text = "Game cue sounds (glass break, success, miss).",
-                style = GolfTypography.Status,
-                color = GolfColors.TextMuted,
+                style = GolfTypography.Body,
+                color = GolfColors.TextSecondary,
+                modifier = Modifier.fillMaxWidth().padding(bottom = GolfSpacing.Sm),
             )
         }
         SectionCard("DEBUG - NOTIFICATION CAPTURE (BENCH)") {

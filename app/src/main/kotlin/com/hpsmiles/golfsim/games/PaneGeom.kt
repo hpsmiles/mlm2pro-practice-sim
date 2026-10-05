@@ -14,6 +14,7 @@ import kotlin.math.floor
  *
  * Cell indices: row (bottom-up) * 3 + col (left-right) -> 0..8, middle = 4.
  * A custom pane distance moves the plane only — cells and the middle-row anchor follow.
+ * Callers are expected to pass [planeDistanceM] within [MIN_FRACTION, MAX_FRACTION] x targetM; clamping is the setup UI's job (PaneGeom does not validate).
  * Boundary rule: inclusive upward -- a point exactly on a row top belongs to
  * the row above; exactly on a col edge belongs to the col right of it
  * (floor semantics on the cell-local coordinate).

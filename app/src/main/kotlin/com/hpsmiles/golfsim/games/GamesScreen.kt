@@ -32,12 +32,14 @@ import com.hpsmiles.golfsim.core.designsystem.GolfColors
 import com.hpsmiles.golfsim.core.designsystem.GolfSpacing
 import com.hpsmiles.golfsim.core.designsystem.GolfTypography
 import java.util.Locale
+import kotlin.math.roundToInt
 
 /** Which game (if any) currently owns the shot stream. Hoisted to AppRoot for dispatch. */
 enum class GameMode { NONE, TARGET_PRACTICE, BREAK_PANE }
 
 private const val DIST_MIN_M = 50.0
 private const val DIST_MAX_M = 350.0
+private const val DEFAULT_TARGET_M = 140.0
 
 /**
  * Games tab: picker -> per-game setup -> play -> result. Plain when-enum
@@ -143,7 +145,7 @@ private fun TargetPracticeSetup(onStart: (Double, Difficulty) -> Unit, onCancel:
 
 @Composable
 private fun BreakPaneSetup(onStart: (Double?, Double, Difficulty) -> Unit, onCancel: () -> Unit) {
-    var targetM by remember { mutableStateOf(140.0) }
+    var targetM by remember { mutableStateOf(DEFAULT_TARGET_M) }
     var customPane by remember { mutableStateOf(false) }
     var paneM by remember { mutableStateOf(PaneGeom.PLANE_FRACTION * 140.0) }
 
@@ -181,8 +183,13 @@ private fun BreakPaneSetup(onStart: (Double?, Double, Difficulty) -> Unit, onCan
             )
             if (customPane) {
                 Text(
+                    text = "Moves the glass pane closer to or farther from the tee.",
+                    style = GolfTypography.Body,
+                    color = GolfColors.TextSecondary,
+                )
+                Text(
                     text = "PANE DISTANCE (m): " + String.format(Locale.US, "%.0f", paneM) +
-                        "  (" + (paneM / targetM * 100).toInt() + "% of target)",
+                        "  (" + Math.round(paneM / targetM * 100).toInt() + "% of target)",
                     style = GolfTypography.Body,
                     color = GolfColors.TextPrimary,
                 )
@@ -190,7 +197,7 @@ private fun BreakPaneSetup(onStart: (Double?, Double, Difficulty) -> Unit, onCan
                     value = paneM.toFloat(),
                     onValueChange = { paneM = it.toDouble() },
                     valueRange = paneMinM.toFloat()..paneMaxM.toFloat(),
-                    steps = ((paneMaxM - paneMinM) - 1.0).toInt().coerceAtLeast(0),
+                    steps = ((paneMaxM - paneMinM).roundToInt() - 1).coerceAtLeast(0),
                 )
             }
         },
@@ -205,8 +212,8 @@ private fun GameSetupScreen(
     onTargetChange: (Double) -> Unit = {},
     extraContent: (@Composable ColumnScope.() -> Unit)? = null,
 ) {
-    var sliderM by remember { mutableStateOf(140.0) }
-    var text by remember { mutableStateOf("140") }
+    var sliderM by remember { mutableStateOf(DEFAULT_TARGET_M) }
+    var text by remember { mutableStateOf(DEFAULT_TARGET_M.toInt().toString()) }
     var difficulty by remember { mutableStateOf(Difficulty.MEDIUM) }
 
     Column(verticalArrangement = Arrangement.spacedBy(GolfSpacing.Lg)) {
