@@ -26,6 +26,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.hpsmiles.golfsim.audio.GameAudio
 import com.hpsmiles.golfsim.core.designsystem.GolfColors
 import com.hpsmiles.golfsim.core.designsystem.GolfSpacing
 import com.hpsmiles.golfsim.core.designsystem.GolfTypography
@@ -48,6 +49,7 @@ fun GamesScreen(
     breakPane: BreakThePaneGame,
     activeGame: GameMode,
     onActiveGameChange: (GameMode) -> Unit,
+    gameAudio: GameAudio,
     modifier: Modifier = Modifier,
 ) {
     var pickerState by remember { mutableStateOf("PICKER") } // PICKER | SETUP | PLAYING
@@ -107,6 +109,7 @@ fun GamesScreen(
         activeGame == GameMode.BREAK_PANE -> {
             BreakPanePlay(
                 game = breakPane,
+                gameAudio = gameAudio,
                 onBack = {
                     onActiveGameChange(GameMode.NONE)
                     pickerState = "PICKER"

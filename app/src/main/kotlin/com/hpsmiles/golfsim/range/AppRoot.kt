@@ -39,6 +39,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.hpsmiles.golfsim.audio.GameAudio
 import com.hpsmiles.golfsim.core.connect.AutoConnectPolicy
 import com.hpsmiles.golfsim.core.connect.ConnectionState
 import com.hpsmiles.golfsim.core.connect.EnvironmentConfig
@@ -67,6 +68,7 @@ import com.hpsmiles.golfsim.games.TargetPracticeGame
 import com.hpsmiles.golfsim.history.HistoryScreen
 import com.hpsmiles.golfsim.settings.GreenConditionStore
 import com.hpsmiles.golfsim.settings.SettingsScreen
+import com.hpsmiles.golfsim.settings.SoundPrefStore
 import com.hpsmiles.golfsim.settings.TurfConditionStore
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -130,6 +132,20 @@ fun AppRoot() {
     fun selectTurfCondition(condition: TurfCondition) {
         turfCondition = condition
         turfConditionStore.set(condition)
+    }
+
+    val gameAudio = remember { GameAudio(context) }
+    DisposableEffect(Unit) {
+        onDispose { gameAudio.release() }
+    }
+
+    val soundPrefStore = remember { SoundPrefStore(context) }
+    var soundsEnabled by remember { mutableStateOf(soundPrefStore.get()) }
+    LaunchedEffect(soundsEnabled) { gameAudio.enabled = soundsEnabled }
+
+    fun selectSoundsEnabled(enabled: Boolean) {
+        soundsEnabled = enabled
+        soundPrefStore.set(enabled)
     }
 
     // Keep the simulated surfaces in sync with Settings > GREEN / TURF for the
@@ -616,6 +632,7 @@ fun AppRoot() {
                             breakPane = breakPane,
                             activeGame = activeGame,
                             onActiveGameChange = { activeGame = it },
+                            gameAudio = gameAudio,
                         )
                     }
                     RangeTab.SETTINGS -> {
@@ -625,6 +642,8 @@ fun AppRoot() {
                             onGreenConditionChange = ::selectGreenCondition,
                             turfCondition = turfCondition,
                             onTurfConditionChange = ::selectTurfCondition,
+                            soundsEnabled = soundsEnabled,
+                            onSoundsChange = ::selectSoundsEnabled,
                             clubs = clubRecords,
                             onAddClub = sessionRepository::addClub,
                             onRenameClub = { id, name ->

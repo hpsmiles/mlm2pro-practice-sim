@@ -27,6 +27,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.unit.dp
+import com.hpsmiles.golfsim.audio.GameAudio
 import com.hpsmiles.golfsim.core.designsystem.GolfColors
 import com.hpsmiles.golfsim.core.designsystem.GolfSpacing
 import com.hpsmiles.golfsim.core.designsystem.GolfTypography
@@ -39,6 +40,8 @@ import com.hpsmiles.golfsim.range.RangeCamera
 fun BreakPanePlay(
     game: BreakThePaneGame,
     onBack: () -> Unit,
+    /** Consumed by Task 10 playback wiring; unused until then. */
+    gameAudio: GameAudio? = null,
     modifier: Modifier = Modifier,
 ) {
     var playFraction by remember { mutableFloatStateOf(1f) }
