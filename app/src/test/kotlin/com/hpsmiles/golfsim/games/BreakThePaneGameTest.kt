@@ -213,4 +213,18 @@ class BreakThePaneGameTest {
         assertEquals(BreakOutcomeKind.MISSED_BOTH, shot.outcome.kind)
         assertFalse(shot.outcome.crossedUnbrokenCell)
     }
+
+    @Test
+    fun `green hit through an already broken cell carries no flag`() {
+        val game = BreakThePaneGame()
+        game.simulator = syntheticShot(0.0, PaneGeom(target).zRefM, 0.0, target + 1.0)
+        game.start(target)
+        val first = game.add(ball())!!
+        assertEquals(BreakOutcomeKind.BROKE, first.outcome.kind)
+        // Same crossing again, rest still on green -> GREEN_MISSED_PANE through the now-broken cell.
+        game.simulator = syntheticShot(0.0, PaneGeom(target).zRefM, 0.0, target + 1.0)
+        val second = game.add(ball())!!
+        assertEquals(BreakOutcomeKind.GREEN_MISSED_PANE, second.outcome.kind)
+        assertFalse(second.outcome.crossedUnbrokenCell)
+    }
 }
