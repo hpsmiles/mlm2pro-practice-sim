@@ -74,4 +74,24 @@ class PaneIntersectionTest {
         )
         assertNull(PaneIntersection.mark(below, planeY, apexVMin = -1.0))
     }
+
+    @Test
+    fun `pending cell stays standing until the crossing reveal`() {
+        assertEquals(setOf(1, 7), PaneIntersection.visibleBroken(setOf(1, 4, 7), 4, revealed = false))
+    }
+
+    @Test
+    fun `pending cell shows broken at the reveal moment`() {
+        assertEquals(setOf(1, 4), PaneIntersection.visibleBroken(setOf(1, 4), 4, revealed = true))
+    }
+
+    @Test
+    fun `no pending cell shows every break`() {
+        assertEquals(setOf(2, 5), PaneIntersection.visibleBroken(setOf(2, 5), null, revealed = false))
+    }
+
+    @Test
+    fun `pending cell absent from the broken set changes nothing`() {
+        assertEquals(setOf(1), PaneIntersection.visibleBroken(setOf(1), 9, revealed = false))
+    }
 }

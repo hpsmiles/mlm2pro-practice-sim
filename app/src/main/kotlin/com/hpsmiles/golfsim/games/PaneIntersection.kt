@@ -41,4 +41,9 @@ object PaneIntersection {
         } else {
             FollowCam.scaledSamples(result, apexVMin) + RangeRollout.samples(result)
         }
+
+    /** Cells that draw broken during playback: previous breaks always show; the current
+     *  shot's cell stays standing until the tracer reaches its crossing, then shows. */
+    fun visibleBroken(brokenCells: Collection<Int>, pendingCell: Int?, revealed: Boolean): Set<Int> =
+        if (pendingCell != null && !revealed) brokenCells.toSet() - pendingCell else brokenCells.toSet()
 }
