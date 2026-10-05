@@ -12,8 +12,8 @@ import com.hpsmiles.golfsim.range.RangeRollout
  */
 object PaneIntersection {
 
-    /** Crossing point plus when it becomes visible along the tracer (0..1). */
-    data class Mark(val xM: Double, val zM: Double, val revealFraction: Float)
+    /** Crossing point plus when it becomes visible along the tracer (0..1) and the crossing time in flight seconds. */
+    data class Mark(val xM: Double, val zM: Double, val revealFraction: Float, val tSec: Double)
 
     /** Null when the drawn flight never crosses the pane plane forward. */
     fun mark(result: ShotResult, planeYM: Double, apexVMin: Double): Mark? {
@@ -27,7 +27,8 @@ object PaneIntersection {
                 val x = a.px + (b.px - a.px) * t
                 val z = a.pz + (b.pz - a.pz) * t
                 val frac = ((i - 1) + t) / (samples.size - 1)
-                return Mark(x, z, frac.coerceIn(0.0, 1.0).toFloat())
+                val tSec = a.tSec + (b.tSec - a.tSec) * t
+                return Mark(x, z, frac.coerceIn(0.0, 1.0).toFloat(), tSec)
             }
         }
         return null

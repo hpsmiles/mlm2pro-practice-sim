@@ -35,6 +35,14 @@ class PaneIntersectionTest {
     }
 
     @Test
+    fun `mark reports the crossing time in flight seconds`() {
+        val mark = PaneIntersection.mark(flight(0.5, 10.0), planeY, apexVMin = -1.0)
+        assertNotNull(mark)
+        // The crossing sample sits at tSec = 3.0 in the synthetic flight.
+        assertEquals(3.0, mark!!.tSec, 1e-9)
+    }
+
+    @Test
     fun `no forward crossing reports null`() {
         // py never reaches the 35 m plane.
         val below = ShotResult(
