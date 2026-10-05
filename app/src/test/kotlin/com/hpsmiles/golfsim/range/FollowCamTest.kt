@@ -354,4 +354,50 @@ class FollowCamTest {
         val cam = FollowCam.cameraAt(chip, frac(chip, 1.0), holdUntilSec = 0.8)
         assertEquals(pitch, cam.pitchRad, 1e-12)
     }
+
+    @Test
+    fun `hold blend starts at the hold and completes at hold plus blend`() {
+        val shot = parabolicShot()
+        val hold = 3.0
+        // Just after the hold (3.05 s) the quintic smoothstep is ~0: the
+        // camera must still be essentially STATIC — the blend starts AT the
+        // hold, not before it (without the hold it would be ~92 m into the
+        // blend by now).
+        val justAfter = FollowCam.cameraAt(shot, frac(shot, 3.05), holdUntilSec = hold)
+        assertEquals(RangeCamera.STATIC.x, justAfter.x, 0.1)
+        assertEquals(RangeCamera.STATIC.y, justAfter.y, 0.1)
+        assertEquals(RangeCamera.STATIC.z, justAfter.z, 0.1)
+        assertEquals(0.0, justAfter.pitchRad, 1e-9)
+        // By engageT + BLEND_SEC (= 4.4 s) the blend has fully handed off to
+        // the chase-shaped rig (pitch 0, behind-and-above the drawn ball) —
+        // it did not linger near STATIC, so the blend window is exactly
+        // [hold, hold + BLEND].
+        val drawn = FollowCam.scaledSamples(shot) + RangeRollout.samples(shot)
+        val timeSec = frac(shot, 4.4).toDouble() * shot.flightTimeSec
+        val head = drawn.last { it.tSec <= timeSec }
+        val atBlendEnd = FollowCam.cameraAt(shot, frac(shot, 4.4), holdUntilSec = hold)
+        assertEquals(head.px, atBlendEnd.x, 1e-6)
+        assertEquals(head.py - FollowCam.CHASE_BACK_M, atBlendEnd.y, 1e-6)
+        assertEquals(head.pz + FollowCam.CHASE_UP_M, atBlendEnd.z, 1e-6)
+        assertEquals(0.0, atBlendEnd.pitchRad, 1e-6)
+    }
+
+    @Test
+    fun `hold composes with early engage as the later of the two`() {
+        // Same recipe as highApexEngagesBeforeTheTimer: on a squarer canvas
+        // the drawn flight breaches the frame top at ~0.8 s, so early engage
+        // E < 1.0 (and E < 0.9 — the timer test proves 0.9 s is moving).
+        val driver = parabolicShot(carryM = 240.0, apexM = 45.0)
+        val vMin = -0.20
+        // A hold smaller than E does not suppress early engage: still moving at 0.9 s.
+        assertNotEquals(
+            RangeCamera.STATIC,
+            FollowCam.cameraAt(driver, frac(driver, 0.9), apexVMin = vMin, holdUntilSec = 0.1),
+        )
+        // A hold larger than E defers engage to the hold: STATIC at 0.9 s.
+        assertEquals(
+            RangeCamera.STATIC,
+            FollowCam.cameraAt(driver, frac(driver, 0.9), apexVMin = vMin, holdUntilSec = 1.0),
+        )
+    }
 }

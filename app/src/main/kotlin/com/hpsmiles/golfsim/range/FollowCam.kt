@@ -133,7 +133,10 @@ object FollowCam {
      * [holdUntilSec] optionally forces the STATIC rig until that flight time
      * (Break the Pane holds the player view until the ball has crossed the
      * pane plane, 2026-10-05); the normal blend, chase, descent, hold and
-     * snap-back then run unchanged with engageT shifted to the hold.
+     * snap-back then run unchanged with engageT shifted to the hold. A hold
+     * past touchdown simply delays the blend into the rollout — crossing
+     * times come from the drawn flight + rollout samples, so a late pane
+     * crossing still anchors the blend on the ground roll.
      */
     fun cameraAt(
         shot: ShotResult,
