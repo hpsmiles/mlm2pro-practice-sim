@@ -199,10 +199,13 @@ fun TargetPracticePlay(
 
                 // In-game quick settings: gear at TopEnd; dialog never touches
                 // game state, so mid-game progress survives (spec 2026-10-06).
-                GameQuickSettingsButton(
-                    onClick = { showQuickSettings = true },
-                    modifier = Modifier.align(Alignment.TopEnd).padding(GolfSpacing.Sm),
-                )
+                // Hidden on the result overlay — entry point is active play only (spec).
+                if (!showResultOverlay) {
+                    GameQuickSettingsButton(
+                        onClick = { showQuickSettings = true },
+                        modifier = Modifier.align(Alignment.TopEnd).padding(GolfSpacing.Sm),
+                    )
+                }
                 if (showQuickSettings) {
                     GameQuickSettingsDialog(
                         soundsEnabled = soundsEnabled,
