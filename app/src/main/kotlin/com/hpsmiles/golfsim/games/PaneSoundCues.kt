@@ -12,7 +12,7 @@ object PaneSoundCues {
     fun restsOnGreen(kind: BreakOutcomeKind): Boolean =
         kind == BreakOutcomeKind.BROKE || kind == BreakOutcomeKind.GREEN_MISSED_PANE
 
-    /** Glass fires once per playback, at/after the pane-crossing reveal fraction. */
+    /** Fires once per playback at/after the pane-crossing reveal fraction; the caller gates this on the shot having crossed standing glass (`crossedUnbrokenCell`), and this function owns timing + the once-per-playback latch. */
     fun glassDue(playFraction: Float, revealFraction: Float, alreadyPlayed: Boolean): Boolean =
         !alreadyPlayed && playFraction >= revealFraction
 }

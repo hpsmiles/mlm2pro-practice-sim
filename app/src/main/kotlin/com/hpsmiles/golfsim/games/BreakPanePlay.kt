@@ -81,8 +81,10 @@ fun BreakPanePlay(
             val now = withFrameNanos { it }
             playFraction = (playFraction + ((now - last) / 1_000_000.0 / durationMs).toFloat()).coerceAtMost(end)
             last = now
-            // Glass fires at the pane-crossing moment, synced with the visual mark.
-            if (shot.outcome.kind == BreakOutcomeKind.BROKE &&
+            // Glass fires at the pane-crossing moment, synced with the visual mark, for any
+            // shot that physically passed through standing glass (BROKE or pane-hit-but-
+            // green-missed with an unbroken cell); already-broken cells stay silent.
+            if (shot.outcome.crossedUnbrokenCell &&
                 reveal != null && PaneSoundCues.glassDue(playFraction, reveal, glassPlayed)
             ) {
                 glassPlayed = true

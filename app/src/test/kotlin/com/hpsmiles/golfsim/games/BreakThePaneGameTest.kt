@@ -175,4 +175,42 @@ class BreakThePaneGameTest {
         assertNull(game.paneDistanceM)
         assertEquals(PaneGeom.PLANE_FRACTION * 150.0, game.pane!!.planeYM, 1e-9)
     }
+
+    @Test
+    fun `pane hit with green missed carries the crossed unbroken cell flag`() {
+        val game = newGame(0.0, PaneGeom(target).zRefM, 0.0, target - 20.0)
+        val shot = game.add(ball())!!
+        assertEquals(BreakOutcomeKind.HIT_PANE_MISSED_GREEN, shot.outcome.kind)
+        assertTrue(shot.outcome.crossedUnbrokenCell)
+    }
+
+    @Test
+    fun `pane hit through an already broken cell stays silent`() {
+        val game = BreakThePaneGame()
+        game.simulator = syntheticShot(0.0, PaneGeom(target).zRefM, 0.0, target + 1.0)
+        game.start(target)
+        game.add(ball()) // breaks cell 4
+        // Same crossing again, but rest off green -> HIT_PANE_MISSED_GREEN through the now-broken cell.
+        game.simulator = syntheticShot(0.0, PaneGeom(target).zRefM, 0.0, target - 20.0)
+        val second = game.add(ball())!!
+        assertEquals(BreakOutcomeKind.HIT_PANE_MISSED_GREEN, second.outcome.kind)
+        assertFalse(second.outcome.crossedUnbrokenCell)
+    }
+
+    @Test
+    fun `broke outcome always carries the flag`() {
+        val game = newGame(0.0, PaneGeom(target).zRefM, 0.0, target + 1.0)
+        val shot = game.add(ball())!!
+        assertEquals(BreakOutcomeKind.BROKE, shot.outcome.kind)
+        assertTrue(shot.outcome.crossedUnbrokenCell)
+    }
+
+    @Test
+    fun `shot that never reaches standing glass carries no flag`() {
+        // Crossing below the pane (out of band), rest off green -> MISSED_BOTH, no glass.
+        val game = newGame(0.0, crossZ = 2.0, restX = 0.0, restY = target - 20.0)
+        val shot = game.add(ball())!!
+        assertEquals(BreakOutcomeKind.MISSED_BOTH, shot.outcome.kind)
+        assertFalse(shot.outcome.crossedUnbrokenCell)
+    }
 }
