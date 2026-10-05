@@ -119,6 +119,14 @@ fun BreakPanePlay(
                 )
 
                 // HUD: pane-state minimap (3x3, filled teal = broken), shots counter, feedback.
+                // The current shot's will-break cell stays standing until the tracer reaches
+                // it (same visible-broken rule as the canvas), so the minimap doesn't spoil
+                // the break from the first playback frame.
+                val brokenSet = PaneIntersection.visibleBroken(
+                    game.brokenCells,
+                    lastShot?.outcome?.brokenCell,
+                    paneMark == null || playFraction >= paneMark.revealFraction,
+                )
                 Column(
                     modifier = Modifier.align(Alignment.TopStart).padding(GolfSpacing.Sm),
                     verticalArrangement = Arrangement.spacedBy(2.dp),
@@ -135,7 +143,7 @@ fun BreakPanePlay(
                                 Box(
                                     modifier = Modifier
                                         .size(16.dp)
-                                        .background(if (cell in game.brokenCells) GolfColors.Teal else GolfColors.Panel)
+                                        .background(if (cell in brokenSet) GolfColors.Teal else GolfColors.Panel)
                                         .border(1.dp, GolfColors.Line, RoundedCornerShape(2.dp)),
                                 )
                             }
@@ -143,7 +151,12 @@ fun BreakPanePlay(
                     }
                     Text("SHOTS ${game.shotCount}", style = GolfTypography.MetricValue, color = GolfColors.TextPrimary)
                 }
-                if (game.lastFeedback.isNotBlank()) {
+                // Feedback ("BROKE CELL 5", "PANE OK - MISSED GREEN", ...) is evaluated at shot
+                // ingest, so it must wait for the playback to finish — the same moment the
+                // ding/fail fires — or it telegraphs the outcome from the first frame.
+                val shotDone = lastShot != null &&
+                    playFraction >= FollowCam.endFraction(lastShot.shot.shotResult).toFloat()
+                if (shotDone && game.lastFeedback.isNotBlank()) {
                     Text(
                         text = game.lastFeedback,
                         style = GolfTypography.Status,
