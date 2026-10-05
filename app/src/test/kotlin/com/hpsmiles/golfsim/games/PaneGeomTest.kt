@@ -1,5 +1,6 @@
 package com.hpsmiles.golfsim.games
 
+import com.hpsmiles.golfsim.core.physics.ReferenceTrajectory
 import com.hpsmiles.golfsim.core.physics.TrajectorySample
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -80,5 +81,30 @@ class PaneGeomTest {
         assertEquals(-pane.cellWM / 2.0, blx, 1e-9)
         val (_, _, trz) = corners[2]
         assertEquals(pane.zRefM + pane.cellHM / 2.0, trz, 1e-9)
+    }
+
+    @Test
+    fun `custom pane distance overrides the plane distance`() {
+        val custom = PaneGeom(140.0, 42.0)
+        assertEquals(42.0, custom.planeYM, 1e-9)
+        // Cell sizes stay % of target — only the distance changes.
+        assertEquals(2.24, custom.cellHM, 1e-9)
+        assertEquals(2.80, custom.cellWM, 1e-9)
+    }
+
+    @Test
+    fun `custom pane distance anchors the middle row at the effective fraction`() {
+        val custom = PaneGeom(140.0, 42.0)
+        assertEquals(
+            ReferenceTrajectory.paneCrossingHeightM(140.0, 42.0 / 140.0),
+            custom.zRefM,
+            1e-9,
+        )
+    }
+
+    @Test
+    fun `slider bound constants`() {
+        assertEquals(0.10, PaneGeom.MIN_FRACTION, 1e-9)
+        assertEquals(0.50, PaneGeom.MAX_FRACTION, 1e-9)
     }
 }

@@ -13,21 +13,27 @@ import kotlin.math.floor
  * flighting.
  *
  * Cell indices: row (bottom-up) * 3 + col (left-right) -> 0..8, middle = 4.
+ * A custom pane distance moves the plane only — cells and the middle-row anchor follow.
  * Boundary rule: inclusive upward -- a point exactly on a row top belongs to
  * the row above; exactly on a col edge belongs to the col right of it
  * (floor semantics on the cell-local coordinate).
  */
-class PaneGeom(val targetM: Double) {
+class PaneGeom(val targetM: Double, planeDistanceM: Double? = null) {
 
     companion object {
-        /** Pane distance as a fraction of the target (item 5, 2026-10-01: 25% -> 20%). */
+        /** Default pane distance as a fraction of the target (item 5, 2026-10-01: 25% -> 20%). */
         const val PLANE_FRACTION = 0.20
+
+        /** Custom-pane-distance slider bounds as a fraction of the target (2026-10-05 spec). */
+        const val MIN_FRACTION = 0.10
+        const val MAX_FRACTION = 0.50
     }
 
-    val planeYM: Double = PLANE_FRACTION * targetM
+    /** Plane distance from the tee (m): the override when given, else PLANE_FRACTION x target. */
+    val planeYM: Double = planeDistanceM ?: (PLANE_FRACTION * targetM)
     val cellHM: Double = 0.016 * targetM
     val cellWM: Double = 0.020 * targetM
-    val zRefM: Double = ReferenceTrajectory.paneCrossingHeightM(targetM, PLANE_FRACTION)
+    val zRefM: Double = ReferenceTrajectory.paneCrossingHeightM(targetM, planeYM / targetM)
     val bottomZM: Double = zRefM - 1.5 * cellHM
     val topZM: Double = bottomZM + 3 * cellHM
     val leftXM: Double = -1.5 * cellWM
