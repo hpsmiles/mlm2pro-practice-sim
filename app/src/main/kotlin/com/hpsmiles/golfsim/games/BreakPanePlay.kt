@@ -151,7 +151,7 @@ fun BreakPanePlay(
                             }
                             Text("Lower is better.", style = GolfTypography.Body, color = GolfColors.TextSecondary)
                             Row(horizontalArrangement = Arrangement.spacedBy(GolfSpacing.Sm)) {
-                                Button(onClick = { game.start(game.targetM, game.difficulty) }) { Text("PLAY AGAIN") }
+                                Button(onClick = { game.start(game.targetM, game.difficulty, game.paneDistanceM) }) { Text("PLAY AGAIN") }
                                 OutlinedButton(onClick = onBack) { Text("BACK") }
                             }
                         }

@@ -58,14 +58,17 @@ class BreakThePaneGame {
         private set
     var difficulty: Difficulty = Difficulty.MEDIUM
         private set
+    var paneDistanceM: Double? = null
+        private set
     var lastFeedback: String = ""
         private set
     private var resultTaken = false
 
-    fun start(targetM: Double, difficulty: Difficulty = Difficulty.MEDIUM) {
+    fun start(targetM: Double, difficulty: Difficulty = Difficulty.MEDIUM, paneDistanceM: Double? = null) {
         this.targetM = targetM
         this.difficulty = difficulty
-        pane = PaneGeom(targetM)
+        this.paneDistanceM = paneDistanceM
+        pane = PaneGeom(targetM, paneDistanceM)
         shots.clear()
         brokenCells.clear()
         lastFeedback = ""
