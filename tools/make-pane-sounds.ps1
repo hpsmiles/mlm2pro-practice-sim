@@ -38,16 +38,30 @@ for ($i = 0; $i -lt $n; $i++) {
 }
 Write-Wav "pane_success_ding.wav" $ding
 
-# Fail: 150 Hz thud with pitch drop + noise tick, 0.4 s.
-$n = [int](0.4 * $rate); $fail = [double[]]::new($n); $rnd = [System.Random]::new(42)
+# Fail ("ba-bong"): two descending mallet tones — short "ba", resonant "bong".
+$n = [int](0.75 * $rate); $fail = [double[]]::new($n)
 for ($i = 0; $i -lt $n; $i++) {
-    $t = $i / $rate; $env = [Math]::Exp(-9.0 * $t)
-    $f = 150.0 - 60.0 * $t
-    $fail[$i] = 0.8 * $env * [Math]::Sin(2 * [Math]::PI * $f * $t) + 0.15 * $env * ($rnd.NextDouble() * 2 - 1)
+    $t = $i / $rate
+    $v = 0.0
+    if ($t -lt 0.25) {
+        $e = [Math]::Exp(-16.0 * $t)
+        $v += 0.55 * $e * ([Math]::Sin(2 * [Math]::PI * 196.0 * $t) + 0.35 * [Math]::Sin(2 * [Math]::PI * 392.0 * $t))
+    }
+    if ($t -ge 0.18) {
+        $t2 = $t - 0.18
+        $e = [Math]::Exp(-4.5 * $t2)
+        $v += 0.6 * $e * ([Math]::Sin(2 * [Math]::PI * 130.8 * $t2) + 0.4 * [Math]::Sin(2 * [Math]::PI * 261.6 * $t2) + 0.15 * [Math]::Sin(2 * [Math]::PI * 65.4 * $t2))
+    }
+    if ($t -gt 0.72) { $v *= (0.75 - $t) / 0.03 }
+    $fail[$i] = $v
 }
 Write-Wav "pane_fail.wav" $fail
 
-# Glass break: burst of decaying high partials + noise crackle, 0.5 s.
+# Glass break: REAL RECORDING since 2026-10-05 — app/src/main/res/raw/pane_glass_break.mp3
+# (user-provided hard-glass-break.mp3). Do NOT regenerate pane_glass_break here; a
+# re-run of this script must not clobber the real recording. The synthetic recipe
+# below is retired; keep it only for reference.
+<#
 $n = [int](0.5 * $rate); $glass = [double[]]::new($n); $rnd2 = [System.Random]::new(7)
 $partials = New-Object 'System.Collections.Generic.List[double]'
 for ($p = 0; $p -lt 18; $p++) {
@@ -64,3 +78,4 @@ for ($i = 0; $i -lt $n; $i++) {
     $glass[$i] = $v
 }
 Write-Wav "pane_glass_break.wav" $glass
+#>
