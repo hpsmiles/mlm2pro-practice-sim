@@ -147,7 +147,7 @@ private fun TargetPracticeSetup(onStart: (Double, Difficulty) -> Unit, onCancel:
 private fun BreakPaneSetup(onStart: (Double?, Double, Difficulty) -> Unit, onCancel: () -> Unit) {
     var targetM by remember { mutableStateOf(DEFAULT_TARGET_M) }
     var customPane by remember { mutableStateOf(false) }
-    var paneM by remember { mutableStateOf(PaneGeom.PLANE_FRACTION * 140.0) }
+    var paneM by remember { mutableStateOf(PaneGeom.PLANE_FRACTION * DEFAULT_TARGET_M) }
 
     val paneMinM = targetM * PaneGeom.MIN_FRACTION
     val paneMaxM = targetM * PaneGeom.MAX_FRACTION
