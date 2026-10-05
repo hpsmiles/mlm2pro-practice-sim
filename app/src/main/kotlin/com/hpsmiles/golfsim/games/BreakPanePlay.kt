@@ -40,12 +40,22 @@ import com.hpsmiles.golfsim.range.RangeCamera
 fun BreakPanePlay(
     game: BreakThePaneGame,
     onBack: () -> Unit,
-    /** Consumed by Task 10 playback wiring; unused until then. */
-    gameAudio: GameAudio? = null,
+    /** Cue sounds for the playback: glass break at pane crossing, ding on green, fail on miss. */
+    gameAudio: GameAudio,
     modifier: Modifier = Modifier,
 ) {
     var playFraction by remember { mutableFloatStateOf(1f) }
     var speedMult by remember { mutableStateOf(GameSpeedMult.X15) }
+
+    val lastShot = game.shots.lastOrNull()
+    // One traversal per shot: tSec gates the camera, revealFraction gates the glass cue
+    // (same quantity the canvas uses for the intersection dot, so they stay in sync).
+    val paneMark = remember(lastShot, game.pane) {
+        val result = lastShot?.shot?.shotResult
+        val pane = game.pane
+        if (result == null || pane == null) null
+        else PaneIntersection.mark(result, pane.planeYM, FollowCam.RAW_APEX_VMIN)
+    }
 
     // Runs past 1 through the follow-cam landing hold (FollowCam.endFraction),
     // same as the range playback, so the camera snaps back to the STATIC
@@ -61,13 +71,24 @@ fun BreakPanePlay(
         if (result.flightTimeSec <= 0.0) return@LaunchedEffect
         val durationMs = result.flightTimeSec * 1000.0 / speedMult.divisor
         val end = FollowCam.endFraction(result).toFloat()
+        val reveal = paneMark?.revealFraction
+        var glassPlayed = false
         var last = withFrameNanos { it }
         playFraction = 0f
         while (playFraction < end) {
             val now = withFrameNanos { it }
             playFraction = (playFraction + ((now - last) / 1_000_000.0 / durationMs).toFloat()).coerceAtMost(end)
             last = now
+            // Glass fires at the pane-crossing moment, synced with the visual mark.
+            if (shot.outcome.kind == BreakOutcomeKind.BROKE &&
+                reveal != null && PaneSoundCues.glassDue(playFraction, reveal, glassPlayed)
+            ) {
+                glassPlayed = true
+                gameAudio.glassBreak()
+            }
         }
+        // Ball at rest: ding on the green, fail on a miss (2026-10-05 spec).
+        if (PaneSoundCues.restsOnGreen(shot.outcome.kind)) gameAudio.success() else gameAudio.fail()
     }
 
     val showResultOverlay = rememberGameResultOverlayGate(
@@ -82,13 +103,9 @@ fun BreakPanePlay(
             // frames the exact same tracer path the pane is drawn in.
             Box(modifier = Modifier.weight(1f).fillMaxHeight().clipToBounds()) {
                 val apexVMin = FollowCam.RAW_APEX_VMIN
-                val camera = when (val shot = game.shots.lastOrNull()) {
+                val camera = when (val shot = lastShot) {
                     null -> RangeCamera.STATIC
-                    else -> FollowCam.cameraAt(
-                        shot.shot.shotResult,
-                        playFraction,
-                        apexVMin,
-                    )
+                    else -> FollowCam.cameraAt(shot.shot.shotResult, playFraction, apexVMin, paneMark?.tSec)
                 }
                 BreakPaneCanvas(
                     game = game,
