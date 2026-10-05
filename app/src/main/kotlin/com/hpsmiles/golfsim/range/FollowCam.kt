@@ -130,11 +130,16 @@ object FollowCam {
      * The camera for a shot at [playFraction] (0 = impact, 1 = touchdown).
      * [apexVMin] is the frame's top-8% clamp line — pass the same value
      * the canvas uses so the chase follows the exact drawn flight.
+     * [holdUntilSec] optionally forces the STATIC rig until that flight time
+     * (Break the Pane holds the player view until the ball has crossed the
+     * pane plane, 2026-10-05); the normal blend, chase, descent, hold and
+     * snap-back then run unchanged with engageT shifted to the hold.
      */
     fun cameraAt(
         shot: ShotResult,
         playFraction: Float,
         apexVMin: Double = REFERENCE_APEX_VMIN,
+        holdUntilSec: Double? = null,
     ): RangeCamera {
         val t = shot.flightTimeSec
         if (t <= 0.0 || shot.samples.isEmpty()) return RangeCamera.STATIC
@@ -160,11 +165,18 @@ object FollowCam {
         // (at touchdown head = last flight sample, so descentRig(..., 1.0)
         // equals the fixed overlook exactly — continuity preserved).
         if (t <= FOLLOW_DELAY_SEC + BLEND_SEC) {
-            return if (timeSec < t) overlook
-            else descentRig(sampleAt(drawn, timeSec), overlook, 1.0)
+            val hold = holdUntilSec ?: 0.0
+            return when {
+                timeSec < hold -> RangeCamera.STATIC
+                timeSec < t -> overlook
+                else -> descentRig(sampleAt(drawn, timeSec), overlook, 1.0)
+            }
         }
 
-        val engageT = earlyEngageT(drawn)?.coerceAtMost(FOLLOW_DELAY_SEC) ?: FOLLOW_DELAY_SEC
+        val engageT = maxOf(
+            earlyEngageT(drawn)?.coerceAtMost(FOLLOW_DELAY_SEC) ?: FOLLOW_DELAY_SEC,
+            holdUntilSec ?: 0.0,
+        )
         val blendEnd = engageT + BLEND_SEC
         val apexT = drawn.maxByOrNull { it.pz }?.tSec ?: (t / 2.0)
         val descentT = maxOf(apexT, blendEnd)

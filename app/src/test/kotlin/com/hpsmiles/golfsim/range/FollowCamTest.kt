@@ -326,4 +326,32 @@ class FollowCamTest {
             assertEquals(FollowCam.cameraAt(shot, f), FollowCam.cameraAt(shot, f))
         }
     }
+
+    @Test
+    fun `holdUntilSec keeps static past the normal engage`() {
+        val shot = parabolicShot() // normally engages on the 1.0 s timer
+        val hold = 3.0
+        // 2.0 s would already be blending today; with the hold it must still be STATIC.
+        assertEquals(RangeCamera.STATIC, FollowCam.cameraAt(shot, frac(shot, 2.0), holdUntilSec = hold))
+        // 3.5 s: past the hold, mid-blend (3.0-4.4 s) -> camera is moving.
+        assertNotEquals(RangeCamera.STATIC, FollowCam.cameraAt(shot, frac(shot, 3.5), holdUntilSec = hold))
+    }
+
+    @Test
+    fun `holdUntilSec null keeps today behavior`() {
+        val shot = parabolicShot()
+        assertEquals(RangeCamera.STATIC, FollowCam.cameraAt(shot, frac(shot, 0.7), holdUntilSec = null))
+        assertNotEquals(RangeCamera.STATIC, FollowCam.cameraAt(shot, frac(shot, 1.6), holdUntilSec = null))
+    }
+
+    @Test
+    fun `holdUntilSec also applies to short shots`() {
+        val chip = parabolicShot(carryM = 15.0, apexM = 6.0, flightTimeSec = 1.6)
+        // t = 0.64 s < hold -> STATIC even though the short-shot branch would park at the overlook.
+        assertEquals(RangeCamera.STATIC, FollowCam.cameraAt(chip, frac(chip, 0.4), holdUntilSec = 0.8))
+        // t = 1.0 s > hold -> back on the short-shot overlook path.
+        val pitch = Math.toRadians(FollowCam.LAND_PITCH_DEG)
+        val cam = FollowCam.cameraAt(chip, frac(chip, 1.0), holdUntilSec = 0.8)
+        assertEquals(pitch, cam.pitchRad, 1e-12)
+    }
 }
