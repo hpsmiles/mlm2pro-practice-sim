@@ -43,6 +43,24 @@ class PaneIntersectionTest {
     }
 
     @Test
+    fun `mark interpolates tSec across a mid-segment crossing`() {
+        // Plane at 35.0 sits midway between py = 0 (tSec 0) and py = 70 (tSec 3).
+        val shot = ShotResult(
+            carryM = 140.0, rolloutM = 0.0, totalM = 140.0, sideM = 0.0, apexM = 25.0, flightTimeSec = 6.0,
+            samples = listOf(
+                TrajectorySample(0.0, 0.0, 0.0, 0.0),
+                TrajectorySample(2.0, 70.0, 4.0, 3.0),
+            ),
+            restX = 0.0, restY = 140.0,
+        )
+        val mark = PaneIntersection.mark(shot, planeY, apexVMin = -1.0)
+        assertNotNull(mark)
+        assertEquals(1.0, mark!!.xM, 1e-9) // midpoint of the segment
+        assertEquals(2.0, mark.zM, 1e-9)
+        assertEquals(1.5, mark.tSec, 1e-9)
+    }
+
+    @Test
     fun `no forward crossing reports null`() {
         // py never reaches the 35 m plane.
         val below = ShotResult(
