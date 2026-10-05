@@ -166,4 +166,13 @@ class BreakThePaneGameTest {
         assertEquals(PaneGeom.PLANE_FRACTION * target, game.pane!!.planeYM, 1e-9)
         assertNull(game.paneDistanceM)
     }
+
+    @Test
+    fun `fresh start without pane distance resets to default`() {
+        val game = BreakThePaneGame()
+        game.start(140.0, paneDistanceM = 42.0)
+        game.start(150.0)
+        assertNull(game.paneDistanceM)
+        assertEquals(PaneGeom.PLANE_FRACTION * 150.0, game.pane!!.planeYM, 1e-9)
+    }
 }
