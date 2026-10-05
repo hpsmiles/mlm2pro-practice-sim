@@ -42,10 +42,13 @@ fun BreakPanePlay(
     onBack: () -> Unit,
     /** Cue sounds for the playback: glass break at pane crossing, ding on green, fail on miss. */
     gameAudio: GameAudio,
+    soundsEnabled: Boolean,
+    onSoundsChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var playFraction by remember { mutableFloatStateOf(1f) }
     var speedMult by remember { mutableStateOf(GameSpeedMult.X15) }
+    var showQuickSettings by remember { mutableStateOf(false) }
 
     val lastShot = game.shots.lastOrNull()
     // One traversal per shot: tSec gates the camera, revealFraction gates the glass cue
@@ -198,6 +201,20 @@ fun BreakPanePlay(
                 // Celebrate a NEW high score on top of the HUD and result card.
                 if (showResultOverlay && game.record.value?.outcome == RecordOutcome.NEW_RECORD) {
                     ConfettiBurst(modifier = Modifier.matchParentSize())
+                }
+
+                // In-game quick settings: gear at TopEnd; dialog never touches
+                // game state, so mid-game progress survives (spec 2026-10-06).
+                GameQuickSettingsButton(
+                    onClick = { showQuickSettings = true },
+                    modifier = Modifier.align(Alignment.TopEnd).padding(GolfSpacing.Sm),
+                )
+                if (showQuickSettings) {
+                    GameQuickSettingsDialog(
+                        soundsEnabled = soundsEnabled,
+                        onSoundsChange = onSoundsChange,
+                        onDismiss = { showQuickSettings = false },
+                    )
                 }
             }
 

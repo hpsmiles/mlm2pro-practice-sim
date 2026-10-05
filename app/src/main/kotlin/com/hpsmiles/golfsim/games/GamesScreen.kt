@@ -53,6 +53,8 @@ fun GamesScreen(
     activeGame: GameMode,
     onActiveGameChange: (GameMode) -> Unit,
     gameAudio: GameAudio,
+    soundsEnabled: Boolean,
+    onSoundsChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var pickerState by remember { mutableStateOf("PICKER") } // PICKER | SETUP | PLAYING
@@ -106,6 +108,8 @@ fun GamesScreen(
                     onActiveGameChange(GameMode.NONE)
                     pickerState = "PICKER"
                 },
+                soundsEnabled = soundsEnabled,
+                onSoundsChange = onSoundsChange,
                 modifier = modifier,
             )
         }
@@ -117,6 +121,8 @@ fun GamesScreen(
                     onActiveGameChange(GameMode.NONE)
                     pickerState = "PICKER"
                 },
+                soundsEnabled = soundsEnabled,
+                onSoundsChange = onSoundsChange,
                 modifier = modifier,
             )
         }

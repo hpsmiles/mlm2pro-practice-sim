@@ -633,6 +633,8 @@ fun AppRoot() {
                             activeGame = activeGame,
                             onActiveGameChange = { activeGame = it },
                             gameAudio = gameAudio,
+                            soundsEnabled = soundsEnabled,
+                            onSoundsChange = ::selectSoundsEnabled,
                         )
                     }
                     RangeTab.SETTINGS -> {
