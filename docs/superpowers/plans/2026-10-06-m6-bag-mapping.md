@@ -2288,7 +2288,7 @@ git commit -m "feat(app): bag mapping result screen with matrix, gap flags, dril
 **Files:**
 - Create: `app/src/main/kotlin/com/hpsmiles/golfsim/bag/BagMappingCollecting.kt`
 
-- [ ] **Step 1: Implement the COLLECTING view**
+- [x] **Step 1: Implement the COLLECTING view**
 
 ```kotlin
 package com.hpsmiles.golfsim.bag
@@ -2440,14 +2440,14 @@ fun BagMappingCollecting(
 }
 ```
 
-- [ ] **Step 2: Compile to verify**
+- [x] **Step 2: Compile to verify**
 
 ```powershell
 .\gradlew.bat :app:compileDebugKotlin
 ```
 Expected: BUILD SUCCESSFUL.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```powershell
 git add app/src/main/kotlin/com/hpsmiles/golfsim/bag/BagMappingCollecting.kt
@@ -2463,7 +2463,7 @@ git commit -m "feat(app): guided bag mapping collection view with quality gate (
 - Modify: `core/data/src/main/kotlin/com/hpsmiles/golfsim/core/data/SessionRepository.kt` (add counts accessor)
 - Create: `app/src/main/kotlin/com/hpsmiles/golfsim/bag/BagMappingHistory.kt`
 
-- [ ] **Step 1: Add the per-session count query**
+- [x] **Step 1: Add the per-session count query**
 
 In `BagMappingShotDao.kt` add (with a small POJO above the interface):
 
@@ -2492,14 +2492,14 @@ In `SessionRepository.kt` (bag mapping section) add:
     }
 ```
 
-- [ ] **Step 2: Compile + run the module tests**
+- [x] **Step 2: Compile + run the module tests**
 
 ```powershell
 .\gradlew.bat :core:data:test
 ```
 Expected: PASS (DAO change is additive).
 
-- [ ] **Step 3: Implement the HISTORY view**
+- [x] **Step 3: Implement the HISTORY view**
 
 ```kotlin
 package com.hpsmiles.golfsim.bag
@@ -2576,14 +2576,14 @@ fun BagMappingHistory(
 }
 ```
 
-- [ ] **Step 4: Compile to verify**
+- [x] **Step 4: Compile to verify**
 
 ```powershell
 .\gradlew.bat :app:compileDebugKotlin
 ```
 Expected: BUILD SUCCESSFUL.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```powershell
 git add core/data/src/main/kotlin/com/hpsmiles/golfsim/core/data/dao/BagMappingShotDao.kt core/data/src/main/kotlin/com/hpsmiles/golfsim/core/data/SessionRepository.kt app/src/main/kotlin/com/hpsmiles/golfsim/bag/BagMappingHistory.kt
