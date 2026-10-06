@@ -99,6 +99,7 @@ fun AppRoot() {
             .apply { setSessionKey(benchSessionKey()) }
     }
     val connectionState by gattClient.state.collectAsState()
+    val batteryPercent by gattClient.batteryPercent.collectAsState()
     val scope = rememberCoroutineScope()
     // M4d: shared Range shot list + no-read counter, owned at the composition
     // root so demo (RangeScreen fire) and live BLE callbacks append to one list.
@@ -829,6 +830,7 @@ fun AppRoot() {
                         failureReason = lastFailure,
                     )
                 },
+                batteryPercent = batteryPercent,
             )
         }
 
