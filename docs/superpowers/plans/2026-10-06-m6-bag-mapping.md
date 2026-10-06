@@ -1365,7 +1365,7 @@ git commit -m "feat(app): box-plot axis geometry for carry matrix (M6)"
 - Create: `app/src/main/kotlin/com/hpsmiles/golfsim/bag/BagMappingCollector.kt`
 - Test: `app/src/test/kotlin/com/hpsmiles/golfsim/bag/BagMappingCollectorTest.kt`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```kotlin
 package com.hpsmiles.golfsim.bag
@@ -1465,14 +1465,14 @@ class BagMappingCollectorTest {
 }
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 ```powershell
 .\gradlew.bat :app:testDebugUnitTest --tests "com.hpsmiles.golfsim.bag.BagMappingCollectorTest"
 ```
 Expected: FAIL — `BagMappingCollector` unresolved.
 
-- [ ] **Step 3: Write the implementation**
+- [x] **Step 3: Write the implementation**
 
 ```kotlin
 package com.hpsmiles.golfsim.bag
@@ -1635,14 +1635,14 @@ class BagMappingCollector {
 }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 ```powershell
 .\gradlew.bat :app:testDebugUnitTest --tests "com.hpsmiles.golfsim.bag.BagMappingCollectorTest"
 ```
 Expected: PASS (6 tests).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```powershell
 git add app/src/main/kotlin/com/hpsmiles/golfsim/bag/BagMappingCollector.kt app/src/test/kotlin/com/hpsmiles/golfsim/bag/BagMappingCollectorTest.kt
@@ -1656,7 +1656,7 @@ git commit -m "feat(app): bag mapping guided collection state holder (M6)"
 - Create: `app/src/main/kotlin/com/hpsmiles/golfsim/bag/BagMappingIntro.kt`
 - Test: `app/src/test/kotlin/com/hpsmiles/golfsim/bag/BagMappingFormatsTest.kt`
 
-- [ ] **Step 1: Write the failing formats test**
+- [x] **Step 1: Write the failing formats test**
 
 ```kotlin
 package com.hpsmiles.golfsim.bag
@@ -1685,14 +1685,14 @@ class BagMappingFormatsTest {
 }
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 ```powershell
 .\gradlew.bat :app:testDebugUnitTest --tests "com.hpsmiles.golfsim.bag.BagMappingFormatsTest"
 ```
 Expected: FAIL — `BagMappingFormats` unresolved.
 
-- [ ] **Step 3: Implement formats + INTRO**
+- [x] **Step 3: Implement formats + INTRO**
 
 `BagMappingFormats.kt`:
 
@@ -1806,14 +1806,14 @@ fun BagMappingIntro(
 }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 ```powershell
 .\gradlew.bat :app:testDebugUnitTest --tests "com.hpsmiles.golfsim.bag.BagMappingFormatsTest"
 ```
 Expected: PASS (3 tests).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```powershell
 git add app/src/main/kotlin/com/hpsmiles/golfsim/bag/BagMappingFormats.kt app/src/main/kotlin/com/hpsmiles/golfsim/bag/BagMappingIntro.kt app/src/test/kotlin/com/hpsmiles/golfsim/bag/BagMappingFormatsTest.kt
