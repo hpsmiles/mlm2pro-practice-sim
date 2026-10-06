@@ -1827,7 +1827,7 @@ git commit -m "feat(app): bag mapping intro screen and formats (M6)"
 **Files:**
 - Create: `app/src/main/kotlin/com/hpsmiles/golfsim/bag/CarryMatrixCanvas.kt`
 
-- [ ] **Step 1: Implement the painter**
+- [x] **Step 1: Implement the painter**
 
 ```kotlin
 package com.hpsmiles.golfsim.bag
@@ -2002,14 +2002,14 @@ private fun DrawScope.drawRow(row: CarryMatrixRow, axis: BoxPlotGeom.Axis, top: 
 
 (Use the second version — one `CarryMatrixCanvas` composable + one private `drawRow`; keep the color/dp constants exactly as listed above. If a tint feels off at review time, swap the constant, not the structure.)
 
-- [ ] **Step 2: Compile to verify**
+- [x] **Step 2: Compile to verify**
 
 ```powershell
 .\gradlew.bat :app:compileDebugKotlin
 ```
 Expected: BUILD SUCCESSFUL.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```powershell
 git add app/src/main/kotlin/com/hpsmiles/golfsim/bag/CarryMatrixCanvas.kt
@@ -2023,7 +2023,7 @@ git commit -m "feat(app): box-plot carry matrix painter (M6)"
 **Files:**
 - Create: `app/src/main/kotlin/com/hpsmiles/golfsim/bag/BagMappingResult.kt`
 
-- [ ] **Step 1: Implement the RESULT view**
+- [x] **Step 1: Implement the RESULT view**
 
 ```kotlin
 package com.hpsmiles.golfsim.bag
@@ -2269,14 +2269,14 @@ private fun DrillDownPanel(
 }
 ```
 
-- [ ] **Step 2: Compile to verify**
+- [x] **Step 2: Compile to verify**
 
 ```powershell
 .\gradlew.bat :app:compileDebugKotlin
 ```
 Expected: BUILD SUCCESSFUL.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```powershell
 git add app/src/main/kotlin/com/hpsmiles/golfsim/bag/BagMappingResult.kt
