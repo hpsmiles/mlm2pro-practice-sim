@@ -978,7 +978,7 @@ git commit -m "feat(core-data): bag mapping repository API with write-through fi
 - Create: `app/src/main/kotlin/com/hpsmiles/golfsim/bag/ClubQualityGate.kt`
 - Test: `app/src/test/kotlin/com/hpsmiles/golfsim/bag/ClubQualityGateTest.kt`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```kotlin
 package com.hpsmiles.golfsim.bag
@@ -1044,14 +1044,14 @@ class ClubQualityGateTest {
 }
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 ```powershell
 .\gradlew.bat :app:testDebugUnitTest --tests "com.hpsmiles.golfsim.bag.ClubQualityGateTest"
 ```
 Expected: FAIL — `ClubQualityGate` unresolved.
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 ```kotlin
 package com.hpsmiles.golfsim.bag
@@ -1093,14 +1093,14 @@ object ClubQualityGate {
 }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 ```powershell
 .\gradlew.bat :app:testDebugUnitTest --tests "com.hpsmiles.golfsim.bag.ClubQualityGateTest"
 ```
 Expected: PASS (6 tests).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```powershell
 git add app/src/main/kotlin/com/hpsmiles/golfsim/bag/ClubQualityGate.kt app/src/test/kotlin/com/hpsmiles/golfsim/bag/ClubQualityGateTest.kt
@@ -1115,7 +1115,7 @@ git commit -m "feat(app): bag mapping quality gate (M6)"
 - Create: `app/src/main/kotlin/com/hpsmiles/golfsim/bag/GapAnalysis.kt`
 - Test: `app/src/test/kotlin/com/hpsmiles/golfsim/bag/GapAnalysisTest.kt`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```kotlin
 package com.hpsmiles.golfsim.bag
@@ -1174,14 +1174,14 @@ class GapAnalysisTest {
 }
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 ```powershell
 .\gradlew.bat :app:testDebugUnitTest --tests "com.hpsmiles.golfsim.bag.GapAnalysisTest"
 ```
 Expected: FAIL — `GapAnalysis` unresolved.
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 ```kotlin
 package com.hpsmiles.golfsim.bag
@@ -1229,14 +1229,14 @@ object GapAnalysis {
 }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 ```powershell
 .\gradlew.bat :app:testDebugUnitTest --tests "com.hpsmiles.golfsim.bag.GapAnalysisTest"
 ```
 Expected: PASS (6 tests).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```powershell
 git add app/src/main/kotlin/com/hpsmiles/golfsim/bag/GapAnalysis.kt app/src/test/kotlin/com/hpsmiles/golfsim/bag/GapAnalysisTest.kt
@@ -1251,7 +1251,7 @@ git commit -m "feat(app): adjacent-club gap analysis flags (M6)"
 - Create: `app/src/main/kotlin/com/hpsmiles/golfsim/bag/BoxPlotGeom.kt`
 - Test: `app/src/test/kotlin/com/hpsmiles/golfsim/bag/BoxPlotGeomTest.kt`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```kotlin
 package com.hpsmiles.golfsim.bag
@@ -1298,14 +1298,14 @@ class BoxPlotGeomTest {
 }
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 ```powershell
 .\gradlew.bat :app:testDebugUnitTest --tests "com.hpsmiles.golfsim.bag.BoxPlotGeomTest"
 ```
 Expected: FAIL — `BoxPlotGeom` unresolved.
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 ```kotlin
 package com.hpsmiles.golfsim.bag
@@ -1343,14 +1343,14 @@ object BoxPlotGeom {
 }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 ```powershell
 .\gradlew.bat :app:testDebugUnitTest --tests "com.hpsmiles.golfsim.bag.BoxPlotGeomTest"
 ```
 Expected: PASS (4 tests).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```powershell
 git add app/src/main/kotlin/com/hpsmiles/golfsim/bag/BoxPlotGeom.kt app/src/test/kotlin/com/hpsmiles/golfsim/bag/BoxPlotGeomTest.kt
