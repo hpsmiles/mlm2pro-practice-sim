@@ -16,9 +16,11 @@ object BagMappingStatus {
  * sessions are isolated from range sessions: separate tables, games pattern.
  *
  * [clubList] snapshots the bag at START as comma-joined "name:TYPE" pairs
- * (names cannot contain commas — addClub/renameClub reject them). Clubs
- * added mid-test never join; renames/deletes never reshape a running or
- * past session (spec §4 + §9 "no data" rows for skipped clubs).
+ * (names cannot contain commas — addClub/renameClub reject them). Each pair
+ * splits at the LAST colon, so club names may themselves contain ':' —
+ * type names are colon-free enum constants, making the codec lossless.
+ * Clubs added mid-test never join; renames/deletes never reshape a running
+ * or past session (spec §4 + §9 "no data" rows for skipped clubs).
  */
 @Entity(tableName = "bag_mapping_sessions")
 data class BagMappingSessionEntity(
@@ -32,8 +34,7 @@ data class BagMappingSessionEntity(
     /** Bag at session start, in guided order: (clubName, clubType) pairs. */
     fun clubSnapshot(): List<Pair<String, ClubType>> =
         clubList.split(',').filter { it.contains(':') }.map { entry ->
-            val parts = entry.split(':', limit = 2)
-            parts[0] to ClubType.fromName(parts[1])
+            entry.substringBeforeLast(':') to ClubType.fromName(entry.substringAfterLast(':'))
         }
 
     companion object {
