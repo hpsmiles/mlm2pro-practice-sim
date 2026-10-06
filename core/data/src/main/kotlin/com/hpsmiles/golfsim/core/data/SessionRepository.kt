@@ -410,6 +410,15 @@ class SessionRepository private constructor(private val context: Context) {
     fun observeBagMappingShots(sessionId: Long): Flow<List<BagMappingShotEntity>> =
         bagMappingShotDao.observeShots(sessionId)
 
+    /** Mapping shots per session id, for history rows. Empty map on failure (never throws). */
+    suspend fun bagMappingShotCounts(): Map<Long, Int> = try {
+        bagMappingShotDao.countsBySession().associate { it.sessionId to it.count }
+    } catch (t: Throwable) {
+        if (t is CancellationException) throw t
+        Log.e(TAG, "bagMappingShotCounts failed", t)
+        emptyMap()
+    }
+
     /**
      * Creates the IN_PROGRESS session (spec §4), snapshotting [clubs] (the
      * mapping-eligible bag, already putter/TEST-free) into clubList. At most
