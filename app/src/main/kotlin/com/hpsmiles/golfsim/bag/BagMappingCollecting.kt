@@ -3,6 +3,7 @@ package com.hpsmiles.golfsim.bag
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -81,7 +82,7 @@ fun BagMappingCollecting(
             }
             Row(horizontalArrangement = Arrangement.spacedBy(GolfSpacing.Sm), verticalAlignment = Alignment.CenterVertically) {
                 repeat(ClubQualityGate.TARGET_KEPT) { i ->
-                    androidx.compose.foundation.layout.Box(
+                    Box(
                         modifier = Modifier
                             .size(12.dp)
                             .background(

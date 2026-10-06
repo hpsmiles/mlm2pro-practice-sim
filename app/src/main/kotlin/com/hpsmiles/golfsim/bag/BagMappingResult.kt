@@ -61,7 +61,7 @@ fun BagMappingResult(
     ) {
         Text("BAG MAPPING", style = GolfTypography.ScreenTitle, color = GolfColors.TextPrimary)
         Text(
-            SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US).format(Date(session.completedAtMs ?: session.startedAtMs)),
+            BagMappingFormats.dateTime(session.completedAtMs ?: session.startedAtMs),
             style = GolfTypography.BodySmall,
             color = GolfColors.TextSecondary,
         )
@@ -213,6 +213,9 @@ private fun DrillDownPanel(
     shots: List<BagMappingShotEntity>,
     onDismiss: () -> Unit,
 ) {
+    // One formatter for all rows (same "HH:mm:ss" output as before, but no
+    // per-row allocation).
+    val timeFormat = remember { SimpleDateFormat("HH:mm:ss", Locale.US) }
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -231,7 +234,7 @@ private fun DrillDownPanel(
                     horizontalArrangement = Arrangement.SpaceBetween,
                 ) {
                     Text(
-                        SimpleDateFormat("HH:mm:ss", Locale.US).format(Date(shot.timestampMs)),
+                        timeFormat.format(Date(shot.timestampMs)),
                         style = GolfTypography.BodySmall,
                         color = GolfColors.TextSecondary,
                     )

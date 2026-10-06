@@ -2,11 +2,8 @@ package com.hpsmiles.golfsim.core.data
 
 import android.database.sqlite.SQLiteDatabase
 import com.hpsmiles.golfsim.core.data.entity.BagMappingStatus
-import com.hpsmiles.golfsim.core.data.entity.GameModes
 import com.hpsmiles.golfsim.core.data.record.ClubRecord
 import com.hpsmiles.golfsim.core.data.record.ClubType
-import com.hpsmiles.golfsim.core.data.record.ShotSource
-import com.hpsmiles.golfsim.core.physics.ShotResult
 import com.hpsmiles.golfsim.core.ble.BallData
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest

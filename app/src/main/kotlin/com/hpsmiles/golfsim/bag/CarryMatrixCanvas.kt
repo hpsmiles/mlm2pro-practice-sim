@@ -43,12 +43,12 @@ fun CarryMatrixCanvas(
         val axis = BoxPlotGeom.Axis(minM, maxM, leftPadPx = 0f, plotWidthPx = size.width)
         val rowHeight = size.height / rows.size
         rows.forEachIndexed { index, row ->
-            drawRow(row, axis, top = index * rowHeight, centerY = index * rowHeight + rowHeight / 2f)
+            drawRow(row, axis, centerY = index * rowHeight + rowHeight / 2f)
         }
     }
 }
 
-private fun DrawScope.drawRow(row: CarryMatrixRow, axis: BoxPlotGeom.Axis, top: Float, centerY: Float) {
+private fun DrawScope.drawRow(row: CarryMatrixRow, axis: BoxPlotGeom.Axis, centerY: Float) {
     val dist = BagMappingStats.distribution(row.kept)
     if (dist != null) {
         drawLine(
@@ -64,14 +64,14 @@ private fun DrawScope.drawRow(row: CarryMatrixRow, axis: BoxPlotGeom.Axis, top: 
             color = GolfColors.Teal,
             topLeft = Offset(left, centerY - BoxHeight.toPx() / 2f),
             size = Size(maxOf(2f, right - left), BoxHeight.toPx()),
-            cornerRadius = CornerRadius(4f, 4f),
-            style = Stroke(width = 2f),
+            cornerRadius = CornerRadius(MeanRadius.toPx(), MeanRadius.toPx()),
+            style = Stroke(width = WhiskerWidth.toPx()),
         )
         val medX = BoxPlotGeom.x(dist.median, axis)
         drawLine(
             color = GolfColors.Amber,
-            start = Offset(medX, centerY - BoxHeight.toPx() / 2f - 4f),
-            end = Offset(medX, centerY + BoxHeight.toPx() / 2f + 4f),
+            start = Offset(medX, centerY - BoxHeight.toPx() / 2f - TickOvershoot.toPx()),
+            end = Offset(medX, centerY + BoxHeight.toPx() / 2f + TickOvershoot.toPx()),
             strokeWidth = MedianWidth.toPx(),
             cap = StrokeCap.Round,
         )
@@ -86,7 +86,7 @@ private fun DrawScope.drawRow(row: CarryMatrixRow, axis: BoxPlotGeom.Axis, top: 
             color = GolfColors.Amber,
             radius = FilteredRadius.toPx(),
             center = Offset(BoxPlotGeom.x(carry, axis), centerY),
-            style = Stroke(width = 2f),
+            style = Stroke(width = WhiskerWidth.toPx()),
         )
     }
 }
@@ -96,3 +96,4 @@ private val MedianWidth = 3.dp
 private val BoxHeight = 18.dp
 private val MeanRadius = 4.dp
 private val FilteredRadius = 5.dp
+private val TickOvershoot = 4.dp
