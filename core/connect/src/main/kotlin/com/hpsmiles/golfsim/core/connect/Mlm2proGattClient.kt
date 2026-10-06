@@ -79,8 +79,10 @@ class Mlm2proGattClient(
     private val _batteryPercent = MutableStateFlow<Int?>(null)
 
     /**
-     * Latest EVENTS 0x03 battery percent for the status strip; null until the
+     * Latest EVENTS 0x03 battery percent for the UI; null until the
      * device first reports (~30 s cadence) and cleared on any link teardown.
+     * The raw value is the device-reported byte, unclamped — the display
+     * layer clamps to 0..100 (`batteryDisplay` in `:core:designsystem`).
      */
     val batteryPercent: StateFlow<Int?> = _batteryPercent
 
@@ -355,7 +357,9 @@ class Mlm2proGattClient(
             is Mlm2proMessage.Event -> when (val event = msg.event) {
                 // Battery: mirror to the UI readout; all other sequencing
                 // (shot detected / processing / ready) stays with the sequencer.
-                is Mlm2proEvent.Battery -> _batteryPercent.value = event.percent
+                // A late notification from a torn-down link must not repopulate
+                // the flow — only mirror while a live link is still held.
+                is Mlm2proEvent.Battery -> if (gatt != null) _batteryPercent.value = event.percent
                 // Gate EVENTS misread alerts: handshake emits a single 0x05-0x00
                 // "misread" frame around ~1.75 s with no accompanying MEASUREMENT.
                 // That artifact arrives while the sequencer is still READY/CONFIG,
