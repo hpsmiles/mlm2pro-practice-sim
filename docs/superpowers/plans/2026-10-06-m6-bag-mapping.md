@@ -562,7 +562,7 @@ git commit -m "feat(core-data): Room v4 with bag mapping tables (M6)"
 **Files:**
 - Test: `core/data/src/test/kotlin/com/hpsmiles/golfsim/core/data/MigrationFrom3Test.kt`
 
-- [ ] **Step 1: Write the test (no failing-run step — it exercises Task 3's code)**
+- [x] **Step 1: Write the test (no failing-run step — it exercises Task 3's code)**
 
 Mirror `MigrationFrom2Test` exactly: hand-built raw SQLite v3 file (v2 DDL + `game_results`), forged identity hash, `raw.version = 3`, then open through the repository. Assert prior data survives AND the new tables are usable.
 
@@ -693,14 +693,14 @@ class MigrationFrom3Test {
 }
 ```
 
-- [ ] **Step 2: Run test to verify it passes**
+- [x] **Step 2: Run test to verify it passes**
 
 ```powershell
 .\gradlew.bat :core:data:testDebugUnitTest --tests "com.hpsmiles.golfsim.core.data.MigrationFrom3Test"
 ```
 Expected: PASS. If Room throws a schema-validation error, the DDL in Task 3 does not match the entity — align them (diff `4.json` CREATE statements against the migration) and re-run.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```powershell
 git add core/data/src/test/kotlin/com/hpsmiles/golfsim/core/data/MigrationFrom3Test.kt
@@ -715,7 +715,7 @@ git commit -m "test(core-data): MIGRATION_3_4 preserves prior data, bag tables u
 - Modify: `core/data/src/main/kotlin/com/hpsmiles/golfsim/core/data/SessionRepository.kt`
 - Test: `core/data/src/test/kotlin/com/hpsmiles/golfsim/core/data/BagMappingRepositoryTest.kt`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```kotlin
 package com.hpsmiles.golfsim.core.data
@@ -820,14 +820,14 @@ class BagMappingRepositoryTest {
 }
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 ```powershell
 .\gradlew.bat :core:data:testDebugUnitTest --tests "com.hpsmiles.golfsim.core.data.BagMappingRepositoryTest"
 ```
 Expected: FAIL — repository members unresolved (`startBagMappingSession` etc.).
 
-- [ ] **Step 3: Implement the repository API**
+- [x] **Step 3: Implement the repository API**
 
 In `SessionRepository.kt`, add imports (`BagMappingSessionEntity`, `BagMappingShotEntity`, `BagMappingStatus`, `com.hpsmiles.golfsim.core.data.bag.BagMappingStats`). Add DAO getters next to the existing ones (after line 39):
 
@@ -957,7 +957,7 @@ Add the getter-flows + API at the end of the class body, before the `companion o
     }
 ```
 
-- [ ] **Step 4: Run test to verify it passes, then the whole module**
+- [x] **Step 4: Run test to verify it passes, then the whole module**
 
 ```powershell
 .\gradlew.bat :core:data:testDebugUnitTest --tests "com.hpsmiles.golfsim.core.data.BagMappingRepositoryTest"
@@ -965,7 +965,7 @@ Add the getter-flows + API at the end of the class body, before the `companion o
 ```
 Expected: PASS — including the pre-existing migration/repository suites (they pin v1→v2→v3 behavior, untouched).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```powershell
 git add core/data/src/main/kotlin/com/hpsmiles/golfsim/core/data/SessionRepository.kt core/data/src/test/kotlin/com/hpsmiles/golfsim/core/data/BagMappingRepositoryTest.kt
