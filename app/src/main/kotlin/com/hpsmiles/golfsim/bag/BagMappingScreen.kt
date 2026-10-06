@@ -1,6 +1,7 @@
 package com.hpsmiles.golfsim.bag
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -60,6 +61,13 @@ fun BagMappingScreen(
     LaunchedEffect(resolvedView) {
         onCollectingChange(resolvedView == BagView.COLLECTING)
     }
+    // Self-contained seam: leaving the BAG tab disposes this composition and
+    // cancels the LaunchedEffect above before its body runs, so bagCollecting
+    // would stick true. Report collection-off on dispose (capture pauses;
+    // progress persists — Room truth survives).
+    DisposableEffect(Unit) {
+        onDispose { onCollectingChange(false) }
+    }
 
     // The session whose shots are on screen: active while collecting,
     // completed on the result, historical in read-only. AppRoot collects the
@@ -69,8 +77,14 @@ fun BagMappingScreen(
         BagView.RESULT -> viewingHistory ?: latestCompleted
         else -> null
     }
-    LaunchedEffect(displaySession?.id) {
-        onViewedSessionChange(displaySession?.id)
+    // Key on both id and view: the COLLECTING→RESULT transition keeps the same
+    // session id, so an id-only key would never re-run and the RESULT view
+    // would bind no shots. While COLLECTING the active session is already
+    // observed via bagActiveShots — skip the duplicate viewed-id report.
+    LaunchedEffect(displaySession?.id, resolvedView) {
+        if (resolvedView != BagView.COLLECTING) {
+            onViewedSessionChange(displaySession?.id)
+        }
     }
 
     when (resolvedView) {
@@ -103,7 +117,7 @@ fun BagMappingScreen(
         BagView.HISTORY -> BagMappingHistory(
             history = history,
             shotCounts = shotCounts,
-            onOpen = { viewingHistory = it },
+            onOpen = { viewingHistory = it; view = BagView.RESULT },
             onBack = {
                 viewingHistory = null
                 view = BagView.AUTO

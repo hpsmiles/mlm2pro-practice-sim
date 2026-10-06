@@ -2705,7 +2705,7 @@ fun BagMappingScreen(
         BagView.HISTORY -> BagMappingHistory(
             history = history,
             shotCounts = shotCounts,
-            onOpen = { viewingHistory = it },
+            onOpen = { viewingHistory = it; view = BagView.RESULT },
             onBack = {
                 viewingHistory = null
                 view = BagView.AUTO
