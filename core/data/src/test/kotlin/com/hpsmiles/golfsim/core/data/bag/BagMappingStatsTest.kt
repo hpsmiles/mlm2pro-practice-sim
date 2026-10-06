@@ -67,6 +67,17 @@ class BagMappingStatsTest {
     }
 
     @Test
+    fun `boundary - a shot at exactly the 85-percent cutoff is kept, just below is filtered`() {
+        // median(42.5, 50, 100) = 50 → cutoff 42.5; equality is NOT a duff (strict <).
+        val atCutoff = BagMappingStats.applyDuffFilter(listOf(shot(1, 100.0), shot(2, 50.0), shot(3, 42.5)))
+        assertEquals(listOf(false, false, false), atCutoff.map { it.filtered })
+        // median(42.499, 50, 100) = 50 → cutoff 42.5; just below IS a duff.
+        val justBelow = BagMappingStats.applyDuffFilter(listOf(shot(1, 100.0), shot(2, 50.0), shot(3, 42.499)))
+        assertEquals(listOf(false, false, true), justBelow.map { it.filtered })
+        assertEquals(BagMappingStats.REASON_DUFF_LOW_BALL_SPEED, justBelow[2].reason)
+    }
+
+    @Test
     fun `median - odd and even sizes`() {
         assertEquals(3.0, BagMappingStats.median(listOf(1.0, 2.0, 3.0, 4.0, 5.0))!!, 1e-9)
         assertEquals(2.5, BagMappingStats.median(listOf(1.0, 2.0, 3.0, 4.0))!!, 1e-9)
