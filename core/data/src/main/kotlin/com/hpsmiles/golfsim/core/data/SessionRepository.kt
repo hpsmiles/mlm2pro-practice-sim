@@ -346,7 +346,11 @@ class SessionRepository private constructor(private val context: Context) {
 
     private fun build(): Mlm2proDatabase =
         Room.databaseBuilder(context, Mlm2proDatabase::class.java, DB_NAME)
-            .addMigrations(Mlm2proDatabase.MIGRATION_1_2, Mlm2proDatabase.MIGRATION_2_3)
+            .addMigrations(
+                Mlm2proDatabase.MIGRATION_1_2,
+                Mlm2proDatabase.MIGRATION_2_3,
+                Mlm2proDatabase.MIGRATION_3_4,
+            )
             .build()
 
     /**

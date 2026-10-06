@@ -4,18 +4,25 @@ import androidx.room.Database
 import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
+import com.hpsmiles.golfsim.core.data.dao.BagMappingSessionDao
+import com.hpsmiles.golfsim.core.data.dao.BagMappingShotDao
 import com.hpsmiles.golfsim.core.data.dao.ClubDao
 import com.hpsmiles.golfsim.core.data.dao.GameResultDao
 import com.hpsmiles.golfsim.core.data.dao.SessionDao
 import com.hpsmiles.golfsim.core.data.dao.ShotDao
+import com.hpsmiles.golfsim.core.data.entity.BagMappingSessionEntity
+import com.hpsmiles.golfsim.core.data.entity.BagMappingShotEntity
 import com.hpsmiles.golfsim.core.data.entity.ClubEntity
 import com.hpsmiles.golfsim.core.data.entity.GameResultEntity
 import com.hpsmiles.golfsim.core.data.entity.SessionEntity
 import com.hpsmiles.golfsim.core.data.entity.ShotEntity
 
 @Database(
-    entities = [SessionEntity::class, ShotEntity::class, ClubEntity::class, GameResultEntity::class],
-    version = 3,
+    entities = [
+        SessionEntity::class, ShotEntity::class, ClubEntity::class, GameResultEntity::class,
+        BagMappingSessionEntity::class, BagMappingShotEntity::class,
+    ],
+    version = 4,
     exportSchema = true,
 )
 abstract class Mlm2proDatabase : RoomDatabase() {
@@ -23,6 +30,8 @@ abstract class Mlm2proDatabase : RoomDatabase() {
     abstract fun shotDao(): ShotDao
     abstract fun clubDao(): ClubDao
     abstract fun gameResultDao(): GameResultDao
+    abstract fun bagMappingSessionDao(): BagMappingSessionDao
+    abstract fun bagMappingShotDao(): BagMappingShotDao
 
     companion object {
         /**
@@ -58,6 +67,39 @@ abstract class Mlm2proDatabase : RoomDatabase() {
                         "`mode` TEXT NOT NULL, `difficulty` TEXT, `distanceBin` INTEGER NOT NULL, " +
                         "`score` INTEGER NOT NULL, `source` INTEGER NOT NULL, " +
                         "`playedAtEpochMs` INTEGER NOT NULL)",
+                )
+            }
+        }
+
+        /**
+         * M6 spec §7: bag_mapping_sessions + bag_mapping_shots. Existing
+         * tables untouched. No DEFAULT clauses — fresh tables, every column
+         * is NOT NULL or genuinely nullable, so the entities need no
+         * @ColumnInfo defaultValue (game_results pattern). Corrupt-file
+         * recovery reuses build(), so it inherits the migration.
+         */
+        val MIGRATION_3_4: Migration = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `bag_mapping_sessions` (" +
+                        "`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                        "`startedAtMs` INTEGER NOT NULL, `completedAtMs` INTEGER, " +
+                        "`status` TEXT NOT NULL, `clubList` TEXT NOT NULL)",
+                )
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `bag_mapping_shots` (" +
+                        "`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                        "`sessionId` INTEGER NOT NULL, `clubName` TEXT NOT NULL, " +
+                        "`clubType` TEXT NOT NULL, `timestampMs` INTEGER NOT NULL, " +
+                        "`clubHeadSpeedMps` REAL NOT NULL, `ballSpeedMps` REAL NOT NULL, " +
+                        "`launchAngleDeg` REAL NOT NULL, `launchDirDeg` REAL NOT NULL, " +
+                        "`spinAxisDeg` REAL NOT NULL, `totalSpinRpm` INTEGER NOT NULL, " +
+                        "`carryM` REAL NOT NULL, `totalM` REAL NOT NULL, " +
+                        "`filtered` INTEGER NOT NULL, `filterReason` TEXT)",
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_bag_mapping_shots_sessionId` " +
+                        "ON `bag_mapping_shots` (`sessionId`)",
                 )
             }
         }
