@@ -470,7 +470,7 @@ git commit -m "feat(core-data): bag mapping session entity and DAOs (M6)"
 - Modify: `core/data/src/main/kotlin/com/hpsmiles/golfsim/core/data/SessionRepository.kt:347-350` (migration registration only)
 - Create (generated, then committed): `core/data/schemas/com.hpsmiles.golfsim.core.data.Mlm2proDatabase/4.json`
 
-- [ ] **Step 1: Register entities, bump version, add `MIGRATION_3_4`**
+- [x] **Step 1: Register entities, bump version, add `MIGRATION_3_4`**
 
 In `Mlm2proDatabase.kt`: add imports for the two new entities and two DAOs; change the database annotation and DAO accessors to:
 
@@ -529,7 +529,7 @@ and add to the companion (after `MIGRATION_2_3`):
         }
 ```
 
-- [ ] **Step 2: Register the migration in `SessionRepository.build()`**
+- [x] **Step 2: Register the migration in `SessionRepository.build()`**
 
 In `SessionRepository.kt:349` change:
 
@@ -541,14 +541,14 @@ In `SessionRepository.kt:349` change:
             )
 ```
 
-- [ ] **Step 3: Build `:core:data` to generate `4.json` and validate schema**
+- [x] **Step 3: Build `:core:data` to generate `4.json` and validate schema**
 
 ```powershell
 .\gradlew.bat :core:data:build
 ```
 Expected: BUILD SUCCESSFUL. Room KSP writes `core/data/schemas/com.hpsmiles.golfsim.core.data.Mlm2proDatabase/4.json`. Verify it exists and contains `bag_mapping_sessions` (with `clubList`) and `bag_mapping_shots` under `entities`, and `"version": 4`.
 
-- [ ] **Step 4: Commit (schema JSON included)**
+- [x] **Step 4: Commit (schema JSON included)**
 
 ```powershell
 git add core/data/src/main/kotlin/com/hpsmiles/golfsim/core/data/Mlm2proDatabase.kt core/data/src/main/kotlin/com/hpsmiles/golfsim/core/data/SessionRepository.kt core/data/schemas/com.hpsmiles.golfsim.core.data.Mlm2proDatabase/4.json
