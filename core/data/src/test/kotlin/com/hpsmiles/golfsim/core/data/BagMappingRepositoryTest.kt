@@ -79,6 +79,23 @@ class BagMappingRepositoryTest {
     }
 
     @Test
+    fun `append lowering the median re-admits an earlier filtered duff`() = runTest {
+        val repo = repo()
+        val id = repo.startBagMappingSession(bag, startedAtMs = 1000)!!
+        // 20 m/s is a duff once the club has 3 shots (median 46, cutoff 39.1).
+        repo.appendBagMappingShot(id, "7i", ClubType.IRON, ball(20.0), 140.0, 150.0, 1001)
+        repo.appendBagMappingShot(id, "7i", ClubType.IRON, ball(48.0), 141.0, 151.0, 1002)
+        repo.appendBagMappingShot(id, "7i", ClubType.IRON, ball(46.0), 139.0, 149.0, 1003)
+        assertTrue(repo.observeBagMappingShots(id).first().single { it.timestampMs == 1001L }.filtered)
+        // Two low strikes drag the median to 22 → cutoff 18.7 → 20 m/s is re-admitted.
+        repo.appendBagMappingShot(id, "7i", ClubType.IRON, ball(22.0), 120.0, 130.0, 1004)
+        repo.appendBagMappingShot(id, "7i", ClubType.IRON, ball(21.0), 118.0, 128.0, 1005)
+        val shots = repo.observeBagMappingShots(id).first()
+        assertFalse(shots.single { it.timestampMs == 1001L }.filtered)
+        assertNull(shots.single { it.timestampMs == 1001L }.filterReason)
+    }
+
+    @Test
     fun `mapping shots never enter range sessions and vice versa`() = runTest {
         val repo = repo()
         val bagId = repo.startBagMappingSession(bag, startedAtMs = 1000)!!
