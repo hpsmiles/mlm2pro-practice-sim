@@ -21,8 +21,17 @@ class BreakThePaneGameTest {
      * exactly once at (crossX, crossZ) and rest at (restX, restY).
      */
     private fun syntheticShot(crossX: Double, crossZ: Double, restX: Double, restY: Double): (LaunchConditions) -> ShotResult =
+        syntheticShotFor(PaneGeom(target), crossX, crossZ, restX, restY)
+
+    /** Same seam, but the samples cross the plane of the given PaneGeom (custom distances). */
+    private fun syntheticShotFor(
+        pane: PaneGeom,
+        crossX: Double,
+        crossZ: Double,
+        restX: Double,
+        restY: Double,
+    ): (LaunchConditions) -> ShotResult =
         { _ ->
-            val pane = PaneGeom(target)
             ShotResult(
                 carryM = target, rolloutM = 1.0, totalM = target + 1.0, sideM = restX,
                 apexM = crossZ + 10.0, flightTimeSec = 6.0,
@@ -135,5 +144,87 @@ class BreakThePaneGameTest {
         val shot = game.add(ball())!!
         assertEquals(BreakOutcomeKind.MISSED_BOTH, shot.outcome.kind)
         assertEquals("LONG", shot.outcome.feedback)
+    }
+
+    @Test
+    fun `custom pane distance threads into the pane geometry`() {
+        val customPane = PaneGeom(target, 42.0)
+        val game = BreakThePaneGame()
+        game.simulator = syntheticShotFor(customPane, 0.0, customPane.zRefM, 0.0, target + 1.0)
+        game.start(target, paneDistanceM = 42.0)
+        assertEquals(42.0, game.pane!!.planeYM, 1e-9)
+        assertEquals(42.0, game.paneDistanceM!!, 1e-9)
+        val shot = game.add(ball())!!
+        assertEquals(BreakOutcomeKind.BROKE, shot.outcome.kind)
+        assertEquals(4, shot.outcome.brokenCell)
+    }
+
+    @Test
+    fun `default start keeps the 20 percent plane`() {
+        val game = BreakThePaneGame()
+        game.start(target)
+        assertEquals(PaneGeom.PLANE_FRACTION * target, game.pane!!.planeYM, 1e-9)
+        assertNull(game.paneDistanceM)
+    }
+
+    @Test
+    fun `fresh start without pane distance resets to default`() {
+        val game = BreakThePaneGame()
+        game.start(140.0, paneDistanceM = 42.0)
+        game.start(150.0)
+        assertNull(game.paneDistanceM)
+        assertEquals(PaneGeom.PLANE_FRACTION * 150.0, game.pane!!.planeYM, 1e-9)
+    }
+
+    @Test
+    fun `pane hit with green missed carries the crossed unbroken cell flag`() {
+        val game = newGame(0.0, PaneGeom(target).zRefM, 0.0, target - 20.0)
+        val shot = game.add(ball())!!
+        assertEquals(BreakOutcomeKind.HIT_PANE_MISSED_GREEN, shot.outcome.kind)
+        assertTrue(shot.outcome.crossedUnbrokenCell)
+    }
+
+    @Test
+    fun `pane hit through an already broken cell stays silent`() {
+        val game = BreakThePaneGame()
+        game.simulator = syntheticShot(0.0, PaneGeom(target).zRefM, 0.0, target + 1.0)
+        game.start(target)
+        game.add(ball()) // breaks cell 4
+        // Same crossing again, but rest off green -> HIT_PANE_MISSED_GREEN through the now-broken cell.
+        game.simulator = syntheticShot(0.0, PaneGeom(target).zRefM, 0.0, target - 20.0)
+        val second = game.add(ball())!!
+        assertEquals(BreakOutcomeKind.HIT_PANE_MISSED_GREEN, second.outcome.kind)
+        assertFalse(second.outcome.crossedUnbrokenCell)
+    }
+
+    @Test
+    fun `broke outcome always carries the flag`() {
+        val game = newGame(0.0, PaneGeom(target).zRefM, 0.0, target + 1.0)
+        val shot = game.add(ball())!!
+        assertEquals(BreakOutcomeKind.BROKE, shot.outcome.kind)
+        assertTrue(shot.outcome.crossedUnbrokenCell)
+    }
+
+    @Test
+    fun `shot that never reaches standing glass carries no flag`() {
+        // Crossing below the pane (out of band), rest off green -> MISSED_BOTH, no glass.
+        val game = newGame(0.0, crossZ = 2.0, restX = 0.0, restY = target - 20.0)
+        val shot = game.add(ball())!!
+        assertEquals(BreakOutcomeKind.MISSED_BOTH, shot.outcome.kind)
+        assertFalse(shot.outcome.crossedUnbrokenCell)
+    }
+
+    @Test
+    fun `green hit through an already broken cell carries no flag`() {
+        val game = BreakThePaneGame()
+        game.simulator = syntheticShot(0.0, PaneGeom(target).zRefM, 0.0, target + 1.0)
+        game.start(target)
+        val first = game.add(ball())!!
+        assertEquals(BreakOutcomeKind.BROKE, first.outcome.kind)
+        // Same crossing again, rest still on green -> GREEN_MISSED_PANE through the now-broken cell.
+        game.simulator = syntheticShot(0.0, PaneGeom(target).zRefM, 0.0, target + 1.0)
+        val second = game.add(ball())!!
+        assertEquals(BreakOutcomeKind.GREEN_MISSED_PANE, second.outcome.kind)
+        assertFalse(second.outcome.crossedUnbrokenCell)
     }
 }

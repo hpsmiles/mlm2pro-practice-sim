@@ -75,12 +75,12 @@ Six user-requested edits layered on M5, delivered as Room schema v2 + UI rework 
 Two practice games layered on the proven shot pipeline, delivered with Room schema v3 `game_results` (design: `docs/superpowers/specs/2026-09-29-games-target-practice-break-pane-design.md`):
 
 - **Target Practice** — pick a distance (50–350 m) and difficulty; 5 shots scored 25/15/10/5 by distance bands from the ball's **rest position** (rollout counts). Archery-bullseye target face sized to the outer band with ring score labels; per-shot scores reveal only after the ball finishes rolling.
-- **Break the Pane** — floating 3×3 pane at 25% of the target distance (cells 2%/4% of target, middle row anchored to the reference trajectory's pane-crossing height); a shot breaks a cell only if it flies through an unbroken cell **and** rests on the green; score = shots taken to break all 9 (lower is better).
+- **Break the Pane** — floating 3×3 pane at 20% of the target distance (cells 1.6%/2.0% of target, middle row anchored to the reference trajectory's pane-crossing height); a shot breaks a cell only if it flies through an unbroken cell **and** rests on the green; score = shots taken to break all 9 (lower is better).
 - **Shared**: GAMES tab + mode dispatcher (game shots never enter range sessions), speed chips (1x/1.5x/2x/4x) with real-flight pacing and snap-back, range dressing (mow stripes + distance boards via the shared `RangeDecorations` painter), right-side shot metrics panel, follow-cam, and HISTORY > GAMES with per-game-type grouping plus RECENT/BEST sorting.
 
 **Exit:** both games playable LIVE + demo, scored and persisted; device-verified over five amendment rounds; final whole-branch review clean; merged as `19ecc6d`.
 
-## M6 — Bag Mapping & True Gapping
+## M6 — Bag Mapping & True Gapping (shipped 2026-10-06)
 
 Guided full-bag workflow, automatic misread/duff filtering, real carry averages, carry matrix, distance-gap visualization. UI design pass on design system.
 

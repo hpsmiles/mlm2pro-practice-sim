@@ -35,6 +35,32 @@ class PaneIntersectionTest {
     }
 
     @Test
+    fun `mark reports the crossing time in flight seconds`() {
+        val mark = PaneIntersection.mark(flight(0.5, 10.0), planeY, apexVMin = -1.0)
+        assertNotNull(mark)
+        // The crossing sample sits at tSec = 3.0 in the synthetic flight.
+        assertEquals(3.0, mark!!.tSec, 1e-9)
+    }
+
+    @Test
+    fun `mark interpolates tSec across a mid-segment crossing`() {
+        // Plane at 35.0 sits midway between py = 0 (tSec 0) and py = 70 (tSec 3).
+        val shot = ShotResult(
+            carryM = 140.0, rolloutM = 0.0, totalM = 140.0, sideM = 0.0, apexM = 25.0, flightTimeSec = 6.0,
+            samples = listOf(
+                TrajectorySample(0.0, 0.0, 0.0, 0.0),
+                TrajectorySample(2.0, 70.0, 4.0, 3.0),
+            ),
+            restX = 0.0, restY = 140.0,
+        )
+        val mark = PaneIntersection.mark(shot, planeY, apexVMin = -1.0)
+        assertNotNull(mark)
+        assertEquals(1.0, mark!!.xM, 1e-9) // midpoint of the segment
+        assertEquals(2.0, mark.zM, 1e-9)
+        assertEquals(1.5, mark.tSec, 1e-9)
+    }
+
+    @Test
     fun `no forward crossing reports null`() {
         // py never reaches the 35 m plane.
         val below = ShotResult(
@@ -47,5 +73,25 @@ class PaneIntersectionTest {
             restX = 0.0, restY = 30.0,
         )
         assertNull(PaneIntersection.mark(below, planeY, apexVMin = -1.0))
+    }
+
+    @Test
+    fun `pending cell stays standing until the crossing reveal`() {
+        assertEquals(setOf(1, 7), PaneIntersection.visibleBroken(setOf(1, 4, 7), 4, revealed = false))
+    }
+
+    @Test
+    fun `pending cell shows broken at the reveal moment`() {
+        assertEquals(setOf(1, 4), PaneIntersection.visibleBroken(setOf(1, 4), 4, revealed = true))
+    }
+
+    @Test
+    fun `no pending cell shows every break`() {
+        assertEquals(setOf(2, 5), PaneIntersection.visibleBroken(setOf(2, 5), null, revealed = false))
+    }
+
+    @Test
+    fun `pending cell absent from the broken set changes nothing`() {
+        assertEquals(setOf(1), PaneIntersection.visibleBroken(setOf(1), 9, revealed = false))
     }
 }

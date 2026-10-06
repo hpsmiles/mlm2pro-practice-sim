@@ -5,6 +5,10 @@ import android.util.Log
 import androidx.room.Room
 import androidx.room.withTransaction
 import com.hpsmiles.golfsim.core.ble.BallData
+import com.hpsmiles.golfsim.core.data.bag.BagMappingStats
+import com.hpsmiles.golfsim.core.data.entity.BagMappingSessionEntity
+import com.hpsmiles.golfsim.core.data.entity.BagMappingShotEntity
+import com.hpsmiles.golfsim.core.data.entity.BagMappingStatus
 import com.hpsmiles.golfsim.core.data.entity.ClubEntity
 import com.hpsmiles.golfsim.core.data.entity.GameResultEntity
 import com.hpsmiles.golfsim.core.data.entity.SessionEntity
@@ -37,6 +41,8 @@ class SessionRepository private constructor(private val context: Context) {
     private val shotDao get() = db.shotDao()
     private val clubDao get() = db.clubDao()
     private val gameResultDao get() = db.gameResultDao()
+    private val bagMappingSessionDao get() = db.bagMappingSessionDao()
+    private val bagMappingShotDao get() = db.bagMappingShotDao()
 
     /** True once a write/open failure has been seen; cleared on next success. */
     val persistError = MutableStateFlow(false)
@@ -346,7 +352,11 @@ class SessionRepository private constructor(private val context: Context) {
 
     private fun build(): Mlm2proDatabase =
         Room.databaseBuilder(context, Mlm2proDatabase::class.java, DB_NAME)
-            .addMigrations(Mlm2proDatabase.MIGRATION_1_2, Mlm2proDatabase.MIGRATION_2_3)
+            .addMigrations(
+                Mlm2proDatabase.MIGRATION_1_2,
+                Mlm2proDatabase.MIGRATION_2_3,
+                Mlm2proDatabase.MIGRATION_3_4,
+            )
             .build()
 
     /**
@@ -379,6 +389,132 @@ class SessionRepository private constructor(private val context: Context) {
             // a cancelled caller must not have its CancellationException eaten
             // on this suspend path (Task 4b, review finding).
             if (t is CancellationException) throw t
+        }
+    }
+
+    // --- Bag mapping (M6, spec §7) -----------------------------------------
+
+    /** Open (in-progress) mapping session, or null. Getter-flow — survives corrupt-file recovery. */
+    val bagMappingActive: Flow<BagMappingSessionEntity?>
+        get() = bagMappingSessionDao.observeInProgress()
+
+    /** Latest completed mapping result (the active result), or null. Getter-flow. */
+    val bagMappingLatestCompleted: Flow<BagMappingSessionEntity?>
+        get() = bagMappingSessionDao.observeLatestCompleted()
+
+    /** All completed mapping results, newest first. Getter-flow. */
+    val bagMappingHistory: Flow<List<BagMappingSessionEntity>>
+        get() = bagMappingSessionDao.observeHistory()
+
+    /** Every stored shot (kept + filtered) of one mapping session. */
+    fun observeBagMappingShots(sessionId: Long): Flow<List<BagMappingShotEntity>> =
+        bagMappingShotDao.observeShots(sessionId)
+
+    /** Mapping shots per session id, for history rows. Empty map on failure (never throws). */
+    suspend fun bagMappingShotCounts(): Map<Long, Int> = try {
+        bagMappingShotDao.countsBySession().associate { it.sessionId to it.count }
+    } catch (t: Throwable) {
+        if (t is CancellationException) throw t
+        Log.e(TAG, "bagMappingShotCounts failed", t)
+        emptyMap()
+    }
+
+    /**
+     * Creates the IN_PROGRESS session (spec §4), snapshotting [clubs] (the
+     * mapping-eligible bag, already putter/TEST-free) into clubList. At most
+     * one IN_PROGRESS session exists (repository-enforced): when one is open
+     * its id is returned untouched — START is idempotent, never destructive.
+     * Returns null only on a persistence failure (persistError flags; never
+     * throws — appendShot contract).
+     */
+    suspend fun startBagMappingSession(clubs: List<ClubRecord>, startedAtMs: Long): Long? =
+        try {
+            db.withTransaction {
+                val existing = bagMappingSessionDao.findInProgress()
+                existing?.id
+                    ?: bagMappingSessionDao.insert(
+                        BagMappingSessionEntity(
+                            startedAtMs = startedAtMs,
+                            completedAtMs = null,
+                            status = BagMappingStatus.IN_PROGRESS,
+                            clubList = BagMappingSessionEntity.encodeClubSnapshot(
+                                clubs.map { it.name to it.type },
+                            ),
+                        ),
+                    )
+            }.also { persistError.value = false }
+        } catch (t: Throwable) {
+            if (t is CancellationException) throw t
+            Log.e(TAG, "startBagMappingSession failed", t)
+            persistError.value = true
+            null
+        }
+
+    /**
+     * Write-through append for one mapping shot (spec §4) — this is what
+     * makes resume-after-kill work. Inside the same transaction the duff
+     * filter is recomputed over the club's whole shot set (BagMappingStats)
+     * so kept-set, stats and plots stay consistent on every write, including
+     * retroactively re-judging early shots. Returns the new row id, or null
+     * on failure (persistError flags; never throws).
+     */
+    suspend fun appendBagMappingShot(
+        sessionId: Long,
+        clubName: String,
+        clubType: ClubType,
+        ballData: BallData,
+        carryM: Double,
+        totalM: Double,
+        timestampMs: Long,
+    ): Long? = try {
+        db.withTransaction {
+            val shotId = bagMappingShotDao.insert(
+                BagMappingShotEntity(
+                    sessionId = sessionId,
+                    clubName = clubName,
+                    clubType = clubType.name,
+                    timestampMs = timestampMs,
+                    clubHeadSpeedMps = ballData.clubHeadSpeed,
+                    ballSpeedMps = ballData.ballSpeed,
+                    launchAngleDeg = ballData.launchAngle,
+                    launchDirDeg = ballData.launchDirection,
+                    spinAxisDeg = ballData.spinAxis,
+                    totalSpinRpm = ballData.totalSpin,
+                    carryM = carryM,
+                    totalM = totalM,
+                ),
+            )
+            recomputeDuffFilter(sessionId, clubName)
+            shotId
+        }.also { persistError.value = false }
+    } catch (t: Throwable) {
+        if (t is CancellationException) throw t
+        Log.e(TAG, "appendBagMappingShot failed", t)
+        persistError.value = true
+        null
+    }
+
+    /** Recomputes the duff filter for one club and persists changed verdicts. Call inside a transaction. */
+    private suspend fun recomputeDuffFilter(sessionId: Long, clubName: String) {
+        val shots = bagMappingShotDao.shotsForClub(sessionId, clubName)
+        val byId = shots.associateBy { it.id }
+        for (verdict in BagMappingStats.applyDuffFilter(shots)) {
+            val current = byId[verdict.id] ?: continue
+            if (current.filtered != verdict.filtered || current.filterReason != verdict.reason) {
+                bagMappingShotDao.setFiltered(verdict.id, verdict.filtered, verdict.reason)
+            }
+        }
+    }
+
+    /** Marks the session COMPLETED — its result becomes the active result. Never throws. */
+    suspend fun completeBagMappingSession(id: Long, completedAtMs: Long) {
+        try {
+            bagMappingSessionDao.complete(id, completedAtMs)
+            persistError.value = false
+        } catch (t: Throwable) {
+            if (t is CancellationException) throw t
+            Log.e(TAG, "completeBagMappingSession failed", t)
+            persistError.value = true
         }
     }
 

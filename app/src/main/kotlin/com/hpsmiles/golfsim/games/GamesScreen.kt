@@ -6,6 +6,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -26,16 +27,19 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.hpsmiles.golfsim.audio.GameAudio
 import com.hpsmiles.golfsim.core.designsystem.GolfColors
 import com.hpsmiles.golfsim.core.designsystem.GolfSpacing
 import com.hpsmiles.golfsim.core.designsystem.GolfTypography
 import java.util.Locale
+import kotlin.math.roundToInt
 
 /** Which game (if any) currently owns the shot stream. Hoisted to AppRoot for dispatch. */
 enum class GameMode { NONE, TARGET_PRACTICE, BREAK_PANE }
 
 private const val DIST_MIN_M = 50.0
 private const val DIST_MAX_M = 350.0
+private const val DEFAULT_TARGET_M = 140.0
 
 /**
  * Games tab: picker -> per-game setup -> play -> result. Plain when-enum
@@ -48,6 +52,9 @@ fun GamesScreen(
     breakPane: BreakThePaneGame,
     activeGame: GameMode,
     onActiveGameChange: (GameMode) -> Unit,
+    gameAudio: GameAudio,
+    soundsEnabled: Boolean,
+    onSoundsChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var pickerState by remember { mutableStateOf("PICKER") } // PICKER | SETUP | PLAYING
@@ -65,7 +72,7 @@ fun GamesScreen(
                 )
                 GameCard(
                     title = "BREAK THE PANE",
-                    blurb = "Break all 9 glass cells floating at 25% of the target. Fewer shots wins.",
+                    blurb = "Break all 9 glass cells floating 20% of the way to the target (customizable in setup). Fewer shots wins.",
                     onClick = { pickerState = "SETUP_BP" },
                 )
             }
@@ -85,8 +92,8 @@ fun GamesScreen(
         pickerState == "SETUP_BP" -> {
             Column(modifier = modifier.fillMaxSize().background(GolfColors.Base).padding(GolfSpacing.Xl)) {
                 BreakPaneSetup(
-                    onStart = { target, difficulty ->
-                        breakPane.start(target, difficulty)
+                    onStart = { paneDistanceM, target, difficulty ->
+                        breakPane.start(target, difficulty, paneDistanceM)
                         onActiveGameChange(GameMode.BREAK_PANE)
                         pickerState = "PLAYING"
                     },
@@ -101,16 +108,21 @@ fun GamesScreen(
                     onActiveGameChange(GameMode.NONE)
                     pickerState = "PICKER"
                 },
+                soundsEnabled = soundsEnabled,
+                onSoundsChange = onSoundsChange,
                 modifier = modifier,
             )
         }
         activeGame == GameMode.BREAK_PANE -> {
             BreakPanePlay(
                 game = breakPane,
+                gameAudio = gameAudio,
                 onBack = {
                     onActiveGameChange(GameMode.NONE)
                     pickerState = "PICKER"
                 },
+                soundsEnabled = soundsEnabled,
+                onSoundsChange = onSoundsChange,
                 modifier = modifier,
             )
         }
@@ -138,14 +150,76 @@ private fun TargetPracticeSetup(onStart: (Double, Difficulty) -> Unit, onCancel:
 }
 
 @Composable
-private fun BreakPaneSetup(onStart: (Double, Difficulty) -> Unit, onCancel: () -> Unit) {
-    GameSetupScreen(title = "BREAK THE PANE", onStart = onStart, onCancel = onCancel)
+private fun BreakPaneSetup(onStart: (Double?, Double, Difficulty) -> Unit, onCancel: () -> Unit) {
+    var targetM by remember { mutableStateOf(DEFAULT_TARGET_M) }
+    var customPane by remember { mutableStateOf(false) }
+    var paneM by remember { mutableStateOf(PaneGeom.PLANE_FRACTION * DEFAULT_TARGET_M) }
+
+    val paneMinM = targetM * PaneGeom.MIN_FRACTION
+    val paneMaxM = targetM * PaneGeom.MAX_FRACTION
+
+    GameSetupScreen(
+        title = "BREAK THE PANE",
+        onStart = { target, difficulty ->
+            val custom = if (customPane) {
+                paneM.coerceIn(target * PaneGeom.MIN_FRACTION, target * PaneGeom.MAX_FRACTION)
+            } else null
+            onStart(custom, target, difficulty)
+        },
+        onCancel = onCancel,
+        onTargetChange = { newTarget ->
+            targetM = newTarget
+            // Spec: target changes clamp the custom value; OFF->ON re-seeds at 20%.
+            if (customPane) {
+                paneM = paneM.coerceIn(newTarget * PaneGeom.MIN_FRACTION, newTarget * PaneGeom.MAX_FRACTION)
+            }
+        },
+        extraContent = {
+            Text(
+                text = if (customPane) "CUSTOM PANE DISTANCE: ON" else "CUSTOM PANE DISTANCE: OFF",
+                style = GolfTypography.MetricLabel,
+                color = if (customPane) GolfColors.Teal else GolfColors.TextMuted,
+                modifier = Modifier
+                    .border(1.dp, if (customPane) GolfColors.Teal else GolfColors.Line, RoundedCornerShape(50))
+                    .clickable {
+                        customPane = !customPane
+                        if (customPane) paneM = targetM * PaneGeom.PLANE_FRACTION
+                    }
+                    .padding(horizontal = GolfSpacing.Lg, vertical = 8.dp),
+            )
+            if (customPane) {
+                Text(
+                    text = "Moves the glass pane closer to or farther from the tee.",
+                    style = GolfTypography.Body,
+                    color = GolfColors.TextSecondary,
+                )
+                Text(
+                    text = "PANE DISTANCE (m): " + String.format(Locale.US, "%.0f", paneM) +
+                        "  (" + Math.round(paneM / targetM * 100).toInt() + "% of target)",
+                    style = GolfTypography.Body,
+                    color = GolfColors.TextPrimary,
+                )
+                Slider(
+                    value = paneM.toFloat(),
+                    onValueChange = { paneM = it.toDouble() },
+                    valueRange = paneMinM.toFloat()..paneMaxM.toFloat(),
+                    steps = ((paneMaxM - paneMinM).roundToInt() - 1).coerceAtLeast(0),
+                )
+            }
+        },
+    )
 }
 
 @Composable
-private fun GameSetupScreen(title: String, onStart: (Double, Difficulty) -> Unit, onCancel: () -> Unit) {
-    var sliderM by remember { mutableStateOf(140.0) }
-    var text by remember { mutableStateOf("140") }
+private fun GameSetupScreen(
+    title: String,
+    onStart: (Double, Difficulty) -> Unit,
+    onCancel: () -> Unit,
+    onTargetChange: (Double) -> Unit = {},
+    extraContent: (@Composable ColumnScope.() -> Unit)? = null,
+) {
+    var sliderM by remember { mutableStateOf(DEFAULT_TARGET_M) }
+    var text by remember { mutableStateOf(DEFAULT_TARGET_M.toInt().toString()) }
     var difficulty by remember { mutableStateOf(Difficulty.MEDIUM) }
 
     Column(verticalArrangement = Arrangement.spacedBy(GolfSpacing.Lg)) {
@@ -155,6 +229,7 @@ private fun GameSetupScreen(title: String, onStart: (Double, Difficulty) -> Unit
             onValueChange = {
                 sliderM = it.toDouble()
                 text = String.format(Locale.US, "%.0f", sliderM)
+                onTargetChange(sliderM)
             },
             valueRange = DIST_MIN_M.toFloat()..DIST_MAX_M.toFloat(),
         )
@@ -162,11 +237,15 @@ private fun GameSetupScreen(title: String, onStart: (Double, Difficulty) -> Unit
             value = text,
             onValueChange = { raw ->
                 text = raw
-                raw.toDoubleOrNull()?.let { sliderM = it.coerceIn(DIST_MIN_M, DIST_MAX_M) }
+                raw.toDoubleOrNull()?.let {
+                    sliderM = it.coerceIn(DIST_MIN_M, DIST_MAX_M)
+                    onTargetChange(sliderM)
+                }
             },
             label = { Text("Distance (m, $DIST_MIN_M-$DIST_MAX_M)") },
             modifier = Modifier.width(260.dp),
         )
+        extraContent?.invoke(this)
         Row(horizontalArrangement = Arrangement.spacedBy(GolfSpacing.Sm)) {
             Difficulty.entries.forEach { d ->
                 Box(

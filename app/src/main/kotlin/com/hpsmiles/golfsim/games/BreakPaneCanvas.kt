@@ -29,9 +29,22 @@ fun BreakPaneCanvas(
             game.pane?.let { pane ->
                 drawGreen(camera, w, h, 0.0, game.targetM, game.greenRadiusM())
                 drawPin(camera, w, h, 0.0, game.targetM)
+                // The current shot's crossed cell stays standing until the tracer reaches the
+                // crossing (same revealFraction that gates the amber dot + glass sound), so a
+                // pending break isn't spoiled from the first playback frame. Other previous
+                // breaks always draw broken; a null mark fails open (nothing to reveal).
+                val lastShot = game.shots.lastOrNull()
+                val mark = lastShot?.shot?.shotResult
+                    ?.let { PaneIntersection.mark(it, pane.planeYM, FollowCam.RAW_APEX_VMIN) }
+                val revealed = mark == null || playFraction >= mark.revealFraction
+                val brokenSet = PaneIntersection.visibleBroken(
+                    game.brokenCells,
+                    lastShot?.outcome?.brokenCell,
+                    revealed,
+                )
                 // Pane cells, top row first so nearer (lower) cells draw on top.
                 for (cell in 8 downTo 0) {
-                    val broken = cell in game.brokenCells
+                    val broken = cell in brokenSet
                     val clipped = PaneClip.clip(
                         pane.cellCorners(cell).map { (x, y, z) -> PaneClip.Vertex(x, y, z) },
                         camera,

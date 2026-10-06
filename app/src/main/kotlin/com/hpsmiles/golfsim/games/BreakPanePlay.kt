@@ -27,6 +27,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.unit.dp
+import com.hpsmiles.golfsim.audio.GameAudio
 import com.hpsmiles.golfsim.core.designsystem.GolfColors
 import com.hpsmiles.golfsim.core.designsystem.GolfSpacing
 import com.hpsmiles.golfsim.core.designsystem.GolfTypography
@@ -39,10 +40,27 @@ import com.hpsmiles.golfsim.range.RangeCamera
 fun BreakPanePlay(
     game: BreakThePaneGame,
     onBack: () -> Unit,
+    /** Cue sounds for the playback: glass break at pane crossing, ding on green, fail on miss. */
+    gameAudio: GameAudio,
+    soundsEnabled: Boolean,
+    onSoundsChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var playFraction by remember { mutableFloatStateOf(1f) }
     var speedMult by remember { mutableStateOf(GameSpeedMult.X15) }
+    var showQuickSettings by remember { mutableStateOf(false) }
+
+    val lastShot = game.shots.lastOrNull()
+    // One traversal per shot: tSec gates the camera, revealFraction gates the glass cue
+    // (same quantity the canvas uses for the intersection dot, so they stay in sync).
+    // Pane only mutates inside start(), always paired with shots.clear() (a snapshot write),
+    // so this remember key pair can't go stale.
+    val paneMark = remember(lastShot, game.pane) {
+        val result = lastShot?.shot?.shotResult
+        val pane = game.pane
+        if (result == null || pane == null) null
+        else PaneIntersection.mark(result, pane.planeYM, FollowCam.RAW_APEX_VMIN)
+    }
 
     // Runs past 1 through the follow-cam landing hold (FollowCam.endFraction),
     // same as the range playback, so the camera snaps back to the STATIC
@@ -58,13 +76,26 @@ fun BreakPanePlay(
         if (result.flightTimeSec <= 0.0) return@LaunchedEffect
         val durationMs = result.flightTimeSec * 1000.0 / speedMult.divisor
         val end = FollowCam.endFraction(result).toFloat()
+        val reveal = paneMark?.revealFraction
+        var glassPlayed = false
         var last = withFrameNanos { it }
         playFraction = 0f
         while (playFraction < end) {
             val now = withFrameNanos { it }
             playFraction = (playFraction + ((now - last) / 1_000_000.0 / durationMs).toFloat()).coerceAtMost(end)
             last = now
+            // Glass fires at the pane-crossing moment, synced with the visual mark, for any
+            // shot that physically passed through standing glass (BROKE or pane-hit-but-
+            // green-missed with an unbroken cell); already-broken cells stay silent.
+            if (shot.outcome.crossedUnbrokenCell &&
+                reveal != null && PaneSoundCues.glassDue(playFraction, reveal, glassPlayed)
+            ) {
+                glassPlayed = true
+                gameAudio.glassBreak()
+            }
         }
+        // Ball at rest: ding on the green, fail on a miss (2026-10-05 spec).
+        if (PaneSoundCues.restsOnGreen(shot.outcome.kind)) gameAudio.success() else gameAudio.fail()
     }
 
     val showResultOverlay = rememberGameResultOverlayGate(
@@ -79,13 +110,9 @@ fun BreakPanePlay(
             // frames the exact same tracer path the pane is drawn in.
             Box(modifier = Modifier.weight(1f).fillMaxHeight().clipToBounds()) {
                 val apexVMin = FollowCam.RAW_APEX_VMIN
-                val camera = when (val shot = game.shots.lastOrNull()) {
+                val camera = when (val shot = lastShot) {
                     null -> RangeCamera.STATIC
-                    else -> FollowCam.cameraAt(
-                        shot.shot.shotResult,
-                        playFraction,
-                        apexVMin,
-                    )
+                    else -> FollowCam.cameraAt(shot.shot.shotResult, playFraction, apexVMin, paneMark?.tSec)
                 }
                 BreakPaneCanvas(
                     game = game,
@@ -95,6 +122,14 @@ fun BreakPanePlay(
                 )
 
                 // HUD: pane-state minimap (3x3, filled teal = broken), shots counter, feedback.
+                // The current shot's will-break cell stays standing until the tracer reaches
+                // it (same visible-broken rule as the canvas), so the minimap doesn't spoil
+                // the break from the first playback frame.
+                val brokenSet = PaneIntersection.visibleBroken(
+                    game.brokenCells,
+                    lastShot?.outcome?.brokenCell,
+                    paneMark == null || playFraction >= paneMark.revealFraction,
+                )
                 Column(
                     modifier = Modifier.align(Alignment.TopStart).padding(GolfSpacing.Sm),
                     verticalArrangement = Arrangement.spacedBy(2.dp),
@@ -111,7 +146,7 @@ fun BreakPanePlay(
                                 Box(
                                     modifier = Modifier
                                         .size(16.dp)
-                                        .background(if (cell in game.brokenCells) GolfColors.Teal else GolfColors.Panel)
+                                        .background(if (cell in brokenSet) GolfColors.Teal else GolfColors.Panel)
                                         .border(1.dp, GolfColors.Line, RoundedCornerShape(2.dp)),
                                 )
                             }
@@ -119,7 +154,12 @@ fun BreakPanePlay(
                     }
                     Text("SHOTS ${game.shotCount}", style = GolfTypography.MetricValue, color = GolfColors.TextPrimary)
                 }
-                if (game.lastFeedback.isNotBlank()) {
+                // Feedback ("BROKE CELL 5", "PANE OK - MISSED GREEN", ...) is evaluated at shot
+                // ingest, so it must wait for the playback to finish — the same moment the
+                // ding/fail fires — or it telegraphs the outcome from the first frame.
+                val shotDone = lastShot != null &&
+                    playFraction >= FollowCam.endFraction(lastShot.shot.shotResult).toFloat()
+                if (shotDone && game.lastFeedback.isNotBlank()) {
                     Text(
                         text = game.lastFeedback,
                         style = GolfTypography.Status,
@@ -151,7 +191,7 @@ fun BreakPanePlay(
                             }
                             Text("Lower is better.", style = GolfTypography.Body, color = GolfColors.TextSecondary)
                             Row(horizontalArrangement = Arrangement.spacedBy(GolfSpacing.Sm)) {
-                                Button(onClick = { game.start(game.targetM, game.difficulty) }) { Text("PLAY AGAIN") }
+                                Button(onClick = { game.start(game.targetM, game.difficulty, game.paneDistanceM) }) { Text("PLAY AGAIN") }
                                 OutlinedButton(onClick = onBack) { Text("BACK") }
                             }
                         }
@@ -161,6 +201,23 @@ fun BreakPanePlay(
                 // Celebrate a NEW high score on top of the HUD and result card.
                 if (showResultOverlay && game.record.value?.outcome == RecordOutcome.NEW_RECORD) {
                     ConfettiBurst(modifier = Modifier.matchParentSize())
+                }
+
+                // In-game quick settings: gear at TopEnd; dialog never touches
+                // game state, so mid-game progress survives (spec 2026-10-06).
+                // Hidden on the result overlay — entry point is active play only (spec).
+                if (!showResultOverlay) {
+                    GameQuickSettingsButton(
+                        onClick = { showQuickSettings = true },
+                        modifier = Modifier.align(Alignment.TopEnd).padding(GolfSpacing.Sm),
+                    )
+                }
+                if (showQuickSettings) {
+                    GameQuickSettingsDialog(
+                        soundsEnabled = soundsEnabled,
+                        onSoundsChange = onSoundsChange,
+                        onDismiss = { showQuickSettings = false },
+                    )
                 }
             }
 

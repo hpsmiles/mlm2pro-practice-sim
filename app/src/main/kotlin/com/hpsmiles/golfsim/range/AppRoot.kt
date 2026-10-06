@@ -39,6 +39,11 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.hpsmiles.golfsim.audio.GameAudio
+import com.hpsmiles.golfsim.bag.BagMappingCollector
+import com.hpsmiles.golfsim.bag.BagMappingScreen
+import com.hpsmiles.golfsim.bag.BagPlanClub
+import com.hpsmiles.golfsim.bag.ClubQualityGate
 import com.hpsmiles.golfsim.core.connect.AutoConnectPolicy
 import com.hpsmiles.golfsim.core.connect.ConnectionState
 import com.hpsmiles.golfsim.core.connect.EnvironmentConfig
@@ -46,6 +51,7 @@ import com.hpsmiles.golfsim.core.connect.HandshakeSequencer
 import com.hpsmiles.golfsim.core.connect.Mlm2proGattClient
 import com.hpsmiles.golfsim.core.connect.Mlm2proScanner
 import com.hpsmiles.golfsim.core.data.SessionRepository
+import com.hpsmiles.golfsim.core.data.record.ClubType
 import com.hpsmiles.golfsim.core.data.record.ShotSource
 import com.hpsmiles.golfsim.core.designsystem.GolfColors
 import com.hpsmiles.golfsim.core.designsystem.GolfSpacing
@@ -67,6 +73,7 @@ import com.hpsmiles.golfsim.games.TargetPracticeGame
 import com.hpsmiles.golfsim.history.HistoryScreen
 import com.hpsmiles.golfsim.settings.GreenConditionStore
 import com.hpsmiles.golfsim.settings.SettingsScreen
+import com.hpsmiles.golfsim.settings.SoundPrefStore
 import com.hpsmiles.golfsim.settings.TurfConditionStore
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -77,7 +84,7 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 
-private enum class RangeTab { RANGE, GAMES, SETTINGS, HISTORY }
+private enum class RangeTab { RANGE, GAMES, BAG, SETTINGS, HISTORY }
 
 /** The bench device session key convention (same bytes the auth write carries raw). */
 private fun benchSessionKey(): ByteArray = ByteArray(32) { it.toByte() }
@@ -103,6 +110,12 @@ fun AppRoot() {
     val targetPractice = remember { TargetPracticeGame() }
     val breakPane = remember { BreakThePaneGame() }
     var activeGame by remember { mutableStateOf(GameMode.NONE) }
+
+    // M6: bag mapping. collector is session-ephemeral guidance state; the
+    // shots are Room truth (write-through persisted, resume-after-kill).
+    val bagCollector = remember { BagMappingCollector() }
+    var bagCollecting by remember { mutableStateOf(false) }
+    var bagViewedSessionId by remember { mutableStateOf<Long?>(null) }
 
     // M5: persistence facade — one per composition. Bag seeding, DB probe and
     // open-session restore run once at startup; appends ride the existing
@@ -130,6 +143,20 @@ fun AppRoot() {
     fun selectTurfCondition(condition: TurfCondition) {
         turfCondition = condition
         turfConditionStore.set(condition)
+    }
+
+    val gameAudio = remember { GameAudio(context) }
+    DisposableEffect(Unit) {
+        onDispose { gameAudio.release() }
+    }
+
+    val soundPrefStore = remember { SoundPrefStore(context) }
+    var soundsEnabled by remember { mutableStateOf(soundPrefStore.get()) }
+    LaunchedEffect(soundsEnabled) { gameAudio.enabled = soundsEnabled }
+
+    fun selectSoundsEnabled(enabled: Boolean) {
+        soundsEnabled = enabled
+        soundPrefStore.set(enabled)
     }
 
     // Keep the simulated surfaces in sync with Settings > GREEN / TURF for the
@@ -229,6 +256,24 @@ fun AppRoot() {
      * games emit exactly one summary row via takeResult().
      */
     fun routeShot(ballData: com.hpsmiles.golfsim.core.ble.BallData, source: com.hpsmiles.golfsim.core.data.record.ShotSource) {
+        // M6: mapping collection captures ONLY while the guided COLLECTING
+        // view is up on the BAG tab (spec §4). Leaving the tab pauses
+        // capture; progress persists and the range keeps its own shots.
+        if (tab == RangeTab.BAG && bagCollecting) {
+            val shot = bagCollector.add(ballData)
+            if (shot != null) {
+                val sessionId = bagCollector.sessionId
+                scope.launch {
+                    if (sessionId > 0) {
+                        sessionRepository.appendBagMappingShot(
+                            sessionId, shot.clubName, shot.clubType, shot.ballData,
+                            shot.carryM, shot.totalM, shot.timestampMs,
+                        )
+                    }
+                }
+            }
+            return
+        }
         when (activeGame) {
             GameMode.NONE -> persist(session.add(ballData), source)
             GameMode.TARGET_PRACTICE -> {
@@ -254,9 +299,11 @@ fun AppRoot() {
         }
         gattClient.onMisread = {
             scope.launch {
-                // Only the coalesce owner persists, or each mishit would
-                // count twice in the DB (EVENTS + MEASUREMENT pair).
-                if (session.markMisread()) sessionRepository.incrementMisread()
+                // M6: while collecting, a mishit feeds the guided "no read"
+                // pill (in-memory, coalesced) and never the range session.
+                if (tab == RangeTab.BAG && bagCollecting) {
+                    bagCollector.markNoRead()
+                } else if (session.markMisread()) sessionRepository.incrementMisread()
             }
         }
         onDispose {
@@ -477,6 +524,76 @@ fun AppRoot() {
         gatedFlow(repoReady, { sessionRepository.gameResults }, flowOf(emptyList()))
     }.collectAsState(initial = emptyList())
 
+    // M6: bag mapping state — getter-flows captured gated like the others
+    // (they re-derive from the current db, so they survive corrupt-file
+    // recovery).
+    val bagActive by remember(sessionRepository, repoReady) {
+        gatedFlow(repoReady, { sessionRepository.bagMappingActive }, flowOf(null))
+    }.collectAsState(initial = null)
+    val bagLatest by remember(sessionRepository, repoReady) {
+        gatedFlow(repoReady, { sessionRepository.bagMappingLatestCompleted }, flowOf(null))
+    }.collectAsState(initial = null)
+    val bagHistory by remember(sessionRepository, repoReady) {
+        gatedFlow(repoReady, { sessionRepository.bagMappingHistory }, flowOf(emptyList()))
+    }.collectAsState(initial = emptyList())
+    val bagActiveShots by remember(sessionRepository, repoReady, bagActive?.id) {
+        val id = bagActive?.id
+        if (id == null) flowOf(emptyList())
+        else gatedFlow(repoReady, { sessionRepository.observeBagMappingShots(id) }, flowOf(emptyList()))
+    }.collectAsState(initial = emptyList())
+    val bagViewedShots by remember(bagViewedSessionId) {
+        bagViewedSessionId?.let { sessionRepository.observeBagMappingShots(it) } ?: flowOf(emptyList())
+    }.collectAsState(initial = emptyList())
+    var bagShotCounts by remember { mutableStateOf<Map<Long, Int>>(emptyMap()) }
+    LaunchedEffect(bagHistory) {
+        bagShotCounts = sessionRepository.bagMappingShotCounts()
+    }
+
+    // M6: auto-bind the collector to an open session (process death, tab
+    // re-entry). Resume index = first club below the 5-shot target; when
+    // every club has >= 5 kept, re-run the gate on the last club. The shot
+    // set is read fresh inside the effect — the gated bagActiveShots capture
+    // may still be empty on the first composition after process death.
+    LaunchedEffect(bagActive?.id) {
+        val active = bagActive ?: return@LaunchedEffect
+        if (bagCollector.sessionId != active.id) {
+            val shots = sessionRepository.observeBagMappingShots(active.id).first()
+            val plan = active.clubSnapshot().map { BagPlanClub(it.first, it.second) }
+            val keptByClub = shots.filter { !it.filtered }.groupingBy { it.clubName }.eachCount()
+            val idx = plan.indexOfFirst { (keptByClub[it.name] ?: 0) < ClubQualityGate.TARGET_KEPT }
+            bagCollector.beginAt(active.id, plan, if (idx == -1) plan.size - 1 else idx)
+        }
+    }
+
+    /**
+     * M6: START TEST (also RETEST). Creates the IN_PROGRESS session with a
+     * bag snapshot and binds the collector. Idempotent in the repo: if a
+     * test is already running its session id comes back untouched (the UI
+     * only offers START when none does — spec §4).
+     */
+    fun startBagTest() {
+        scope.launch {
+            val eligible = clubRecords.filter { !it.isTemp && it.type != ClubType.PUTTER }
+            if (eligible.isEmpty()) return@launch
+            val id = sessionRepository.startBagMappingSession(eligible, System.currentTimeMillis()) ?: return@launch
+            bagCollector.begin(id, eligible.map { BagPlanClub(it.name, it.type) })
+        }
+    }
+
+    /** M6: END TEST / final-club completion → the result becomes the active result. */
+    fun completeBagTest() {
+        val active = bagActive ?: return
+        scope.launch {
+            sessionRepository.completeBagMappingSession(active.id, System.currentTimeMillis())
+            bagCollector.reset()
+        }
+    }
+
+    // M6: the last club advancing past the plan completes the session.
+    LaunchedEffect(bagCollector.done, bagActive?.id) {
+        if (bagCollector.done && bagActive != null) completeBagTest()
+    }
+
     // Newest session is selected by default; an absent selection falls back
     // to newest so the detail pane never points at a ghost row.
     LaunchedEffect(summaries) {
@@ -521,6 +638,7 @@ fun AppRoot() {
                 NavRail {
                     NavRailButton("RANGE", tab == RangeTab.RANGE, onClick = { requestTab(RangeTab.RANGE) })
                     NavRailButton("GAMES", tab == RangeTab.GAMES, onClick = { tab = RangeTab.GAMES })
+                    NavRailButton("BAG", tab == RangeTab.BAG, onClick = { requestTab(RangeTab.BAG) })
                     NavRailButton("SETTINGS", tab == RangeTab.SETTINGS, onClick = { requestTab(RangeTab.SETTINGS) })
                     NavRailButton("HISTORY", tab == RangeTab.HISTORY, onClick = { requestTab(RangeTab.HISTORY) })
 
@@ -616,6 +734,27 @@ fun AppRoot() {
                             breakPane = breakPane,
                             activeGame = activeGame,
                             onActiveGameChange = { activeGame = it },
+                            gameAudio = gameAudio,
+                            soundsEnabled = soundsEnabled,
+                            onSoundsChange = ::selectSoundsEnabled,
+                        )
+                    }
+                    RangeTab.BAG -> {
+                        BagMappingScreen(
+                            modifier = Modifier.weight(1f),
+                            clubs = clubRecords,
+                            activeSession = bagActive,
+                            latestCompleted = bagLatest,
+                            history = bagHistory,
+                            shotCounts = bagShotCounts,
+                            activeShots = bagActiveShots,
+                            viewedShots = bagViewedShots,
+                            collector = bagCollector,
+                            onViewedSessionChange = { bagViewedSessionId = it },
+                            onCollectingChange = { bagCollecting = it },
+                            onStartTest = ::startBagTest,
+                            onOpenSettings = { requestTab(RangeTab.SETTINGS) },
+                            onCompleteSession = ::completeBagTest,
                         )
                     }
                     RangeTab.SETTINGS -> {
@@ -625,6 +764,8 @@ fun AppRoot() {
                             onGreenConditionChange = ::selectGreenCondition,
                             turfCondition = turfCondition,
                             onTurfConditionChange = ::selectTurfCondition,
+                            soundsEnabled = soundsEnabled,
+                            onSoundsChange = ::selectSoundsEnabled,
                             clubs = clubRecords,
                             onAddClub = sessionRepository::addClub,
                             onRenameClub = { id, name ->

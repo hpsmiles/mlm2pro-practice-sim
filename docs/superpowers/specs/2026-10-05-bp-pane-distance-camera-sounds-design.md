@@ -51,6 +51,7 @@ Three user-requested changes to Break the Pane:
   - **Ding** — ball rests on the green (including shots that crossed an already-broken cell and still finished on green: ding, but no glass).
   - **Fail** — ball rests off the green.
   - Ding/fail fire at ball rest — the same playback moment the result overlay unlocks.
+  - Device-verification amendment (2026-10-05): glass fires whenever the ball physically crosses standing glass (BROKE or HIT_PANE_MISSED_GREEN with an unbroken cell), not only when the break scores; already-broken cells stay silent.
 - **Pure cue logic:** tiny JVM-testable `PaneSoundCues` object decides trigger moments (crossing threshold reached / rest reached / trigger-once per playback) given playback state; `BreakPanePlay`'s playback loop calls it and invokes `GameAudio`.
 
 ### Tidy-ups included

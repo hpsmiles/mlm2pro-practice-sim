@@ -62,6 +62,8 @@ fun SettingsScreen(
     onGreenConditionChange: (GreenCondition) -> Unit = {},
     turfCondition: TurfCondition = TurfCondition.FIRM,
     onTurfConditionChange: (TurfCondition) -> Unit = {},
+    soundsEnabled: Boolean = true,
+    onSoundsChange: (Boolean) -> Unit = {},
     clubs: List<ClubRecord> = emptyList(),
     onAddClub: suspend (String, ClubType, Boolean) -> Boolean = { _, _, _ -> false },
     onRenameClub: suspend (Long, String) -> Boolean = { _, _ -> false },
@@ -182,6 +184,25 @@ fun SettingsScreen(
             PickerList(
                 rows = TurfCondition.entries.map { Triple(it.label, it.blurb, it == turfCondition) },
                 onSelect = { onTurfConditionChange(TurfCondition.entries[it]) },
+            )
+        }
+        SectionCard("SOUND") {
+            Row(modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
+                Text(
+                    text = if (soundsEnabled) "SOUNDS: ON" else "SOUNDS: OFF",
+                    style = GolfTypography.MetricLabel,
+                    color = chipStyle(soundsEnabled),
+                    modifier = Modifier
+                        .border(1.dp, if (soundsEnabled) GolfColors.Teal else GolfColors.Line, RoundedCornerShape(50))
+                        .clickable { onSoundsChange(!soundsEnabled) }
+                        .padding(horizontal = GolfSpacing.Lg, vertical = 8.dp),
+                )
+            }
+            Text(
+                text = "Game cue sounds (glass break, success, miss).",
+                style = GolfTypography.Body,
+                color = GolfColors.TextSecondary,
+                modifier = Modifier.fillMaxWidth().padding(bottom = GolfSpacing.Sm),
             )
         }
         SectionCard("DEBUG - NOTIFICATION CAPTURE (BENCH)") {

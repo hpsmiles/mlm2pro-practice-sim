@@ -41,6 +41,8 @@ import com.hpsmiles.golfsim.range.RangeCamera
 fun TargetPracticePlay(
     game: TargetPracticeGame,
     onBack: () -> Unit,
+    soundsEnabled: Boolean,
+    onSoundsChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var playFraction by remember { mutableFloatStateOf(1f) }
@@ -49,6 +51,7 @@ fun TargetPracticePlay(
     // appears once its animation reaches FollowCam.endFraction (ball rolled
     // out and camera snapped back). Reset when a new game starts.
     var revealedCount by remember { mutableIntStateOf(0) }
+    var showQuickSettings by remember { mutableStateOf(false) }
 
     // Restart the flight animation each time a shot lands (tick bump).
     // Runs past 1 through the follow-cam landing hold (FollowCam.endFraction),
@@ -192,6 +195,23 @@ fun TargetPracticePlay(
                 // Celebrate a NEW high score on top of the HUD and result card.
                 if (showResultOverlay && game.record.value?.outcome == RecordOutcome.NEW_RECORD) {
                     ConfettiBurst(modifier = Modifier.matchParentSize())
+                }
+
+                // In-game quick settings: gear at TopEnd; dialog never touches
+                // game state, so mid-game progress survives (spec 2026-10-06).
+                // Hidden on the result overlay — entry point is active play only (spec).
+                if (!showResultOverlay) {
+                    GameQuickSettingsButton(
+                        onClick = { showQuickSettings = true },
+                        modifier = Modifier.align(Alignment.TopEnd).padding(GolfSpacing.Sm),
+                    )
+                }
+                if (showQuickSettings) {
+                    GameQuickSettingsDialog(
+                        soundsEnabled = soundsEnabled,
+                        onSoundsChange = onSoundsChange,
+                        onDismiss = { showQuickSettings = false },
+                    )
                 }
             }
 

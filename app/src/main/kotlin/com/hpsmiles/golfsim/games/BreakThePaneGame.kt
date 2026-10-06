@@ -19,7 +19,13 @@ import kotlin.math.hypot
 
 enum class BreakOutcomeKind { BROKE, HIT_PANE_MISSED_GREEN, GREEN_MISSED_PANE, MISSED_BOTH }
 
-data class BreakOutcome(val kind: BreakOutcomeKind, val brokenCell: Int?, val feedback: String)
+data class BreakOutcome(
+    val kind: BreakOutcomeKind,
+    val brokenCell: Int?,
+    val feedback: String,
+    /** True when the shot's first plane crossing passed through standing glass (an unbroken cell), evaluated at add() time — brokenCells mutates between shots, so the verdict must be frozen here. */
+    val crossedUnbrokenCell: Boolean = false,
+)
 
 /**
  * Break the Pane state holder (spec section 5). A shot breaks a cell only when it
@@ -58,14 +64,18 @@ class BreakThePaneGame {
         private set
     var difficulty: Difficulty = Difficulty.MEDIUM
         private set
+    /** Custom pane plane distance (m), null = default 20%; survives PLAY AGAIN via explicit pass-through. */
+    var paneDistanceM: Double? = null
+        private set
     var lastFeedback: String = ""
         private set
     private var resultTaken = false
 
-    fun start(targetM: Double, difficulty: Difficulty = Difficulty.MEDIUM) {
+    fun start(targetM: Double, difficulty: Difficulty = Difficulty.MEDIUM, paneDistanceM: Double? = null) {
         this.targetM = targetM
         this.difficulty = difficulty
-        pane = PaneGeom(targetM)
+        this.paneDistanceM = paneDistanceM
+        pane = PaneGeom(targetM, paneDistanceM)
         shots.clear()
         brokenCells.clear()
         lastFeedback = ""
@@ -103,13 +113,14 @@ class BreakThePaneGame {
         val onGreen = hypot(result.restX, result.restY - targetM) <= greenRadiusM()
         val crossing = p.firstCrossing(result.samples)
         val cell = crossing?.cell
+        val crossedUnbroken = cell != null && cell !in brokenCells
         val outcome = when {
             cell != null && onGreen && cell !in brokenCells -> {
                 brokenCells.add(cell)
-                BreakOutcome(BreakOutcomeKind.BROKE, cell, "BROKE CELL ${cell + 1}")
+                BreakOutcome(BreakOutcomeKind.BROKE, cell, "BROKE CELL ${cell + 1}", crossedUnbrokenCell = true)
             }
-            cell != null && onGreen -> BreakOutcome(BreakOutcomeKind.GREEN_MISSED_PANE, null, "GREEN OK - CELL ALREADY BROKEN")
-            cell != null -> BreakOutcome(BreakOutcomeKind.HIT_PANE_MISSED_GREEN, null, "PANE OK - MISSED GREEN")
+            cell != null && onGreen -> BreakOutcome(BreakOutcomeKind.GREEN_MISSED_PANE, null, "GREEN OK - CELL ALREADY BROKEN", crossedUnbrokenCell = false)
+            cell != null -> BreakOutcome(BreakOutcomeKind.HIT_PANE_MISSED_GREEN, null, "PANE OK - MISSED GREEN", crossedUnbrokenCell = crossedUnbroken)
             onGreen -> {
                 val dir = when {
                     crossing == null -> "MISSED PANE"
@@ -118,7 +129,7 @@ class BreakThePaneGame {
                     crossing.xM < p.leftXM -> "GREEN OK - MISSED LEFT"
                     else -> "GREEN OK - MISSED RIGHT"
                 }
-                BreakOutcome(BreakOutcomeKind.GREEN_MISSED_PANE, null, dir)
+                BreakOutcome(BreakOutcomeKind.GREEN_MISSED_PANE, null, dir, crossedUnbrokenCell = false)
             }
             else -> {
                 val dir = when {
@@ -130,7 +141,7 @@ class BreakThePaneGame {
                     result.restX < 0.0 -> "MISSED LEFT"
                     else -> "MISSED RIGHT"
                 }
-                BreakOutcome(BreakOutcomeKind.MISSED_BOTH, null, dir)
+                BreakOutcome(BreakOutcomeKind.MISSED_BOTH, null, dir, crossedUnbrokenCell = false)
             }
         }
         lastFeedback = outcome.feedback
