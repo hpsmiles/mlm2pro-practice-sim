@@ -80,7 +80,7 @@ Two practice games layered on the proven shot pipeline, delivered with Room sche
 
 **Exit:** both games playable LIVE + demo, scored and persisted; device-verified over five amendment rounds; final whole-branch review clean; merged as `19ecc6d`.
 
-## M6 — Bag Mapping & True Gapping
+## M6 — Bag Mapping & True Gapping (shipped 2026-10-06)
 
 Guided full-bag workflow, automatic misread/duff filtering, real carry averages, carry matrix, distance-gap visualization. UI design pass on design system.
 
