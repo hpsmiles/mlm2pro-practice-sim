@@ -76,6 +76,16 @@ class Mlm2proGattClient(
     private val _state = MutableStateFlow<ConnectionState>(ConnectionState.Disconnected)
     val state: StateFlow<ConnectionState> = _state
 
+    private val _batteryPercent = MutableStateFlow<Int?>(null)
+
+    /**
+     * Latest EVENTS 0x03 battery percent for the UI; null until the
+     * device first reports (~30 s cadence) and cleared on any link teardown.
+     * The raw value is the device-reported byte, unclamped — the display
+     * layer clamps to 0..100 (`batteryDisplay` in `:core:designsystem`).
+     */
+    val batteryPercent: StateFlow<Int?> = _batteryPercent
+
     /** Fired for every decoded shot measurement. */
     var onMeasurement: ((BallData) -> Unit)? = null
 
@@ -226,6 +236,9 @@ class Mlm2proGattClient(
         gattQueue.reset()
         gatt?.close()
         gatt = null
+        // A battery reading must not outlive its link. All teardown paths
+        // route here: link loss, explicit disconnect(), pre-retry teardown.
+        _batteryPercent.value = null
         _state.value =
             if (status == BluetoothGatt.GATT_SUCCESS) ConnectionState.Disconnected
             else ConnectionState.Faulted("gatt $status")
@@ -341,15 +354,19 @@ class Mlm2proGattClient(
                 // Malformed MEASUREMENT already recorded in captureLog; drop.
                 is BallDataResult.Malformed -> Unit
             }
-            is Mlm2proMessage.Event -> {
-                // ShotDetected/Ready/battery: state kept; sequencer owns protocol.
+            is Mlm2proMessage.Event -> when (val event = msg.event) {
+                // Battery: mirror to the UI readout; all other sequencing
+                // (shot detected / processing / ready) stays with the sequencer.
+                // A late notification from a torn-down link must not repopulate
+                // the flow — only mirror while a live link is still held.
+                is Mlm2proEvent.Battery -> if (gatt != null) _batteryPercent.value = event.percent
                 // Gate EVENTS misread alerts: handshake emits a single 0x05-0x00
                 // "misread" frame around ~1.75 s with no accompanying MEASUREMENT.
                 // That artifact arrives while the sequencer is still READY/CONFIG,
                 // so only surface it as a user-facing misread once truly armed.
-                if (msg.event is Mlm2proEvent.MisreadAlert && sequencer.state == HandshakeState.ARMED) {
-                    onMisread?.invoke()
-                }
+                is Mlm2proEvent.MisreadAlert ->
+                    if (sequencer.state == HandshakeState.ARMED) onMisread?.invoke()
+                else -> Unit
             }
             else -> Unit
         }

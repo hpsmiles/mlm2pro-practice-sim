@@ -301,7 +301,7 @@ fun StatusStrip(
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier
                 .padding(start = GolfSpacing.Sm)
-                .weight(1f, fill = false),
+                .weight(1f),
         )
         if (batteryPercent != null) {
             BatteryIndicator(
@@ -376,7 +376,7 @@ with:
             is Mlm2proMessage.Event -> when (val event = msg.event) {
                 // Battery: mirror to the UI readout; all other sequencing
                 // (shot detected / processing / ready) stays with the sequencer.
-                is Mlm2proEvent.Battery -> _batteryPercent.value = event.percent
+                is Mlm2proEvent.Battery -> if (gatt != null) _batteryPercent.value = event.percent
                 // Gate EVENTS misread alerts: handshake emits a single 0x05-0x00
                 // "misread" frame around ~1.75 s with no accompanying MEASUREMENT.
                 // That artifact arrives while the sequencer is still READY/CONFIG,

@@ -13,14 +13,21 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 
-/** Bottom status strip: BLE armed dot + session info (avg/sigma/misreads). */
+/**
+ * Bottom status strip: BLE armed dot + session info, plus an optional
+ * monitor battery readout pinned to the trailing edge while connected.
+ * The info text fills the remaining width and ellipsizes when long, so
+ * the battery always keeps the right edge.
+ */
 @Composable
 fun StatusStrip(
     armed: Boolean,
     info: String,
     modifier: Modifier = Modifier,
+    batteryPercent: Int? = null,
 ) {
     Row(
         modifier = modifier
@@ -42,7 +49,17 @@ fun StatusStrip(
             text = info,
             style = GolfTypography.Status,
             color = GolfColors.TextMuted,
-            modifier = Modifier.padding(start = GolfSpacing.Sm),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier
+                .padding(start = GolfSpacing.Sm)
+                .weight(1f),
         )
+        if (batteryPercent != null) {
+            BatteryIndicator(
+                percent = batteryPercent,
+                modifier = Modifier.padding(start = GolfSpacing.Sm),
+            )
+        }
     }
 }

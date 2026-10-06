@@ -90,7 +90,7 @@ fun StatusStrip(
 ```
 
 Layout: existing dot + info text; the info `Text` gains
-`Modifier.weight(1f, fill = false)` so the indicator owns the trailing edge
+`Modifier.weight(1f)` so the indicator owns the trailing edge
 (extreme-length info is constrained rather than displacing the battery;
 `maxLines = 1` + ellipsis for safety). Battery row renders only when
 `batteryPercent != null`.
