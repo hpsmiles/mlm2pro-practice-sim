@@ -2597,7 +2597,7 @@ git commit -m "feat(app): bag mapping history view with per-session shot counts 
 **Files:**
 - Create: `app/src/main/kotlin/com/hpsmiles/golfsim/bag/BagMappingScreen.kt`
 
-- [ ] **Step 1: Implement the shell**
+- [x] **Step 1: Implement the shell**
 
 ```kotlin
 package com.hpsmiles.golfsim.bag
@@ -2717,14 +2717,14 @@ fun BagMappingScreen(
 }
 ```
 
-- [ ] **Step 2: Compile to verify**
+- [x] **Step 2: Compile to verify**
 
 ```powershell
 .\gradlew.bat :app:compileDebugKotlin
 ```
 Expected: BUILD SUCCESSFUL (screen not yet referenced — AppRoot wires it in Task 16).
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```powershell
 git add app/src/main/kotlin/com/hpsmiles/golfsim/bag/BagMappingScreen.kt
@@ -2738,7 +2738,7 @@ git commit -m "feat(app): bag mapping screen state selection shell (M6)"
 **Files:**
 - Modify: `app/src/main/kotlin/com/hpsmiles/golfsim/range/AppRoot.kt` (enum `:82`, state `:104-107`, shot routing `:247-263`, misread `:271-277`, flows near `:492`, NavRail `:537-541`, `when (tab)` `:617-696`)
 
-- [ ] **Step 1: Add the tab + hoisted state**
+- [x] **Step 1: Add the tab + hoisted state**
 
 At `AppRoot.kt:82` change the enum:
 
@@ -2758,7 +2758,7 @@ Near `:107` (after `var activeGame by remember { mutableStateOf(GameMode.NONE) }
 
 Add imports: `com.hpsmiles.golfsim.bag.BagMappingCollector`, `com.hpsmiles.golfsim.bag.BagMappingScreen`, `com.hpsmiles.golfsim.bag.BagPlanClub`, `com.hpsmiles.golfsim.bag.ClubQualityGate`.
 
-- [ ] **Step 2: Add the lifecycle helpers** — AFTER the Step 3 flow captures (Kotlin local functions may only reference locals declared above them; `completeBagTest` reads `bagActive`). Paste immediately below the Step 3 block:
+- [x] **Step 2: Add the lifecycle helpers** — AFTER the Step 3 flow captures (Kotlin local functions may only reference locals declared above them; `completeBagTest` reads `bagActive`). Paste immediately below the Step 3 block:
 
 ```kotlin
     /**
@@ -2788,7 +2788,7 @@ Add imports: `com.hpsmiles.golfsim.bag.BagMappingCollector`, `com.hpsmiles.golfs
 
 (`bagActive` is the flow capture from Step 3 — declare before use or Kotlin will still resolve it inside the function body since both live in the same composable scope; keep Step 3's declarations ABOVE these helpers to be safe.)
 
-- [ ] **Step 3: Add the gated Room captures** (near the other captures, ~`:492`)
+- [x] **Step 3: Add the gated Room captures** (near the other captures, ~`:492`)
 
 ```kotlin
     // M6: bag mapping state — getter-flows captured gated like the others
@@ -2838,7 +2838,7 @@ Add imports: `com.hpsmiles.golfsim.bag.BagMappingCollector`, `com.hpsmiles.golfs
     }
 ```
 
-- [ ] **Step 4: Route shots and misreads** (modify `routeShot` `:247-263` and the `onMisread` callback `:271-277`)
+- [x] **Step 4: Route shots and misreads** (modify `routeShot` `:247-263` and the `onMisread` callback `:271-277`)
 
 In `routeShot`, insert the bag branch FIRST:
 
@@ -2882,7 +2882,7 @@ In the `onMisread` callback:
         }
 ```
 
-- [ ] **Step 5: NavRail button + screen branch**
+- [x] **Step 5: NavRail button + screen branch**
 
 After the GAMES `NavRailButton` (`:539`) add:
 
@@ -2915,7 +2915,7 @@ In the `when (tab)` switch (between the GAMES and SETTINGS branches):
                     }
 ```
 
-- [ ] **Step 6: Compile + run all app tests**
+- [x] **Step 6: Compile + run all app tests**
 
 ```powershell
 .\gradlew.bat :app:compileDebugKotlin
@@ -2923,7 +2923,7 @@ In the `when (tab)` switch (between the GAMES and SETTINGS branches):
 ```
 Expected: BUILD SUCCESSFUL, all tests PASS (pre-existing suites untouched; `GameLeavePolicy`/`requestTab` behavior unchanged).
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```powershell
 git add app/src/main/kotlin/com/hpsmiles/golfsim/range/AppRoot.kt
