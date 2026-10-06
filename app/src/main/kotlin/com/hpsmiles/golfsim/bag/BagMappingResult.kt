@@ -111,6 +111,16 @@ private fun ColumnScope.CarryMatrixSection(
         val clubShots = shots.filter { it.clubName == name }
         Triple(name, type.label, clubShots)
     }
+    // ONE shared carry axis over every club's kept+filtered carries (spec §6):
+    // the matrix's whole point is cross-club comparison, so all rows map
+    // through the same value-domain scale. The pixel fields are per-canvas
+    // (rebuilt inside the painter from each canvas width); only the value
+    // bounds are shared here.
+    val sharedCarryAxis = BoxPlotGeom.axis(
+        rows.flatMap { (_, _, clubShots) -> clubShots.map { it.carryM } },
+        leftPadPx = 0f,
+        plotWidthPx = 1f, // nominal — pixels are per-canvas; minM/maxM are width-independent
+    )
     val mappedMedians = rows.mapNotNull { (name, _, clubShots) ->
         val kept = clubShots.filter { !it.filtered }.map { it.carryM }
         val dist = BagMappingStats.distribution(kept) ?: return@mapNotNull null
@@ -122,7 +132,7 @@ private fun ColumnScope.CarryMatrixSection(
         verticalArrangement = Arrangement.spacedBy(GolfSpacing.Sm),
     ) {
         items(rows, key = { it.first }) { (name, typeLabel, clubShots) ->
-            ClubRow(name, typeLabel, clubShots, onDrillDown)
+            ClubRow(name, typeLabel, clubShots, sharedCarryAxis, onDrillDown)
         }
         if (gaps.isNotEmpty()) {
             item {
@@ -150,6 +160,7 @@ private fun ClubRow(
     clubName: String,
     typeLabel: String,
     clubShots: List<BagMappingShotEntity>,
+    sharedCarryAxis: BoxPlotGeom.Axis?,
     onDrillDown: (String) -> Unit,
 ) {
     val kept = clubShots.filter { !it.filtered }.map { it.carryM }
@@ -169,9 +180,13 @@ private fun ClubRow(
             }
             if (dist == null) {
                 Text("no data", style = GolfTypography.Body, color = GolfColors.TextSecondary)
-            } else {
+            } else if (sharedCarryAxis != null) {
+                // A club with kept shots always contributes to the shared axis,
+                // so it is non-null exactly when the canvas is drawn.
                 CarryMatrixCanvas(
                     rows = listOf(CarryMatrixRow(clubName, kept, filtered)),
+                    minM = sharedCarryAxis.minM,
+                    maxM = sharedCarryAxis.maxM,
                     modifier = Modifier.weight(1f).height(28.dp),
                 )
                 Column(horizontalAlignment = Alignment.End) {
