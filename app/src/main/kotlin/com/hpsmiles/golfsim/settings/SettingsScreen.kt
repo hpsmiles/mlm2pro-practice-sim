@@ -68,6 +68,7 @@ fun SettingsScreen(
     onAddClub: suspend (String, ClubType, Boolean) -> Boolean = { _, _, _ -> false },
     onRenameClub: suspend (Long, String) -> Boolean = { _, _ -> false },
     onDeleteClub: (Long) -> Unit = {},
+    onMoveClub: (Long, Int) -> Unit = { _, _ -> },
 ) {
     val context = LocalContext.current
     var captureOn by remember { mutableStateOf(captureLog.enabled) }
@@ -87,14 +88,30 @@ fun SettingsScreen(
     var renameRejected by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
+    // Reorder mode: the focused panel replaces the settings body (spec §5.1).
+    var reorderMode by remember { mutableStateOf(false) }
+    // Hoisted so returning from reorder mode keeps the settings scroll position.
+    val settingsScroll = rememberScrollState()
+
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(GolfColors.Base)
-            .verticalScroll(rememberScrollState())
             .padding(GolfSpacing.Md),
-        verticalArrangement = Arrangement.spacedBy(GolfSpacing.Md),
     ) {
+        if (reorderMode) {
+            BagReorderPanel(
+                clubs = clubs,
+                onMoveClub = onMoveClub,
+                onDone = { reorderMode = false },
+            )
+        } else {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(settingsScroll),
+                verticalArrangement = Arrangement.spacedBy(GolfSpacing.Md),
+            ) {
         SectionCard("RAPSODO AUTH") {
             Text(
                 text = "Before using a live session:\n" +
@@ -112,6 +129,20 @@ fun SettingsScreen(
                 color = GolfColors.TextSecondary,
                 modifier = Modifier.fillMaxWidth().padding(bottom = GolfSpacing.Sm),
             )
+            // Bag reorder entry: shown once any type group has 2+ clubs.
+            if (bagGroups(clubs).any { it.clubs.size >= 2 }) {
+                Row(modifier = Modifier.fillMaxWidth().padding(bottom = GolfSpacing.Sm)) {
+                    Text(
+                        text = "EDIT ORDER",
+                        style = GolfTypography.MetricLabel,
+                        color = GolfColors.TextSecondary,
+                        modifier = Modifier
+                            .border(1.dp, GolfColors.Line, RoundedCornerShape(50))
+                            .clickable { reorderMode = true }
+                            .padding(horizontal = GolfSpacing.Md, vertical = 6.dp),
+                    )
+                }
+            }
             if (clubs.isEmpty()) {
                 Text(
                     "NO CLUBS YET",
@@ -258,7 +289,9 @@ fun SettingsScreen(
                 )
             }
         }
-    }
+            } // closes the else-branch scroll Column
+        } // closes the else
+    } // closes the root Column
 
     if (renameTarget != null) {
         AlertDialog(
