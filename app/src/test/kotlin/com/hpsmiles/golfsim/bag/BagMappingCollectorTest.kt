@@ -64,7 +64,8 @@ class BagMappingCollectorTest {
         assertTrue(c.markNoRead(1000))
         assertFalse(c.markNoRead(1200)) // within 500 ms window
         assertTrue(c.markNoRead(1600))
-        assertEquals(2, c.noReadCount.intValue)
+        assertTrue(c.markNoRead(2100)) // exactly 500 ms later is counted (500 < 500 is false)
+        assertEquals(3, c.noReadCount.intValue)
     }
 
     @Test

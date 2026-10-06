@@ -41,7 +41,7 @@ class BagMappingCollector {
     /** Club the player answered HIT MORE for — suppresses re-prompting until they advance. */
     val moreGrantedFor = mutableStateOf<String?>(null)
     val noReadCount = mutableIntStateOf(0)
-    /** Bumps on every state change so keyed UI effects re-run deterministically. */
+    /** Bumps on collection-flow state changes so keyed UI effects re-run deterministically. */
     val tick = mutableIntStateOf(0)
 
     /** Injectable clock (ms). AppRoot can leave the default. */
