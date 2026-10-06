@@ -787,6 +787,9 @@ fun AppRoot() {
                                     if (deletedName == activeClubName) selectClub(null)
                                 }
                             },
+                            onMoveClub = { id, index ->
+                                scope.launch { sessionRepository.moveClub(id, index) }
+                            },
                         )
                     }
                     RangeTab.HISTORY -> {
