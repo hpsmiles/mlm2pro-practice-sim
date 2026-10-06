@@ -19,8 +19,8 @@ import androidx.compose.ui.unit.dp
 /**
  * Bottom status strip: BLE armed dot + session info, plus an optional
  * monitor battery readout pinned to the trailing edge while connected.
- * The info text is weight-constrained (not displaced) so the battery
- * keeps the right edge even for the longest failure labels.
+ * The info text fills the remaining width and ellipsizes when long, so
+ * the battery always keeps the right edge.
  */
 @Composable
 fun StatusStrip(
@@ -53,7 +53,7 @@ fun StatusStrip(
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier
                 .padding(start = GolfSpacing.Sm)
-                .weight(1f, fill = false),
+                .weight(1f),
         )
         if (batteryPercent != null) {
             BatteryIndicator(
