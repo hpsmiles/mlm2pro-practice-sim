@@ -59,7 +59,7 @@ Tests: `core/data/src/test/.../bag/BagMappingStatsTest.kt`, `core/data/src/test/
 - Create: `core/data/src/main/kotlin/com/hpsmiles/golfsim/core/data/bag/BagMappingStats.kt`
 - Test: `core/data/src/test/kotlin/com/hpsmiles/golfsim/core/data/bag/BagMappingStatsTest.kt`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```kotlin
 package com.hpsmiles.golfsim.core.data.bag
@@ -156,14 +156,14 @@ class BagMappingStatsTest {
 }
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 ```powershell
 .\gradlew.bat :core:data:testDebugUnitTest --tests "com.hpsmiles.golfsim.core.data.bag.BagMappingStatsTest"
 ```
 Expected: FAIL — `BagMappingStats` and `BagMappingShotEntity` unresolved (entity arrives in Task 2; create both files in this task's Step 3 if the test cannot compile without the entity — the entity is a plain data class with no Room processing needed yet).
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 Create the entity FIRST (needed by stats + compile; Room annotations are inert until Task 3 registers the entity). `core/data/src/main/kotlin/com/hpsmiles/golfsim/core/data/entity/BagMappingShotEntity.kt`:
 
@@ -311,14 +311,14 @@ object BagMappingStats {
 }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 ```powershell
 .\gradlew.bat :core:data:testDebugUnitTest --tests "com.hpsmiles.golfsim.core.data.bag.BagMappingStatsTest"
 ```
 Expected: PASS (all 8 tests).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```powershell
 git add core/data/src/main/kotlin/com/hpsmiles/golfsim/core/data/bag/BagMappingStats.kt core/data/src/main/kotlin/com/hpsmiles/golfsim/core/data/entity/BagMappingShotEntity.kt core/data/src/test/kotlin/com/hpsmiles/golfsim/core/data/bag/BagMappingStatsTest.kt
