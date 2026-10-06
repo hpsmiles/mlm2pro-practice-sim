@@ -79,6 +79,9 @@ class SessionRepository private constructor(private val context: Context) {
                 .map { ClubRecord(it.id, it.name, ClubType.fromName(it.type), it.isTemp) }
         }
 
+    /** Test seam: raw club rows, for reorder order/uniqueness assertions. */
+    internal fun clubDao() = clubDao
+
     fun observeShots(sessionId: Long): Flow<List<ShotRecord>> =
         shotDao.observeShots(sessionId).map { list -> list.map { it.toRecord() } }
 
@@ -284,6 +287,39 @@ class SessionRepository private constructor(private val context: Context) {
         } catch (t: Throwable) {
             if (t is CancellationException) throw t
             Log.e(TAG, "deleteClub failed", t)
+            persistError.value = true
+        }
+    }
+
+    /**
+     * Moves a club to a 0-based slot within its own type group. The slot is a
+     * final position and is clamped to 0..k-1. Renumbers only that group's
+     * sortOrder to 0..k-1. Same-slot drop is a no-op. Never throws — same
+     * contract as [deleteClub]; a failed write leaves the old order in the
+     * [clubs] flow.
+     */
+    suspend fun moveClub(id: Long, toIndexInType: Int) {
+        try {
+            db.withTransaction {
+                val club = clubDao.findById(id) ?: return@withTransaction
+                val type = ClubType.fromName(club.type)
+                val group = clubDao.all()
+                    .filter { ClubType.fromName(it.type) == type }
+                    .sortedWith(compareBy({ it.sortOrder }, { it.id }))
+                val from = group.indexOfFirst { it.id == id }
+                if (from < 0) return@withTransaction
+                val reordered = group.toMutableList()
+                reordered.removeAt(from)
+                reordered.add(toIndexInType.coerceIn(0, reordered.size), club)
+                if (reordered.map { it.id } == group.map { it.id }) return@withTransaction
+                reordered.forEachIndexed { index, entity ->
+                    if (entity.sortOrder != index) clubDao.updateSortOrder(entity.id, index)
+                }
+            }
+            persistError.value = false
+        } catch (t: Throwable) {
+            if (t is CancellationException) throw t
+            Log.e(TAG, "moveClub failed", t)
             persistError.value = true
         }
     }

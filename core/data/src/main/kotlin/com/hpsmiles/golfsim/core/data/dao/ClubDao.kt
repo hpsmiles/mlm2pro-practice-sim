@@ -21,6 +21,15 @@ interface ClubDao {
     @Query("SELECT * FROM clubs WHERE name = :name")
     suspend fun findByName(name: String): ClubEntity?
 
+    @Query("SELECT * FROM clubs WHERE id = :id")
+    suspend fun findById(id: Long): ClubEntity?
+
+    @Query("SELECT * FROM clubs")
+    suspend fun all(): List<ClubEntity>
+
+    @Query("UPDATE clubs SET sortOrder = :sortOrder WHERE id = :id")
+    suspend fun updateSortOrder(id: Long, sortOrder: Int)
+
     @Query("SELECT COALESCE(MAX(sortOrder), -1) FROM clubs")
     suspend fun maxSortOrder(): Int
 
