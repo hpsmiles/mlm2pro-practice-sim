@@ -334,7 +334,7 @@ git commit -m "feat(core-data): pure bag-mapping duff filter and distributions (
 - Create: `core/data/src/main/kotlin/com/hpsmiles/golfsim/core/data/dao/BagMappingSessionDao.kt`
 - Create: `core/data/src/main/kotlin/com/hpsmiles/golfsim/core/data/dao/BagMappingShotDao.kt`
 
-- [ ] **Step 1: Create `BagMappingSessionEntity.kt`**
+- [x] **Step 1: Create `BagMappingSessionEntity.kt`**
 
 ```kotlin
 package com.hpsmiles.golfsim.core.data.entity
@@ -381,7 +381,7 @@ data class BagMappingSessionEntity(
 }
 ```
 
-- [ ] **Step 2: Create the two DAOs**
+- [x] **Step 2: Create the two DAOs**
 
 `core/data/src/main/kotlin/com/hpsmiles/golfsim/core/data/dao/BagMappingSessionDao.kt`:
 
@@ -449,14 +449,14 @@ interface BagMappingShotDao {
 }
 ```
 
-- [ ] **Step 3: Compile to verify**
+- [x] **Step 3: Compile to verify**
 
 ```powershell
 .\gradlew.bat :core:data:compileDebugKotlin
 ```
 Expected: BUILD SUCCESSFUL (entities compile; Room KSP validates DAO queries against registered entities — these entities are not yet registered, KSP ignores them until Task 3).
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```powershell
 git add core/data/src/main/kotlin/com/hpsmiles/golfsim/core/data/entity/BagMappingSessionEntity.kt core/data/src/main/kotlin/com/hpsmiles/golfsim/core/data/dao/BagMappingSessionDao.kt core/data/src/main/kotlin/com/hpsmiles/golfsim/core/data/dao/BagMappingShotDao.kt
