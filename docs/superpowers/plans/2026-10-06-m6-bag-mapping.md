@@ -2937,25 +2937,25 @@ git commit -m "feat(app): BAG tab with guided shot routing and session lifecycle
 **Files:**
 - Modify: `ROADMAP.md` (~line 83, M6 entry)
 
-- [ ] **Step 1: Build everything and run every test**
+- [x] **Step 1: Build everything and run every test**
 
 ```powershell
 .\gradlew.bat build
 ```
 Expected: BUILD SUCCESSFUL — assemble + every module's unit tests, including the new `BagMappingStatsTest`, `MigrationFrom3Test`, `BagMappingRepositoryTest`, `ClubQualityGateTest`, `GapAnalysisTest`, `BoxPlotGeomTest`, `BagMappingCollectorTest`, `BagMappingFormatsTest`.
 
-- [ ] **Step 2: Update ROADMAP M6 status**
+- [x] **Step 2: Update ROADMAP M6 status**
 
 Read `ROADMAP.md` lines 78–100, then mark the M6 entry shipped using the exact same formatting convention the M5.5 shipped entry uses (status marker + date). Keep the exit-criteria sentence.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```powershell
 git add ROADMAP.md
 git commit -m "docs: M6 bag mapping shipped"
 ```
 
-- [ ] **Step 4: Manual smoke (tablet, optional but recommended)**
+- [x] **Step 4: Manual smoke (tablet, optional but recommended)**
 
 `.\gradlew.bat :app:installDebug` then on-device: BAG tab → START TEST → fire demo shots (MODE: DEMO + FIRE) → verify progress dots, gate prompt behavior with clustered carries, END TEST, matrix renders, RETEST shows the banner, HISTORY lists the result, app kill mid-collection resumes where it left off, and HISTORY/Range show zero mapping contamination.
 
