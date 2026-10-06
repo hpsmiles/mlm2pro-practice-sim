@@ -34,7 +34,7 @@ class ClubQualityGateTest {
 
     @Test
     fun `big window - ask for more`() {
-        // window 30 > 20% of median 140 = 28
+        // median 141 → threshold 28.2; window 30 > 28.2
         assertEquals(
             ClubQualityGate.Verdict.ASK_MORE,
             ClubQualityGate.evaluate(kept(125.0, 140.0, 141.0, 142.0, 155.0), filteredCount = 0),
@@ -43,10 +43,10 @@ class ClubQualityGateTest {
 
     @Test
     fun `window exactly at threshold - accept`() {
-        // window 28 == 20% of median 140 → not > → accept (spec: window > 20%)
+        // median 140, window 28 == 20% of median → not > → accept (spec: window > 20%)
         assertEquals(
             ClubQualityGate.Verdict.ACCEPT,
-            ClubQualityGate.evaluate(kept(126.0, 140.0, 141.0, 142.0, 154.0), filteredCount = 0),
+            ClubQualityGate.evaluate(kept(126.0, 139.0, 140.0, 141.0, 154.0), filteredCount = 0),
         )
     }
 
