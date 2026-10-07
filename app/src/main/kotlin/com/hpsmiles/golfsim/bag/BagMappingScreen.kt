@@ -35,7 +35,7 @@ fun BagMappingScreen(
     collector: BagMappingCollector,
     onViewedSessionChange: (Long?) -> Unit,
     onCollectingChange: (Boolean) -> Unit,
-    onStartTest: () -> Unit,
+    onStartTest: (BagOrderMode) -> Unit,
     onOpenSettings: () -> Unit,
     onCompleteSession: () -> Unit,
     modifier: Modifier = Modifier,
@@ -92,8 +92,8 @@ fun BagMappingScreen(
         BagView.INTRO -> BagMappingIntro(
             eligibleClubs = clubs.filter { !it.isTemp && it.type != ClubType.PUTTER },
             onOpenSettings = onOpenSettings,
-            // TODO(lane-D): thread order mode (Screen param flips to (BagOrderMode) -> Unit).
-            onStartTest = { onStartTest() },
+            // Intro selector carries the mode (wedge-first default, spec item 2).
+            onStartTest = { onStartTest(it) },
             modifier = modifier,
         )
         BagView.COLLECTING -> BagMappingCollecting(
@@ -110,7 +110,7 @@ fun BagMappingScreen(
                     session = session,
                     shots = viewedShots,
                     isStaleResult = activeSession != null && viewingHistory == null,
-                    onRetest = onStartTest,
+                    onRetest = { onStartTest(BagOrderMode.WEDGE_FIRST) },
                     onResume = { view = BagView.COLLECTING },
                     onOpenHistory = { view = BagView.HISTORY },
                     modifier = modifier,

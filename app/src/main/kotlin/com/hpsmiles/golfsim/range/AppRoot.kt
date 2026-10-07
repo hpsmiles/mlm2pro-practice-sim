@@ -42,8 +42,10 @@ import androidx.compose.ui.unit.sp
 import com.hpsmiles.golfsim.audio.GameAudio
 import com.hpsmiles.golfsim.bag.BagMappingCollector
 import com.hpsmiles.golfsim.bag.BagMappingScreen
+import com.hpsmiles.golfsim.bag.BagOrderMode
 import com.hpsmiles.golfsim.bag.BagPlanClub
 import com.hpsmiles.golfsim.bag.ClubQualityGate
+import com.hpsmiles.golfsim.bag.orderPlan
 import com.hpsmiles.golfsim.core.connect.AutoConnectPolicy
 import com.hpsmiles.golfsim.core.connect.ConnectionState
 import com.hpsmiles.golfsim.core.connect.EnvironmentConfig
@@ -572,12 +574,13 @@ fun AppRoot() {
      * test is already running its session id comes back untouched (the UI
      * only offers START when none does — spec §4).
      */
-    fun startBagTest() {
+    fun startBagTest(orderMode: BagOrderMode) {
         scope.launch {
             val eligible = clubRecords.filter { !it.isTemp && it.type != ClubType.PUTTER }
             if (eligible.isEmpty()) return@launch
-            val id = sessionRepository.startBagMappingSession(eligible, System.currentTimeMillis()) ?: return@launch
-            bagCollector.begin(id, eligible.map { BagPlanClub(it.name, it.type) })
+            val ordered = orderPlan(eligible, orderMode)
+            val id = sessionRepository.startBagMappingSession(ordered, System.currentTimeMillis()) ?: return@launch
+            bagCollector.begin(id, ordered.map { BagPlanClub(it.name, it.type) })
         }
     }
 
