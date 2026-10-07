@@ -83,6 +83,9 @@ fun GameMetricsPanel(
                 Spacer(Modifier.size(GolfSpacing.Xs))
                 MetricChip("launch", String.format(Locale.US, "%.1f", currentShot.ballData.launchAngle), "DEG")
                 Spacer(Modifier.size(GolfSpacing.Xs))
+                // HLA sign verified on-device M4c: − left / + right of target.
+                MetricChip("dir", String.format(Locale.US, "%+.1f", currentShot.ballData.launchDirection), "DEG")
+                Spacer(Modifier.size(GolfSpacing.Xs))
                 MetricChip("axis", String.format(Locale.US, "%.1f", currentShot.ballData.spinAxis), "DEG")
             }
         }
