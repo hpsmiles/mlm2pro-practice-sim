@@ -18,11 +18,12 @@ class HistoryGroupingTest {
         seq: Int = 0,
         carry: Double = 140.0,
         side: Double = -3.0,
+        launchDir: Double = -1.0,
         excluded: Boolean = false,
         wasTemp: Boolean = false,
     ) = ShotRecord(
         id = id, sessionId = 1, seq = seq, timestampMs = id, source = ShotSource.LIVE,
-        clubName = club, ballData = BallData(33.0, 48.0, -1.0, 12.0, -4.0, 8000, 5, 10),
+        clubName = club, ballData = BallData(33.0, 48.0, launchDir, 12.0, -4.0, 8000, 5, 10),
         carryM = carry, totalM = 150.0, sideM = side, apexM = 27.0, flightTimeSec = 6.0,
         excluded = excluded, clubWasTemp = wasTemp,
     )
@@ -81,5 +82,11 @@ class HistoryGroupingTest {
             it.copy(ballData = it.ballData.copy(clubHeadSpeed = 0.0))
         }
         assertNull(statsFor(ClubGroup("7i", listOf(zeroClub))).avgSmash)
+    }
+
+    @Test
+    fun `club stats average launch direction over included shots`() {
+        val group = ClubGroup("D", listOf(shot(1, "D", launchDir = -2.0), shot(2, "D", launchDir = 4.0), shot(3, "D", launchDir = 6.0, excluded = true)))
+        assertEquals(1.0, statsFor(group).avgDirDeg!!, 1e-9)
     }
 }

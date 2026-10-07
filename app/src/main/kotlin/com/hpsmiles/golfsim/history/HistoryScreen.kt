@@ -510,6 +510,7 @@ private fun HeaderRow() {
         val cols = listOf(
             "#" to 36.dp, "CARRY" to 80.dp, "TOTAL" to 80.dp, "SIDE" to 84.dp, "APEX" to 80.dp,
             "BALL" to 88.dp, "CLUB" to 76.dp, "SMASH" to 64.dp, "LAUNCH" to 72.dp,
+            "DIR" to 72.dp,
             "AXIS" to 72.dp, "SPIN" to 96.dp,
         )
         cols.forEach { (label, w) -> HeaderCell(label, w) }
@@ -555,6 +556,7 @@ private fun AvgRow(stats: ClubStats) {
             modifier = Modifier.width(64.dp),
         )
         AvgCell(HistoryFormats::launch, stats.avgLaunchDeg, 72.dp)
+        AvgCell(HistoryFormats::dir, stats.avgDirDeg, 72.dp)
         AvgCell(HistoryFormats::axis, stats.avgAxisDeg, 72.dp)
         AvgCell(HistoryFormats::avgSpin, stats.avgSpinRpm, 96.dp)
         Spacer(Modifier.width(48.dp))
@@ -612,6 +614,7 @@ private fun ShotRow(
         ShotCell(HistoryFormats.clubMph(shot.ballData.clubHeadSpeed), 76.dp, shot.excluded)
         ShotCell(HistoryFormats.smash(shot.ballData.ballSpeed, shot.ballData.clubHeadSpeed), 64.dp, shot.excluded)
         ShotCell(HistoryFormats.launch(shot.ballData.launchAngle), 72.dp, shot.excluded)
+        ShotCell(HistoryFormats.dir(shot.ballData.launchDirection), 72.dp, shot.excluded)
         ShotCell(HistoryFormats.axis(shot.ballData.spinAxis), 72.dp, shot.excluded)
         ShotCell(HistoryFormats.spin(shot.ballData.totalSpin), 96.dp, shot.excluded)
         Checkbox(
