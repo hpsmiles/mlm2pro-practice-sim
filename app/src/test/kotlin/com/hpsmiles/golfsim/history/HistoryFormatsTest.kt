@@ -46,4 +46,11 @@ class HistoryFormatsTest {
         assertEquals("—", HistoryFormats.clubOrDash(null))
         assertEquals("7i", HistoryFormats.clubOrDash("7i"))
     }
+
+    @Test
+    fun `dir formats signed degrees with unicode minus`() {
+        assertEquals("+3.5°", HistoryFormats.dir(3.46))
+        assertEquals("−2.0°", HistoryFormats.dir(-2.04))
+        assertEquals("+0.0°", HistoryFormats.dir(0.0))
+    }
 }

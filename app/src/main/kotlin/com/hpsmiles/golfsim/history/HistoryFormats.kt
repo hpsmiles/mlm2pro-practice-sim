@@ -42,6 +42,9 @@ object HistoryFormats {
     fun axis(deg: Double): String =
         String.format(Locale.US, "%+.1f°", deg).replace('-', '−')
 
+    /** Signed HLA (°): − left / + right of target (sign verified on-device, M4c handover). */
+    fun dir(deg: Double): String = String.format(Locale.US, "%+.1f°", deg).replace('-', '−')
+
     fun avgSpin(spinRpm: Double): String = String.format(Locale.US, "%.0f rpm", spinRpm)
 
     fun sigma(v: Double): String = String.format(Locale.US, "%.1f", v)
