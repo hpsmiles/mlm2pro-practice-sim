@@ -91,7 +91,8 @@ fun BagMappingScreen(
         BagView.INTRO -> BagMappingIntro(
             eligibleClubs = clubs.filter { !it.isTemp && it.type != ClubType.PUTTER },
             onOpenSettings = onOpenSettings,
-            onStartTest = onStartTest,
+            // TODO(lane-D): thread order mode (Screen param flips to (BagOrderMode) -> Unit).
+            onStartTest = { onStartTest() },
             modifier = modifier,
         )
         BagView.COLLECTING -> BagMappingCollecting(
