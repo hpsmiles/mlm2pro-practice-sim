@@ -39,6 +39,7 @@ fun BagMappingScreen(
     onOpenSettings: () -> Unit,
     onCompleteSession: () -> Unit,
     modifier: Modifier = Modifier,
+    latestShot: com.hpsmiles.golfsim.range.DisplayShot? = null,
 ) {
     var view by remember { mutableStateOf(BagView.AUTO) }
     var viewingHistory by remember { mutableStateOf<BagMappingSessionEntity?>(null) }
@@ -100,6 +101,7 @@ fun BagMappingScreen(
             activeShots = activeShots,
             onCompleteSession = onCompleteSession,
             modifier = modifier,
+            latestShot = latestShot,
         )
         BagView.RESULT -> {
             val session = viewingHistory ?: latestCompleted
