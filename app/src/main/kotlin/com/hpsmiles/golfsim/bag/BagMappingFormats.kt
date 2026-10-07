@@ -12,6 +12,9 @@ import java.util.Locale
 object BagMappingFormats {
     fun carry(m: Double): String = String.format(Locale.US, "%.0f m", m)
 
+    /** Total distance (carry + rollout), same "%.0f m" convention. */
+    fun total(m: Double): String = String.format(Locale.US, "%.0f m", m)
+
     /** Smash factor = ball speed / club head speed. */
     fun smash(clubMps: Double, ballMps: Double): String =
         if (clubMps <= 0.0) "—" else String.format(Locale.US, "%.2f", ballMps / clubMps)
