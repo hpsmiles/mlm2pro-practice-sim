@@ -51,19 +51,26 @@ class RolloutRecalibrationTest {
         }
     }
 
-    /** Spec req 1: no cliff — adjacent-degree rollout ratio stays bounded. */
+    /**
+     * Spec req 1: no cliff — adjacent-degree rollout ratio stays bounded. Sweeps
+     * 2600 rpm (baseline) and 2000 rpm, the spin where the 2026-10-07 low-spin
+     * relief (LOW_SPIN_RELIEF_*) deviates most from the frozen M2 law, so the
+     * thetaCrit-boundary step is test-constrained exactly where it acts strongest.
+     */
     @Test
     fun rolloutContinuousAcrossThetaCrit() {
-        var prev = -1.0
-        for (angle in 12..32) {
-            val r = BounceRollModel.bounceAndRoll(
-                landing(angle.toDouble(), 2600.0), Surface.FAIRWAY_NORMAL, 12.0, env,
-            ).deltaY
-            if (prev > 0) assertTrue(
-                "rollout jumped $prev -> $r at ${angle}deg",
-                r <= prev * 1.5 + 1.0,
-            )
-            prev = r
+        for (spin in doubleArrayOf(2000.0, 2600.0)) {
+            var prev = -1.0
+            for (angle in 12..32) {
+                val r = BounceRollModel.bounceAndRoll(
+                    landing(angle.toDouble(), spin), Surface.FAIRWAY_NORMAL, 12.0, env,
+                ).deltaY
+                if (prev > 0) assertTrue(
+                    "rollout jumped $prev -> $r at ${angle}deg/${spin.toInt()}rpm",
+                    r <= prev * 1.5 + 1.0,
+                )
+                prev = r
+            }
         }
     }
 
