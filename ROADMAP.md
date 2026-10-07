@@ -86,6 +86,18 @@ Guided full-bag workflow, automatic misread/duff filtering, real carry averages,
 
 **Exit:** complete full-bag session → matrix + gap chart.
 
+### M6 follow-ups (shipped 2026-10-07)
+
+Five post-M6 refinements (design: `docs/superpowers/specs/2026-10-07-bag-rollout-polish-design.md`; plan: `docs/superpowers/plans/2026-10-07-bag-rollout-polish.md`):
+
+- **Launch Direction (HLA) everywhere** — signed DIR chip in the range LAST SHOT panel and the shared games metrics panel; DIR column + per-club average in history (− left / + right, M4c-verified).
+- **Bag mapping order selector** — intro-screen ORDER choice: SHORT → LONG (default, LW → driver) or RANDOM shuffle; applied to the plan before the session snapshot so kill/resume keeps the sequence.
+- **Range view while collecting** — the BAG tab keeps the live range/tracer view (extracted `RangeLiveView`) with the collecting panel as a compact overlay card.
+- **Dual-metric results** — each club row plots carry (teal) and total (blue) boxes on one shared metre axis; drill-down rows show both; gap flags stay carry-based.
+- **Rollout recalibration (physics)** — driver fairway rollout bounded to a realistic 18–35 m band via a continuous low-spin relief law across thetaCrit; rough stops shorter than fairway for identical landings (test-enforced); the straight-vs-left rollout asymmetry narrows. Tour-average and green pins bit-identical; range/green surfaces unchanged.
+
+**Exit:** full build + all module tests green; cross-lane review approved; pushed as `b3fb514`.
+
 ## M7 — Club & Shaft Testing Engine
 
 Head-to-head A/B sessions (shaft vs shaft, head vs head), side-by-side metric overlays, standard deviations, dispersion ovals. UI design pass on design system.

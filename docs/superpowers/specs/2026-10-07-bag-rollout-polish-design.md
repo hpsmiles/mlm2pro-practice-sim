@@ -1,7 +1,7 @@
 # Design: HLA metric everywhere, bag mapping order/views, dual-metric results, rollout recalibration
 
 Date: 2026-10-07
-Status: approved (design), pending spec review
+Status: shipped 2026-10-07 (commits 15a2cac..b3fb514)
 Origin: tablet follow-ups after M6 bag mapping shipped (ROADMAP.md:83)
 
 Five items: (1) show Launch Direction (HLA) on all metric displays, (2) bag mapping

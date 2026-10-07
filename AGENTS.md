@@ -1,6 +1,6 @@
 # AGENTS.md — golf sim
 
-Android tablet golf-sim & practice app for the **Rapsodo MLM2PRO** launch monitor. Milestones M0–M5.5 have shipped (see [ROADMAP.md](ROADMAP.md)); this file is the standing charter for agents working in the repo.
+Android tablet golf-sim & practice app for the **Rapsodo MLM2PRO** launch monitor. Milestones M0–M6 have shipped, plus the M6 follow-ups (2026-10-07 — see [ROADMAP.md](ROADMAP.md)); this file is the standing charter for agents working in the repo.
 
 ## Mission & Constraints
 
@@ -15,7 +15,7 @@ Android tablet golf-sim & practice app for the **Rapsodo MLM2PRO** launch monito
 
 ## Feature Modules (target scope)
 
-1. **Bag Mapping & True Gapping** (M6, planned) — guided full-set workflow; automatic misread/duff filtering; real carry averages; carry matrix + distance-gap visualization.
+1. **Bag Mapping & True Gapping** (M6, shipped; follow-ups 2026-10-07) — guided full-set workflow; automatic misread/duff filtering; real carry averages; intro ORDER selector (short→long default / random shuffle); dual carry+total box-plot matrix + distance-gap visualization.
 2. **Club & Shaft Testing Engine** (M7, planned) — head-to-head comparison (e.g., Shaft A vs B); side-by-side metric overlays; standard deviations; dispersion ovals. Session-scoped TEST clubs (M5x) are the precursor.
 3. **Custom Combines** (M8, planned) — user-defined target distances (e.g., 50m / 70m / 90m wedges), NOT Rapsodo's fixed 24-shot template.
 4. **Clean Practice Environment** (M4, shipped) — flat target grids / scaled target ovals focused on dispersion & landing metrics; explicitly avoid oversized 3D island greens.
@@ -34,6 +34,7 @@ Android tablet golf-sim & practice app for the **Rapsodo MLM2PRO** launch monito
 
 - Pre-calculated 3D ballistic ODE model; reuse aerodynamic drag/lift math from **libgolf** or **golfmodel** rather than inventing formulas.
 - Outputs: carry, total distance, side-curve, rollout.
+- The bounce/roll law is deliberately recalibrated when shed feedback demands it (2026-10-03, 2026-10-07 — dated comments in `BounceRollModel`/`Surface`). Any re-tuning must steer with the `RolloutSweepDiagnostic` sweep and keep the existing pin set green (tour averages, green behavior, rough ≤ fairway).
 
 ## Conventions for This Repo
 
@@ -43,8 +44,10 @@ Android tablet golf-sim & practice app for the **Rapsodo MLM2PRO** launch monito
 - Run all unit tests: `.\gradlew.bat test`
 - One module's tests: `.\gradlew.bat :core:ble:test`
 - One test class: `.\gradlew.bat :core:ble:testDebugUnitTest --tests "com.hpsmiles.golfsim.core.ble.Mlm2proDecoderTest"` — the aggregate `test` task rejects `--tests`; always use the typed `testDebugUnitTest` variant (same for `:app:testDebugUnitTest`).
+- Exception: `:core:physics` is a pure-JVM module with no Android variants — run its tests with `.\gradlew.bat :core:physics:test` (no `testDebugUnitTest` exists there).
 - Install debug build on a connected tablet: `.\gradlew.bat :app:installDebug`
 - Room schema is versioned: entity changes require a new `MIGRATION_N_N+1` in `Mlm2proDatabase`, `@ColumnInfo(defaultValue)` matching the ALTER TABLE defaults exactly, a committed schema JSON under `core/data/schemas/`, and a migration test (see `MigrationFrom1Test`, `MigrationFrom2Test`). Never enable destructive migration fallback.
 - BLE parsing and physics code must be unit-testable without a physical MLM2PRO — keep the byte-decoder and ball-flight ODE pure/deterministic (given inputs → same outputs).
 - Game code follows the same discipline: `app/.../games/` holds plain Compose state holders + painters (no ViewModels, no Navigation-Compose); scoring/geometry/reveal logic is pure and JVM-tested (`TargetPracticeScoring`, `PaneGeom`, `PaneClip`, `GameLeavePolicy`, ...). Game shots never enter range sessions/shot history — only completed-game summaries via `SessionRepository.saveGameResult` (`game_results`, Room v3). Leaving a game mid-session is governed by `GameLeavePolicy`.
+- Bag mapping follows the games pattern: `app/.../bag/` holds plain Compose state holders + painters; the plan snapshot (`clubList`) is the only persisted truth — order/random modes are applied BEFORE `encodeClubSnapshot`, and kill/resume derives the club index from persisted shots. Bag shots never enter range sessions — each is write-through persisted to `bag_mapping_sessions`/`bag_mapping_shots` (Room v4) via `SessionRepository.appendBagMappingShot`; the results matrix plots carry AND total, while gap flags stay carry-based. Live shots reach the collector only while the BAG tab is collecting (`onCollectingChange` seam, pause-on-leave on dispose).
 - Do not add cloud/PC dependencies; single-device constraint is a hard architectural boundary.
