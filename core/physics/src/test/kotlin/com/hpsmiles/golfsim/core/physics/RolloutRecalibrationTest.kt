@@ -8,21 +8,25 @@ import org.junit.Test
  * docs/superpowers/plans/2026-10-07-bag-rollout-polish.md Lane C, spec §5):
  *
  * 1. Tangential speed after bounce is continuous + monotonic vs impact angle
- *    across thetaCrit — no cliff (previously a ±1° landing-angle difference
- *    flipped rollout ~3×).
- * 2. Driver-class fairway rollout lands in the realistic 18–35 m band (was
- *    ~10 m on the steep branch).
- * 3. Rough never out-rolls fairway for identical landing states (previously
- *    the rough's higher thetaCrit made a driver impact "shallow/fast" there).
+ *    across thetaCrit — no cliff.
+ * 2. Driver-class fairway rollout lands in the realistic 18–35 m band.
+ * 3. Rough never out-rolls fairway for identical landing states.
  *
- * POST-change calibration record (2026-10-07) — rollout in metres, vh = 35:
+ * POST-change calibration record (2026-10-07) — rollout in metres, vh = 35,
+ * bounceAndRoll deltaY on FAIRWAY_NORMAL (sweep: RolloutSweepDiagnostic):
  *
- * angle | 1500rpm F/R | 2600rpm F/R | 4500rpm F/R | 8000rpm F/R
- * ------+-------------+-------------+-------------+-------------
- *  12   |    ...      |    ...      |    ...      |    ...
- *  ...
+ * angle | 2000rpm | 2600rpm | 3000rpm
+ * ------+---------+---------+--------
+ *  17   |  33.5   |  30.9   |  28.8
+ *  18   |  33.9   |  30.4   |  27.8
+ *  19   |  34.1   |  29.7   |  26.7
+ *  20   |  34.2   |  29.0   |  25.6
+ *  21   |  34.0   |  28.2   |  24.5
+ *  22   |  32.7   |  26.7   |  23.0
+ *  23   |  29.9   |  24.4   |  20.9
+ *  24   |  27.5   |  22.2   |  18.9
  *
- * (Full table maintained in [RolloutSweepDiagnostic].)
+ * ROUGH <= FAIRWAY holds at every sweep cell (12..40 deg x 1500/2600/8000 rpm).
  */
 class RolloutRecalibrationTest {
     private val env = Environment()

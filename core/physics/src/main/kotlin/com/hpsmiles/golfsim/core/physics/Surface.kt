@@ -85,10 +85,18 @@ data class Surface(
             rollDecelMps2 = 1.00,
         )
 
+        // 2026-10-07 recalibration (plan Lane C, spec §5): rough now shares the
+        // fairway branch split (thetaCrit 0.29 rad = 16.6deg) so a given impact
+        // takes the SAME shallow/steep branch on both turfs. Previously rough's
+        // higher thetaCrit (0.35) made a driver-class impact "shallow/fast" on
+        // rough but "steep/slow" on fairway, so rough could out-roll fairway.
+        // Rough's harshness now lives only in rollDecelMps2 (0.32*g) and
+        // spinbackScale (0.70); the rough <= fairway ordering invariant is
+        // enforced by tests (RolloutRecalibrationTest), not by a higher thetaCrit.
         val ROUGH_NORMAL: Surface = Surface(
             name = "rough",
             cor = 0.35,
-            thetaCritRad = 0.35,
+            thetaCritRad = 0.29,
             spinbackScale = 0.70,
             spinRetention = 0.75,
             rollDecelMps2 = 0.32 * BallPhysical.GRAVITY_MPS2,

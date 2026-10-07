@@ -63,6 +63,20 @@ object BounceRollModel {
     // saturated raw Penner check gave 0.8-1.4%.
     private const val STEEP_BLEND_CAP = 0.55
 
+    // 2026-10-07 recalibration (plan Lane C, spec §5 req 2): a low-spin
+    // driver-class landing just past thetaCrit (17-21deg, 2000-3000rpm) kept
+    // almost the full retention share (angleBlend tiny there) and ran ~50 m —
+    // over the realistic 18-35 m driver band. This is a LOW-SPIN relief in the
+    // non-gate steep branch ONLY: it scales the retention share down as
+    // backspin drops, ramping to no-op at 4500 rpm (wedge-class landings are
+    // bit-identical) and fading to no-op as angleBlend rises past 0.25 rad
+    // (deep-steep landings, incl. every TrackMan tour pin at >=33.9deg, are
+    // bit-identical — the frozen M2 law there is intentionally untouched).
+    // Deliberate recalibration, 2026-10-07 — see RolloutRecalibrationTest.
+    private const val LOW_SPIN_RELIEF_RPM = 4500.0
+    private const val LOW_SPIN_RELIEF_MAX = 0.42
+    private const val LOW_SPIN_RELIEF_ANGLE = 0.25
+
     /** 0 below [GRIP_RATIO_ZERO], 1 at/above [GRIP_RATIO_FULL], linear between. */
     internal fun gripBlend(gripRatio: Double): Double = when {
         gripRatio <= GRIP_RATIO_ZERO -> 0.0
@@ -130,7 +144,15 @@ object BounceRollModel {
                         // cancel the ejection; tour irons need it intact.
                         val angleBlend = ((impactAngle - surface.thetaCritRad) / STEEP_BLEND_SPAN_RAD)
                             .coerceIn(0.0, STEEP_BLEND_CAP)
-                        (1.0 - angleBlend) * (vh * retention) + angleBlend * (ejection - backImpulse)
+                        // 2026-10-07 low-spin relief (spec §5 req 2): a low-spin
+                        // driver-class landing just past thetaCrit kept nearly the
+                        // full retention share and ran ~50 m. Scale the retention
+                        // share down with backspin; no-op at wedge-class spin and
+                        // as the blend saturates (deep-steep pins untouched).
+                        val lowSpinRelief = (rpmNow / LOW_SPIN_RELIEF_RPM).coerceIn(0.0, 1.0)
+                        val blendFade = (1.0 - angleBlend / LOW_SPIN_RELIEF_ANGLE).coerceIn(0.0, 1.0)
+                        val skidFactor = 1.0 - LOW_SPIN_RELIEF_MAX * (1.0 - lowSpinRelief) * blendFade
+                        (1.0 - angleBlend) * (vh * retention * skidFactor) + angleBlend * (ejection - backImpulse)
                     }
                 } else {
                     // Shallow skid-and-release boost (item 2, 2026-10-01).
