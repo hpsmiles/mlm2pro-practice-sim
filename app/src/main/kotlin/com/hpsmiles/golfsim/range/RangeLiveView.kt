@@ -115,8 +115,9 @@ internal fun RangeLiveView(
         )
     }
 
-    // Tracer controls: inside the view frame, top-left. Hidden when the
-    // caller opts out (e.g. the bag collecting overlay).
+    // Tracer controls: inside the view frame, top-left. Rendered for every
+    // caller today (the bag collecting overlay keeps them too — they sit
+    // top-left, clear of its bottom-left status card).
     if (showControls) {
         Column(
             modifier = Modifier.padding(GolfSpacing.Sm),

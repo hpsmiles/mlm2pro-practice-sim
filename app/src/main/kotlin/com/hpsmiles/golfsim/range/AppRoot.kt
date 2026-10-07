@@ -279,7 +279,9 @@ fun AppRoot() {
                 }
                 // Display-only: render this shot on the bag view's tracer
                 // immediately (Room persistence rides the coroutine above).
-                bagDisplayShot = DisplayShot(shot.ballData, shot.launch, shot.result)
+                bagDisplayShot = DisplayShot(
+                    shot.ballData, shot.launch, shot.result, timestampMs = shot.timestampMs,
+                )
             }
             return
         }

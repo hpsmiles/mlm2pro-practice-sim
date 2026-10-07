@@ -266,8 +266,8 @@ private fun DrillDownPanel(
                         style = GolfTypography.BodySmall,
                         color = GolfColors.TextSecondary,
                     )
-                    Text(BagMappingFormats.carry(shot.carryM), style = GolfTypography.MetricLabel, color = GolfColors.TextPrimary)
-                    Text(BagMappingFormats.total(shot.totalM), style = GolfTypography.MetricLabel, color = GolfColors.TextPrimary)
+                    Text("C ${BagMappingFormats.carry(shot.carryM)}", style = GolfTypography.MetricLabel, color = GolfColors.TextPrimary)
+                    Text("T ${BagMappingFormats.total(shot.totalM)}", style = GolfTypography.MetricLabel, color = GolfColors.TextPrimary)
                     Text(
                         "smash ${BagMappingFormats.smash(shot.clubHeadSpeedMps, shot.ballSpeedMps)}",
                         style = GolfTypography.BodySmall,
