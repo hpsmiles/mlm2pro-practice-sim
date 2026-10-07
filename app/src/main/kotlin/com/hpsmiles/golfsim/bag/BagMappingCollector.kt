@@ -20,6 +20,8 @@ data class BagMappedShot(
     val clubType: ClubType,
     val timestampMs: Long,
     val ballData: BallData,
+    val launch: LaunchConditions,
+    val result: ShotResult,
     val carryM: Double,
     val totalM: Double,
 )
@@ -100,7 +102,7 @@ class BagMappingCollector {
         }
         val result = simulator(launch)
         tick.intValue++
-        return BagMappedShot(club.name, club.type, clockMs(), ballData, result.carryM, result.totalM)
+        return BagMappedShot(club.name, club.type, clockMs(), ballData, launch, result, result.carryM, result.totalM)
     }
 
     /**

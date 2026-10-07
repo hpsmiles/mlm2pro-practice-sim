@@ -35,6 +35,8 @@ class BagMappingCollectorTest {
         assertEquals(140.0, shot.carryM, 1e-9)
         assertEquals(150.0, shot.totalM, 1e-9)
         assertEquals(48.0, shot.ballData.ballSpeed, 1e-9)
+        assertEquals(48.0, shot.launch.ballSpeedMps, 1e-9)
+        assertEquals(150.0, shot.result.totalM, 1e-9)
         assertTrue(shot.timestampMs > 0)
     }
 

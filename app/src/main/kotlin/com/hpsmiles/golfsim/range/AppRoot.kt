@@ -119,6 +119,9 @@ fun AppRoot() {
     val bagCollector = remember { BagMappingCollector() }
     var bagCollecting by remember { mutableStateOf(false) }
     var bagViewedSessionId by remember { mutableStateOf<Long?>(null) }
+    // M6: the latest accepted bag shot, rendered on the bag collecting view's
+    // live range tracer. Display-only — bag shots never enter session.shots.
+    var bagDisplayShot by remember { mutableStateOf<DisplayShot?>(null) }
 
     // M5: persistence facade — one per composition. Bag seeding, DB probe and
     // open-session restore run once at startup; appends ride the existing
@@ -274,6 +277,9 @@ fun AppRoot() {
                         )
                     }
                 }
+                // Display-only: render this shot on the bag view's tracer
+                // immediately (Room persistence rides the coroutine above).
+                bagDisplayShot = DisplayShot(shot.ballData, shot.launch, shot.result)
             }
             return
         }
@@ -587,6 +593,7 @@ fun AppRoot() {
     /** M6: END TEST / final-club completion → the result becomes the active result. */
     fun completeBagTest() {
         val active = bagActive ?: return
+        bagDisplayShot = null
         scope.launch {
             sessionRepository.completeBagMappingSession(active.id, System.currentTimeMillis())
             bagCollector.reset()
@@ -759,6 +766,7 @@ fun AppRoot() {
                             onStartTest = ::startBagTest,
                             onOpenSettings = { requestTab(RangeTab.SETTINGS) },
                             onCompleteSession = ::completeBagTest,
+                            latestShot = bagDisplayShot,
                         )
                     }
                     RangeTab.SETTINGS -> {
