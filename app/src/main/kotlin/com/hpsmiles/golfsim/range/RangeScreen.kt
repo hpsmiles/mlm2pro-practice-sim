@@ -5,7 +5,6 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -23,21 +22,16 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -58,7 +52,7 @@ import kotlin.math.sqrt
  * as the VIEW and speed-multiplier chips.
  */
 @Composable
-private fun OverlayChip(text: String, active: Boolean, onClick: () -> Unit) {
+internal fun OverlayChip(text: String, active: Boolean, onClick: () -> Unit) {
     Text(
         text = text,
         style = ChipFont,
@@ -70,12 +64,12 @@ private fun OverlayChip(text: String, active: Boolean, onClick: () -> Unit) {
     )
 }
 
-private val ChipFont = GolfTypography.Status.copy(fontSize = 15.sp)
+internal val ChipFont = GolfTypography.Status.copy(fontSize = 15.sp)
 
 /** Metres/second to mph for display. */
 private const val MPH_PER_MS = 2.23694
 
-private enum class SpeedMult(val label: String, val divisor: Float) {
+internal enum class SpeedMult(val label: String, val divisor: Float) {
     X1("1x", 1f), X15("1.5x", 1.5f), X2("2x", 2f), X4("4x", 4f);
 }
 
@@ -101,88 +95,28 @@ fun RangeScreen(
     onSelectClub: (String?) -> Unit = {},
     onAddClub: suspend (String, ClubType, Boolean) -> Boolean = { _, _, _ -> false },
 ) {
-    var playFraction by remember { mutableFloatStateOf(1f) }
     var speedMult by remember { mutableStateOf(SpeedMult.X15) }
     var viewMode by remember { mutableStateOf(ViewMode.POV) }
-    var showTracer by remember { mutableStateOf(true) }
-    var showHistory by remember { mutableStateOf(true) }
-    var historyLimit by remember { mutableFloatStateOf(8f) }
     val currentShot = session.shots.lastOrNull()
     var showClubPicker by remember { mutableStateOf(false) }
     var showGreenPicker by remember { mutableStateOf(false) }
 
-    // Follow cam (spec 2026-09-25): the per-frame camera from the pure
-    // phase machine; computed inside the canvas slot below because the
-    // chase follows the apex-clamped drawn flight, which needs the slot's
-    // live geometry.
-
-    // M4d: live BLE connection state lives in AppRoot (which now also owns
-    // DEMO toggle, FIRE and CONNECT).
-
-    // New shot (demo or live): restart the tracer animation.
-    LaunchedEffect(session.tick.intValue) {
-        playFraction = 0f
-    }
-
-    // Tracer playback: animate playFraction over the shot's real duration,
-    // EXTENDED past 1 by the follow-cam landing hold (FollowCam.endFraction).
-    // The speed multiplier scales the whole timeline, hold included —
-    // consistent with slow-mo review.
-    LaunchedEffect(currentShot, speedMult) {
-        val shot = currentShot ?: return@LaunchedEffect
-        // M5 restore: a shot with no trajectory samples is a restored
-        // (pre-animated) one — park it in the COMPLETED state (landing dot
-        // and resting ball render, nothing animates), at relaunch or on a
-        // speed-mult change. Robust by construction: live shots always
-        // carry flight samples, restored shots never do.
-        if (shot.shotResult.samples.isEmpty()) {
-            playFraction = FollowCam.endFraction(shot.shotResult).toFloat()
-            return@LaunchedEffect
-        }
-        if (shot.shotResult.flightTimeSec <= 0.0) return@LaunchedEffect
-        val durationMs = shot.shotResult.flightTimeSec * 1000.0 / speedMult.divisor
-        val end = FollowCam.endFraction(shot.shotResult).toFloat()
-        var lastNanos = withFrameNanos { it }
-        while (playFraction < end) {
-            val now = withFrameNanos { it }
-            val deltaMs = (now - lastNanos) / 1_000_000.0
-            lastNanos = now
-            playFraction = (playFraction + (deltaMs / durationMs).toFloat()).coerceAtMost(end)
-        }
-    }
-
-    // Previous-shot lines: faded, most recent first, limited by the slider.
-    val previousShots = if (showHistory) {
-        session.shots.dropLast(1).map { it.shotResult }.takeLast(historyLimit.toInt())
-    } else {
-        emptyList()
-    }
+    // Tracer playback / follow cam / previous-shot lines live in
+    // RangeLiveView (extracted so the BAG collecting view reuses them).
 
     Row(modifier = modifier.fillMaxSize().background(GolfColors.Base)) {
         // Range canvas with overlays. Left of the range there is exactly one
         // column: AppRoot's NavRail (2026-09-24 user request).
         Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
-            BoxWithConstraints(modifier = Modifier.fillMaxSize().clipToBounds()) {
-                // Same top-8% line the canvas derives (v0 = 0.30h, focal =
-                // 1.10w), so the follow cam chases the exact drawn
-                // (apex-clamped) flight on this geometry.
-                val wPx = constraints.maxWidth.toFloat()
-                val hPx = constraints.maxHeight.toFloat()
-                val apexVMin = ((0.08f * hPx - 0.30f * hPx) / (1.10f * wPx)).toDouble()
-                val camera = when (val shot = currentShot) {
-                    null -> RangeCamera.STATIC
-                    else -> FollowCam.cameraAt(shot.shotResult, playFraction, apexVMin)
-                }
-                if (viewMode == ViewMode.POV) {
-                    PovRangeCanvas(
-                        currentShot?.shotResult, previousShots, playFraction, showTracer, showHistory,
-                        camera = camera,
-                        customGreen = session.customGreen.value,
-                        modifier = Modifier.fillMaxSize(),
-                    )
-                } else {
-                    TopDownCanvas(session.shots, Modifier.fillMaxSize())
-                }
+            if (viewMode == ViewMode.POV) {
+                RangeLiveView(
+                    shots = session.shots,
+                    modifier = Modifier.fillMaxSize(),
+                    speedMult = speedMult,
+                    customGreen = session.customGreen.value,
+                )
+            } else {
+                TopDownCanvas(session.shots, Modifier.fillMaxSize())
             }
             // M4d no-read pill: live misreads coalesced in RangeSession.
             if (session.misreadCount.intValue > 0) {
@@ -206,42 +140,8 @@ fun RangeScreen(
                     }
                 }
             }
-            // Tracer controls: back inside the range frame, top-left (2026-09-24).
-            // M5x E1: the active-club trigger moved to the top-right column below.
-            Column(
-                modifier = Modifier.align(Alignment.TopStart).padding(GolfSpacing.Sm),
-                verticalArrangement = Arrangement.spacedBy(GolfSpacing.Xs),
-            ) {
-                Row(horizontalArrangement = Arrangement.spacedBy(GolfSpacing.Xs)) {
-                    OverlayChip("TRACER: ${if (showTracer) "ON" else "OFF"}", active = showTracer) {
-                        showTracer = !showTracer
-                    }
-                    if (showTracer) {
-                        OverlayChip("PREV: ${if (showHistory) "ON" else "OFF"}", active = showHistory) {
-                            showHistory = !showHistory
-                        }
-                    }
-                }
-                if (showTracer && showHistory) {
-                    Slider(
-                        value = historyLimit,
-                        onValueChange = { historyLimit = it },
-                        valueRange = 0f..20f,
-                        steps = 19,
-                        modifier = Modifier.width(110.dp),
-                        colors = SliderDefaults.colors(
-                            thumbColor = GolfColors.Teal,
-                            activeTrackColor = GolfColors.Teal,
-                            inactiveTrackColor = GolfColors.Line,
-                        ),
-                    )
-                    Text(
-                        "LAST ${historyLimit.toInt()} LINES",
-                        color = GolfColors.TextMuted,
-                        style = GolfTypography.Status,
-                    )
-                }
-            }
+            // Tracer controls (TRACER/PREV + history slider) moved into
+            // RangeLiveView — they render there, top-left, unchanged.
             // M5x E1+E2: VIEW chip + the filled ACTIVE CLUB trigger, top-right.
             Column(
                 modifier = Modifier.align(Alignment.TopEnd).padding(GolfSpacing.Sm),
@@ -353,6 +253,9 @@ fun RangeScreen(
                     MetricChip("spin", String.format(Locale.US, "%d", shot.ballData.totalSpin), "RPM")
                     Spacer(Modifier.size(GolfSpacing.Xs))
                     MetricChip("launch", String.format(Locale.US, "%.1f", shot.ballData.launchAngle), "DEG")
+                    Spacer(Modifier.size(GolfSpacing.Xs))
+                    // HLA sign verified on-device M4c: − left / + right of target.
+                    MetricChip("dir", String.format(Locale.US, "%+.1f", shot.ballData.launchDirection), "DEG")
                     Spacer(Modifier.size(GolfSpacing.Xs))
                     MetricChip("axis", String.format(Locale.US, "%.1f", shot.ballData.spinAxis), "DEG")
                 }
