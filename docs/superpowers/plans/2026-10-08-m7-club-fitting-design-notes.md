@@ -206,17 +206,17 @@ Viewing a history item opens the read-only RESULTS described in §2.1 (viewed-se
 
 These decisions supersede/conflict-resolve the sections above where they differ. Both were user-requested after on-device verification; the designer (des-1, notes commit 0ea32c7) owns §0.1/§2.3 changes; the orchestrator owns this addendum.
 
-### §2.2 AREA column (user ruling 2026-10-08 — supersedes the 2σ ellipse definition)
+### §2.2 AREA column (user ruling 2026-10-08, 2nd revision — ellipse inscribed in the buffered bbox)
 
 - Metric column **AREA** after OFFLINE (88 dp, unit-less header like all columns).
-- User ruling: "I want the ring to be a small 5% buffered ring, and the area of this to be the number on the table" (buffer option chosen: **5% of span**). The metric is the **buffered bounding box** of the club's kept shots: each axis of the (side, total) bbox is expanded by 5% of its own span per side (a span-0 axis stays unbuffered); AREA = buffered width × buffered depth in m², rendered unit-in-cell (e.g. `412 m²`).
-- Rationale (lib-1 convention survey, 2026-10-08): consumer apps avoid 2σ covariance contours (they read "too large"); Rapsodo's own native convention is an extreme-shot bbox-extent shape; raw bbox area has no industry namesake — this is our own documented metric. The closest industry relative is Golf Digest's 95% dispersion area (ellipse inscribed in the 95% bbox).
+- User rulings (same day, in sequence): "I want the ring to be a small 5% buffered ring, and the area of this to be the number on the table" (buffer: **5 % of span** per side), then on-device: "The bounding area should still be a elipse, and have a 5% buffer. The area of the ring is the number the user should see as an area metric."
+- Final definition: the **ellipse inscribed in the 5 %-buffered bbox** of the club's kept shots — centre = box centre, semi-axes = buffered half-extents; AREA = π/4 × buffered width × depth (m²), rendered unit-in-cell (e.g. `412 m²`). This is the Golf Digest equipment-testing dispersion convention (lib-1 survey). A kept shot at a bbox corner may lie slightly outside the inscribed ellipse — inherent to the convention (box defines extents).
 - `-` when the club has fewer than 3 kept shots (same guard as the ring); **no Δ row** (unchanged).
-- Implementation: `DispersionBox` in `FittingTopDownFit.kt` (`BBOX_BUFFER_FRACTION = 0.05`); the 2σ `DispersionOval` was removed from the app (git-recoverable for M9).
+- Implementation: `DispersionBox` in `FittingTopDownFit.kt` (`BBOX_BUFFER_FRACTION = 0.05`, `ellipseAreaM2()`); the 2σ `DispersionOval` was removed from the app (git-recoverable for M9).
 
 ### §2.3 top-down ring + auto-fit (user ruling 2026-10-08 — supersedes the 2σ ring)
 
-- The ring per club is the **buffered bounding box outline** of the kept shots — the same `DispersionBox` the AREA column reports: rectangle, 2 dp stroke, club colour @ 0.55 α, no fill; ≥3 kept shots; a zero-span axis renders as a line (matches the data).
+- The ring per club is the **ellipse inscribed in the buffered bounding box** of the kept shots — the same `DispersionBox` geometry the AREA column reports, drawn as an oval: 2 dp stroke, club colour @ 0.55 α, no fill; ≥3 kept shots; a zero-span axis renders as a line (matches the data).
 - Auto-fit bounds use the buffered box extents (min/max side/total grown 5% per axis) across all clubs that have a box; the empty fallback is unchanged (exact previous full-range mapping, no visual jump).
 - Isotropic scale: px/m = min(yFit, xFit); y-window bottom-anchored (shots near the bottom, same as the full-range view); x centred. Padding: max(10 m, 6 % of the content span); minimum content span 30 m; lateral pad 48 px.
 - Grid/boards/mat remain world-anchored and simply fall outside the window; the lateral gridlines still span the full canvas.
