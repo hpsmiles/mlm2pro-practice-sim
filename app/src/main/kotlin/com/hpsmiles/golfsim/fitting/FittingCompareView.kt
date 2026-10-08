@@ -68,6 +68,7 @@ internal fun FittingCompareView(
     armed: Boolean,
     info: String,
     distanceMode: FittingDistanceMode,
+    historyCount: Int,
     onDistanceModeChange: (FittingDistanceMode) -> Unit,
     onSelectClub: (String?) -> Unit,
     onAddClub: suspend (String, ClubType, Boolean) -> Boolean,
@@ -90,23 +91,14 @@ internal fun FittingCompareView(
                 speedMult = speedMult,
                 customGreen = null,
             )
-            // Top-right overlays mirroring RANGE: a disabled VIEW: COMPARE
-            // chip (v1 has only one canvas — notes approve omission; kept
-            // disabled-styled for idiom continuity) + the filled ACTIVE CLUB
-            // trigger.
+            // Top-right overlay mirroring RANGE: the filled ACTIVE CLUB
+            // trigger. The VIEW chip is omitted in v1 (design notes §1.1.2 /
+            // §4.2 — COMPARE has only one canvas, so omission was ratified).
             Column(
                 modifier = Modifier.align(Alignment.TopEnd).padding(GolfSpacing.Sm),
                 horizontalAlignment = Alignment.End,
                 verticalArrangement = Arrangement.spacedBy(GolfSpacing.Xs),
             ) {
-                Text(
-                    "VIEW: COMPARE",
-                    color = GolfColors.TextMuted,
-                    style = ChipFont,
-                    modifier = Modifier
-                        .border(1.dp, GolfColors.Line, RoundedCornerShape(50))
-                        .padding(horizontal = GolfSpacing.Sm, vertical = 2.dp),
-                )
                 FittingActiveClubButton(activeClubName) { pickerOpen = true }
             }
             // Speed multiplier chips — copied verbatim from RANGE (notes §1.1).
@@ -267,9 +259,10 @@ internal fun FittingCompareView(
                     textAlign = TextAlign.Center,
                 )
             }
-            // HISTORY chip (notes §1.2.4).
+            // HISTORY chip (notes §1.2.4): TextMuted count suffix when history
+            // is non-empty.
             Text(
-                "HISTORY",
+                if (historyCount > 0) "HISTORY · $historyCount" else "HISTORY",
                 style = ChipFont,
                 color = GolfColors.TextSecondary,
                 textAlign = TextAlign.Center,

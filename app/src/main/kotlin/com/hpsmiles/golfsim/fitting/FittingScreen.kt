@@ -40,6 +40,7 @@ fun FittingScreen(
             armed = armed,
             info = info,
             distanceMode = controller.distanceMode,
+            historyCount = history.size,
             onDistanceModeChange = { controller.distanceMode = it },
             onSelectClub = onSelectClub,
             onAddClub = onAddClub,
