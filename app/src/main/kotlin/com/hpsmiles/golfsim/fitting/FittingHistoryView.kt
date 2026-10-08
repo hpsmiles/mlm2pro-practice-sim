@@ -16,6 +16,7 @@ import com.hpsmiles.golfsim.core.designsystem.GolfSpacing
 internal fun FittingHistoryView(
     modifier: Modifier = Modifier,
     history: List<FittingSessionEntity>,
+    historyDetails: Map<Long, List<Pair<String, Int>>>,
     onOpen: (Long) -> Unit,
     onBack: () -> Unit,
 ) {

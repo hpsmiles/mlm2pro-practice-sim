@@ -20,6 +20,7 @@ fun FittingScreen(
     activeClubName: String?,
     activeSession: FittingSessionEntity?,
     history: List<FittingSessionEntity>,
+    historyDetails: Map<Long, List<Pair<String, Int>>>,
     liveShots: List<DisplayShot>,
     sessionShots: List<FittingShotEntity>,
     viewedShots: List<FittingShotEntity>,
@@ -69,6 +70,7 @@ fun FittingScreen(
         FittingView.HISTORY -> FittingHistoryView(
             modifier = modifier,
             history = history,
+            historyDetails = historyDetails,
             onOpen = { id ->
                 controller.viewedSessionId = id
                 controller.view = FittingView.RESULTS

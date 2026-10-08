@@ -4,6 +4,7 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.Query
 import com.hpsmiles.golfsim.core.data.entity.FittingShotEntity
+import com.hpsmiles.golfsim.core.data.record.FittingClubCountRow
 import kotlinx.coroutines.flow.Flow
 
 @Dao
@@ -21,4 +22,11 @@ interface FittingShotDao {
 
     @Query("UPDATE fitting_shots SET excluded = :excluded WHERE id IN (:ids)")
     suspend fun setExcluded(ids: List<Long>, excluded: Boolean)
+
+    /** Per-(session, club) shot counts; MIN(id) preserves first-appearance order. */
+    @Query(
+        "SELECT sessionId, clubName, COUNT(*) AS shotCount FROM fitting_shots " +
+            "GROUP BY sessionId, clubName ORDER BY sessionId, MIN(id)",
+    )
+    fun observeClubCounts(): Flow<List<FittingClubCountRow>>
 }

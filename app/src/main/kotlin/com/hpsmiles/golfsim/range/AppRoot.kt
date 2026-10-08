@@ -603,6 +603,9 @@ fun AppRoot() {
     val fitHistory by remember(sessionRepository, repoReady) {
         gatedFlow(repoReady, { sessionRepository.fittingHistory }, flowOf(emptyList()))
     }.collectAsState(initial = emptyList())
+    val fitHistoryDetails by remember(sessionRepository, repoReady) {
+        gatedFlow(repoReady, { sessionRepository.fittingHistoryDetails }, flowOf(emptyMap()))
+    }.collectAsState(initial = emptyMap())
     val fitShots by remember(sessionRepository, repoReady, fitActive?.id) {
         gatedFlow(
             repoReady,
@@ -860,6 +863,7 @@ fun AppRoot() {
                             activeClubName = activeClubName,
                             activeSession = fitActive,
                             history = fitHistory,
+                            historyDetails = fitHistoryDetails,
                             liveShots = fitSession.shots,
                             sessionShots = fitShots,
                             viewedShots = fitViewedShots,

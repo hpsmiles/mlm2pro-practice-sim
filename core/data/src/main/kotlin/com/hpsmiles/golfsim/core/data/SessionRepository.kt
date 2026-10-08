@@ -577,6 +577,17 @@ class SessionRepository private constructor(private val context: Context) {
     val fittingHistory: Flow<List<FittingSessionEntity>>
         get() = fittingSessionDao.observeHistory()
 
+    /**
+     * M7 task 10: sessionId -> ordered (clubName, shotCount) rows for HISTORY
+     * list rows. Order = each session's club first-appearance order (the DAO
+     * groups by MIN(id)), so colour-dot index 0 is that session's first club.
+     * Getter-flow.
+     */
+    val fittingHistoryDetails: Flow<Map<Long, List<Pair<String, Int>>>>
+        get() = fittingShotDao.observeClubCounts().map { rows ->
+            rows.groupBy({ it.sessionId }, { it.clubName to it.shotCount })
+        }
+
     /** Every stored shot of one fitting session, in insertion order. */
     fun observeFittingShots(sessionId: Long): Flow<List<FittingShotEntity>> =
         fittingShotDao.observeBySession(sessionId)
