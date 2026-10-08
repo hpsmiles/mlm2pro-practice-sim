@@ -95,7 +95,7 @@ internal fun FittingHistoryView(
                 verticalArrangement = Arrangement.spacedBy(GolfSpacing.Md),
             ) {
                 items(history, key = { it.id }) { session ->
-                    val details = historyDetails[session.id]
+                    val details = historyDetails[session.id].orEmpty()
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -122,7 +122,7 @@ internal fun FittingHistoryView(
                             // session's first-appearance order (the details map
                             // is already ordered; index 0 = first club). A
                             // session with no details entry shows only the date.
-                            if (!details.isNullOrEmpty()) {
+                            if (details.isNotEmpty()) {
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.spacedBy(GolfSpacing.Xs),
@@ -155,7 +155,7 @@ internal fun FittingHistoryView(
                             horizontalAlignment = Alignment.End,
                             verticalArrangement = Arrangement.spacedBy(GolfSpacing.Xs),
                         ) {
-                            if (!details.isNullOrEmpty()) {
+                            if (details.isNotEmpty()) {
                                 Text(
                                     "${details.sumOf { it.second }} shots",
                                     style = GolfTypography.Status,

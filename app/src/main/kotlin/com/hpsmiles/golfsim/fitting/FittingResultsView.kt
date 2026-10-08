@@ -7,7 +7,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -95,9 +94,10 @@ internal fun FittingResultsView(
                     )
                 }
             }
-            Spacer(Modifier.weight(1f))
             // Shot-context line (notes §2.1.4): live counts, or the viewed
-            // session's date when read-only (history).
+            // session's date when read-only (history). weight(1f, fill = false)
+            // so it ellipsizes at its natural width across the full free space
+            // (a second weight(1f) Spacer used to cap it at ~50 % of the row).
             Text(
                 resultsContextLine(shots, readOnly),
                 style = GolfTypography.Status,

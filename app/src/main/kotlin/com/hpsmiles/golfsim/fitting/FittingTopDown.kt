@@ -58,6 +58,10 @@ internal fun FittingTopDownPane(
     val order = FittingStats.clubOrder(shots)
     val labelPaint = remember { android.graphics.Paint() }
     val keptCount = shots.count { !it.excluded }
+    // One kept-shot set per club, computed once — exclusion stays the single
+    // source of truth by construction and feeds the legend badge counts, the
+    // oval inputs and the dots below (previously filtered 3× per pass).
+    val keptByClub = order.associateWith { key -> shots.filter { it.clubId == key.id && !it.excluded } }
     Column(modifier.fillMaxSize()) {
         // Legend (notes §2.3): one chip per club — 10 dp colour dot + name
         // (ChipFont) + count badge (§0.3). Chips are not tappable in v1; the
@@ -76,7 +80,7 @@ internal fun FittingTopDownPane(
                 ) {
                     Box(Modifier.size(10.dp).clip(CircleShape).background(FittingColors.clubColor(index)))
                     Text(key.name, style = ChipFont, color = GolfColors.TextPrimary, maxLines = 1)
-                    FittingCountBadge(shots.count { it.clubId == key.id && !it.excluded })
+                    FittingCountBadge(keptByClub[key].orEmpty().size)
                 }
             }
         }
@@ -192,7 +196,10 @@ internal fun FittingTopDownPane(
                 // Notes §2.3 (binding overrides): 1σ @ 55 % alpha, 2σ @ 25 %,
                 // 2 dp stroke, no fill — replaces the plan's 0.9/0.45 @ 1.5 dp.
                 order.forEachIndexed { index, key ->
-                    val kept = shots.filter { it.clubId == key.id && !it.excluded }
+                    // compute returns null for a degenerate cloud — zero
+                    // variance OR collinear (λ2 ≈ 0 with λ1 > 0, a half-line):
+                    // the ring is skipped, dots below are still drawn.
+                    val kept = keptByClub[key].orEmpty()
                     val oval = DispersionOval.compute(kept.map { it.sideM to it.totalM }) ?: return@forEachIndexed
                     val color = FittingColors.clubColor(index)
                     listOf(2.0 to 0.25f, 1.0 to 0.55f).forEach { (scale, alpha) ->
@@ -212,7 +219,7 @@ internal fun FittingTopDownPane(
                 // 6 dp dots replaces the plan's 3.sp radius).
                 order.forEachIndexed { index, key ->
                     val color = FittingColors.clubColor(index)
-                    shots.filter { it.clubId == key.id && !it.excluded }.forEach { s ->
+                    keptByClub[key].orEmpty().forEach { s ->
                         val x = originX + (s.sideM * pxPerM).toFloat()
                         val y = originY - (s.totalM * pxPerM).toFloat()
                         drawCircle(color.copy(alpha = 0.8f), radius = 3.dp.toPx(), center = Offset(x, y))

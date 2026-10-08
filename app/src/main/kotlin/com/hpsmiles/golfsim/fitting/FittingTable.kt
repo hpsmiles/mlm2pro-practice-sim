@@ -68,8 +68,10 @@ internal fun FittingTable(
     distanceMode: FittingDistanceMode,
     modifier: Modifier = Modifier,
 ) {
-    val order = FittingStats.clubOrder(shots)
-    val summaries = order.map { FittingStats.summarize(it, shots) }
+    val (order, summaries) = remember(shots) {
+        val o = FittingStats.clubOrder(shots)
+        o to o.map { FittingStats.summarize(it, shots) }
+    }
     val baseline = summaries.firstOrNull { it.key.id == baselineClubId } ?: summaries.firstOrNull()
     var expandedId by remember { mutableStateOf<Long?>(null) }
     // One shared horizontal scroll so the header, every club row and every Δ
@@ -87,12 +89,16 @@ internal fun FittingTable(
         RowSeparator()
 
         if (summaries.isEmpty()) {
-            Text(
-                "No comparison yet — hit shots in COMPARE",
-                style = GolfTypography.BodySmall,
-                color = GolfColors.TextMuted,
-                modifier = Modifier.padding(top = GolfSpacing.Md),
-            )
+            Box(
+                Modifier.fillMaxWidth().padding(top = GolfSpacing.Md),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    "No comparison yet — hit shots in COMPARE",
+                    style = GolfTypography.BodySmall,
+                    color = GolfColors.TextMuted,
+                )
+            }
         }
 
         summaries.forEachIndexed { index, s ->
@@ -519,6 +525,10 @@ private enum class Metric { N, CHS, BALL, SMASH, CARRY, TOTAL, LAUNCH, DIR, SPIN
  * returns m/s and [FittingStats.NOISE_CHS_MPS] / [NOISE_BALL_SPEED_MPS]
  * are m/s. Values/headers: MetricLabel TextSecondary (TextPrimary + 1 dp
  * Teal top border when the distance mode emphasises the column).
+ *
+ * Three formatters are structurally unreachable but kept so every Col is
+ * uniform: N's [Col.deltaFmt] (pick → null renders "-" directly) and the
+ * CARRY/TOTAL [Col.club] lambdas (those cells render via TwoLineCell).
  */
 private val COLS = listOf(
     Col(Metric.N, "n", 40.dp, { null }, { s -> "${s.kept}" }, { "-" }, 0.0),
