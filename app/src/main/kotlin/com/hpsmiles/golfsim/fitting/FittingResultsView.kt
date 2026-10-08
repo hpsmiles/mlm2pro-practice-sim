@@ -161,5 +161,3 @@ private fun resultsContextLine(shots: List<FittingShotEntity>, readOnly: Boolean
     val excluded = shots.count { it.excluded }
     return "${shots.size} shots · $excluded excluded"
 }
-
-
