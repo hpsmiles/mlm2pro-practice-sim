@@ -563,9 +563,10 @@ class SessionRepository private constructor(private val context: Context) {
     // --- Club fitting (M7, spec §2) --------------------------------------
 
     /**
-     * Minimal Room-v5 surface (Task 1 scope). The full fitting API —
-     * exclusion toggles, aggregates, stats — lands in Task 3 with its own
-     * TDD suite.
+     * Room-v5 fitting surface. Write-through shot storage with club
+     * snapshots, manual exclusion toggles, and an at-most-one-IN_PROGRESS
+     * session lifecycle (bag-mapping pattern). Aggregates/stats live in
+     * FittingStats (pure), not here.
      */
 
     /** Open (in-progress) fitting session, or null. Getter-flow — survives corrupt-file recovery. */
@@ -622,34 +623,49 @@ class SessionRepository private constructor(private val context: Context) {
         result: ShotResult,
         timestampMs: Long,
     ): Long? = try {
-        db.withTransaction {
-            fittingShotDao.insert(
-                FittingShotEntity(
-                    sessionId = sessionId,
-                    clubId = club.id,
-                    clubName = club.name,
-                    clubType = club.type.name,
-                    clubWasTemp = club.isTemp,
-                    timestampMs = timestampMs,
-                    clubHeadSpeedMps = ballData.clubHeadSpeed,
-                    ballSpeedMps = ballData.ballSpeed,
-                    launchAngleDeg = ballData.launchAngle,
-                    launchDirDeg = ballData.launchDirection,
-                    spinAxisDeg = ballData.spinAxis,
-                    totalSpinRpm = ballData.totalSpin,
-                    carryM = result.carryM,
-                    totalM = result.totalM,
-                    sideM = result.sideM,
-                    apexM = result.apexM,
-                    flightTimeSec = result.flightTimeSec,
-                ),
-            )
-        }.also { persistError.value = false }
+        fittingShotDao.insert(
+            FittingShotEntity(
+                sessionId = sessionId,
+                clubId = club.id,
+                clubName = club.name,
+                clubType = club.type.name,
+                clubWasTemp = club.isTemp,
+                timestampMs = timestampMs,
+                clubHeadSpeedMps = ballData.clubHeadSpeed,
+                ballSpeedMps = ballData.ballSpeed,
+                launchAngleDeg = ballData.launchAngle,
+                launchDirDeg = ballData.launchDirection,
+                spinAxisDeg = ballData.spinAxis,
+                totalSpinRpm = ballData.totalSpin,
+                carryM = result.carryM,
+                totalM = result.totalM,
+                sideM = result.sideM,
+                apexM = result.apexM,
+                flightTimeSec = result.flightTimeSec,
+            ),
+        ).also { persistError.value = false }
     } catch (t: Throwable) {
         if (t is CancellationException) throw t
         Log.e(TAG, "appendFittingShot failed", t)
         persistError.value = true
         null
+    }
+
+    /**
+     * Batch-flips the manual exclusion flag for a set of fitting shots.
+     * Fitting has no auto-filter — exclusion is manual or one-tap via the
+     * UI (M7 spec §2). Never throws — bag-mapping contract; flows re-emit.
+     */
+    suspend fun setFittingShotsExcluded(ids: List<Long>, excluded: Boolean) {
+        if (ids.isEmpty()) return
+        try {
+            fittingShotDao.setExcluded(ids, excluded)
+            persistError.value = false
+        } catch (t: Throwable) {
+            if (t is CancellationException) throw t
+            Log.e(TAG, "setFittingShotsExcluded failed", t)
+            persistError.value = true
+        }
     }
 
     /** Marks the session COMPLETED. Never throws — bag-mapping contract. */
