@@ -666,6 +666,8 @@ class SessionRepository private constructor(private val context: Context) {
      * Batch-flips the manual exclusion flag for a set of fitting shots.
      * Fitting has no auto-filter — exclusion is manual or one-tap via the
      * UI (M7 spec §2). Never throws — bag-mapping contract; flows re-emit.
+     * [ids] are global row ids by design under the single-writer discipline
+     * (the fitting UI only ever passes ids from the session being viewed).
      */
     suspend fun setFittingShotsExcluded(ids: List<Long>, excluded: Boolean) {
         if (ids.isEmpty()) return

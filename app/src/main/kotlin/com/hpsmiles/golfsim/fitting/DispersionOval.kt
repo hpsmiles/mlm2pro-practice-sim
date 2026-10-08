@@ -10,7 +10,8 @@ import kotlin.math.sqrt
  * Pure dispersion-oval math (M7 spec §5): mean + covariance of an (x, y)
  * point cloud → 1σ ellipse parameters + outline polygon. Metres in, metres
  * out; no framework types. Null below 3 points or for a degenerate cloud
- * (zero variance — no meaningful spread to draw).
+ * (zero variance OR collinear — λ2 ≈ 0 with λ1 > 0 gives a half-line, no
+ * meaningful spread to draw).
  */
 object DispersionOval {
 

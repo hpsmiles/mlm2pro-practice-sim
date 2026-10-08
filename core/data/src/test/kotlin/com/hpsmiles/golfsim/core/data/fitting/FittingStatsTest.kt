@@ -1,5 +1,6 @@
 package com.hpsmiles.golfsim.core.data.fitting
 
+import com.hpsmiles.golfsim.core.data.bag.BagMappingStats
 import com.hpsmiles.golfsim.core.data.entity.FittingShotEntity
 import com.hpsmiles.golfsim.core.data.record.ClubType
 import org.junit.Assert.assertEquals
@@ -74,5 +75,64 @@ class FittingStatsTest {
         // Dormant below 3 shots: everything kept.
         val dormant = FittingStats.applyDuffFilter(listOf(shot(1, ball = 20.0), shot(2, ball = 48.0)))
         assertEquals(listOf(false, false), dormant.map { it.filtered })
+    }
+
+    @Test
+    fun `delta - noise band boundary is inclusive - exactly at the band is significant`() {
+        // |Δ| EXACTLY equal to the noise band is SIGNIFICANT (≥ semantics).
+        assertTrue(
+            FittingStats.delta(other = 142.0, baseline = 140.0, noise = FittingStats.NOISE_CARRY_M)!!.significant,
+        )
+        // Just below the band is NOT significant (1.9 < 2.0).
+        assertFalse(
+            FittingStats.delta(other = 141.9, baseline = 140.0, noise = FittingStats.NOISE_CARRY_M)!!.significant,
+        )
+    }
+
+    @Test
+    fun `applyDuffFilter - exactly at the cutoff is kept - strict less-than`() {
+        // median(50, 50, 50, 50, cutoff) = 50 → cutoff = 50 × 0.85 (the exact
+        // double the filter computes). A shot AT that exact value is NOT below
+        // the cutoff (strict `<`), so it stays kept; a hair below is a duff.
+        val atCutoff = 50.0 * BagMappingStats.DUFF_BALL_SPEED_FRACTION
+        val at = FittingStats.applyDuffFilter(
+            listOf(shot(1, ball = 50.0), shot(2, ball = 50.0), shot(3, ball = 50.0), shot(4, ball = 50.0), shot(5, ball = atCutoff)),
+        )
+        assertEquals(listOf(false, false, false, false, false), at.map { it.filtered })
+        val below = FittingStats.applyDuffFilter(
+            listOf(shot(1, ball = 50.0), shot(2, ball = 50.0), shot(3, ball = 50.0), shot(4, ball = 50.0), shot(5, ball = 42.4)),
+        )
+        assertEquals(listOf(false, false, false, false, true), below.map { it.filtered })
+    }
+
+    @Test
+    fun `summarize - smash averages only chs-greater-than-zero shots`() {
+        // A 0.0 CHS shot contributes nothing: mean(45/30, 90/60) = 1.5.
+        val s = FittingStats.summarize(
+            FittingStats.ClubKey(1, "A", ClubType.DRIVER, false),
+            listOf(shot(1, chs = 0.0, ball = 99.0), shot(2, chs = 30.0, ball = 45.0), shot(3, chs = 60.0, ball = 90.0)),
+        )
+        assertEquals(3, s.kept)
+        assertEquals(1.5, s.smash!!, 1e-9)
+        // A club whose shots ALL have chs ≤ 0 → smash null.
+        val allZero = FittingStats.summarize(
+            FittingStats.ClubKey(1, "A", ClubType.DRIVER, false),
+            listOf(shot(1, chs = 0.0, ball = 99.0), shot(2, chs = 0.0, ball = 100.0), shot(3, chs = 0.0, ball = 90.0)),
+        )
+        assertEquals(3, allZero.kept)
+        assertNull(allZero.smash)
+    }
+
+    @Test
+    fun `summarize - club with no shots is all-null`() {
+        val s = FittingStats.summarize(
+            FittingStats.ClubKey(1, "A", ClubType.DRIVER, false),
+            listOf(shot(1, clubId = 2, name = "B")),
+        )
+        assertEquals(0, s.kept)
+        assertEquals(0, s.excluded)
+        assertNull(s.chs)
+        assertNull(s.carry)
+        assertNull(s.smash)
     }
 }

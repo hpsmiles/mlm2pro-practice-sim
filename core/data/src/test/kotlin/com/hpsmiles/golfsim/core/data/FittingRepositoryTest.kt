@@ -81,6 +81,45 @@ class FittingRepositoryTest {
     }
 
     @Test
+    fun `setFittingShotsExcluded edge cases - empty ids, stale ids, idempotence`() = runTest {
+        val repo = repo()
+        val id = repo.startFittingSession(startedAtMs = 1000)!!
+        repo.appendFittingShot(id, clubA, ball(48.0), result(), timestampMs = 1001)
+        repo.appendFittingShot(id, clubB, ball(48.0), result(), timestampMs = 1002)
+        val shots = repo.observeFittingShots(id).first()
+
+        // (a) Empty ids: early return — no crash, nothing changes.
+        repo.setFittingShotsExcluded(emptyList(), true)
+        assertEquals(listOf(false, false), repo.observeFittingShots(id).first().map { it.excluded })
+
+        // (b) Stale/nonexistent ids: no error, 0 rows change — others untouched.
+        repo.setFittingShotsExcluded(listOf(99999L, 12345L), true)
+        assertEquals(listOf(false, false), repo.observeFittingShots(id).first().map { it.excluded })
+
+        // (c) Idempotence: calling twice with the same ids leaves the same state.
+        repo.setFittingShotsExcluded(listOf(shots[0].id), true)
+        repo.setFittingShotsExcluded(listOf(shots[0].id), true)
+        assertEquals(listOf(true, false), repo.observeFittingShots(id).first().map { it.excluded })
+    }
+
+    @Test
+    fun `restart cycle - complete then start yields a new in-progress session`() = runTest {
+        val repo = repo()
+        val id1 = repo.startFittingSession(startedAtMs = 1000)!!
+        repo.appendFittingShot(id1, clubA, ball(48.0), result(), timestampMs = 1001)
+        repo.completeFittingSession(id1, completedAtMs = 2000)
+        assertNull(repo.fittingActive.first())
+
+        val id2 = repo.startFittingSession(startedAtMs = 3000)!!
+        assertTrue(id2 != id1)
+        val active = repo.fittingActive.first()!!
+        assertEquals(id2, active.id)
+        // The new session starts empty; the completed one stays in history.
+        assertEquals(0, repo.observeFittingShots(id2).first().size)
+        assertEquals(1, repo.fittingHistory.first().size)
+    }
+
+    @Test
     fun `complete moves the session to history`() = runTest {
         val repo = repo()
         val id = repo.startFittingSession(startedAtMs = 1000)!!

@@ -1,7 +1,6 @@
 package com.hpsmiles.golfsim.fitting
 
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Test
 import kotlin.math.PI
@@ -44,9 +43,11 @@ class DispersionOvalTest {
     @Test
     fun `polygon - sigma scaling and vertex placement`() {
         val pts = DispersionOval.polygon(DispersionOval.Oval(0.0, 0.0, 1.0, 1.0, 0.0), sigmaScale = 2.0, segments = 4)
-        // t = 0, π/2, π, 3π/2 on a radius-2 circle
-        assertEquals(listOf(2.0 to 0.0, 0.0 to 2.0, -2.0 to 0.0, 0.0 to -2.0)
-            .zip(pts) { e, a -> assertEquals(e.first, a.first, 1e-9); assertEquals(e.second, a.second, 1e-9) }.size, 4)
-        assertNotNull(pts)
+        // t = 0, π/2, π, 3π/2 on a radius-2 circle.
+        val expected = listOf(2.0 to 0.0, 0.0 to 2.0, -2.0 to 0.0, 0.0 to -2.0)
+        for (i in expected.indices) {
+            assertEquals(expected[i].first, pts[i].first, 1e-9)
+            assertEquals(expected[i].second, pts[i].second, 1e-9)
+        }
     }
 }
