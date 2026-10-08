@@ -28,8 +28,8 @@ $env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"
 | Task | Status |
 |---|---|
 | 1. Room v5 tables/DAOs/migration | ✅ done — 649b6fe, spec ✅, quality ✅ approve (minor follow-ups ride with Task 3: DAO ORDER BY guards, status-literal interpolation, ordering comment) |
-| 2. FittingStats (TDD) | in progress |
-| 3. Repository fitting API (TDD) | pending |
+| 2. FittingStats (TDD) | ✅ done — 401a475, spec ✅, quality ✅ approve (5 minor backlog items, none blocking) |
+| 3. Repository fitting API (TDD) | in progress |
 | 4. DispersionOval (TDD) | pending |
 | 5. FittingController + AppRoot wiring | pending |
 | 6. UI design pass (designer) | pending |
