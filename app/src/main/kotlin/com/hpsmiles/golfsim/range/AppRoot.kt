@@ -177,17 +177,21 @@ fun AppRoot() {
 
     // Keep the simulated surfaces in sync with Settings > GREEN / TURF for the
     // range oval and both games (their default simulators read these fields).
+    // M7 (task 5 review): fitSession gets the same sync so FIT physics match
+    // the user's surfaces exactly like RANGE.
     LaunchedEffect(greenCondition) {
         val surface = greenCondition.surface()
         session.greenSurface = surface
         targetPractice.greenSurface = surface
         breakPane.greenSurface = surface
+        fitSession.greenSurface = surface
     }
     LaunchedEffect(turfCondition) {
         val surface = turfCondition.surface()
         session.turfSurface = surface
         targetPractice.fairwaySurface = surface
         breakPane.fairwaySurface = surface
+        fitSession.turfSurface = surface
     }
 
     // Post-merge fix (final-review follow-up): the Room-backed getter-flow
@@ -280,10 +284,12 @@ fun AppRoot() {
             if (club == null) return  // no active club → nothing to compare
             val shot = fitSession.add(ballData) ?: return
             scope.launch {
+                // M7 (task 5 review): sessionId is bound from Room by a
+                // LaunchedEffect — never written back from here, so a late
+                // append can never re-bind a COMPLETED session after END
+                // COMPARISON.
                 val id = fittingController.sessionId.takeIf { it > 0 }
-                    ?: sessionRepository.startFittingSession(System.currentTimeMillis())?.also {
-                        fittingController.sessionId = it
-                    }
+                    ?: sessionRepository.startFittingSession(System.currentTimeMillis())
                 if (id != null) {
                     sessionRepository.appendFittingShot(id, club, ballData, shot.shotResult, shot.timestampMs)
                 }
@@ -611,6 +617,13 @@ fun AppRoot() {
             flowOf(emptyList()),
         )
     }.collectAsState(initial = emptyList())
+
+    // M7 (task 5 review): sessionId is derived from Room truth, never cached
+    // across completion — prevents a late write-back from re-binding a
+    // COMPLETED session after END COMPARISON.
+    LaunchedEffect(fitActive?.id) {
+        fittingController.sessionId = fitActive?.id ?: 0
+    }
 
     // M6: auto-bind the collector to an open session (process death, tab
     // re-entry). Resume index = first club below the 5-shot target; when

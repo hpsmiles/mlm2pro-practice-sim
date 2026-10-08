@@ -27,5 +27,6 @@ class FittingController {
     var baselineClubId by mutableStateOf<Long?>(null)
     /** Non-null = read-only RESULTS of a completed history session. */
     var viewedSessionId by mutableStateOf<Long?>(null)
-    var sessionId: Long = 0
+    /** Active fitting session id (0 = none; Room-derived — see AppRoot). */
+    var sessionId by mutableStateOf(0L)
 }
