@@ -20,10 +20,12 @@ range sessions).
 - New `RangeTab.FIT` in `AppRoot.kt` (enum ~:89), `NavRailButton("FIT")`
   (~:651–656), a `when` content branch (~:732–833), and a `routeShot` branch
   (~:264).
-- Shot routing: shots go to the fitting collector only while the FIT tab is
-  active and the fit state is COMPARE (accepting shots). Pause-on-leave on
-  dispose via the `onCollectingChange` seam (same as BAG,
-  `BagMappingScreen.kt:68–70`).
+- Shot routing: `routeShot` captures for the fitting session whenever the
+  FIT tab is active (any FIT-internal view — COMPARE, RESULTS, HISTORY alike,
+  matching the "capture live" rule); the baseline state machine decides where
+  the shot is shown. Switching to any other tab stops capture — no
+  pause-on-leave disposal needed since the gate is the tab itself (deviation
+  from BAG's `onCollectingChange` seam, agreed 2026-10-08).
 - Fitting shots **never enter range sessions or normal shot history** — same
   rule as games and bag shots. The fitting session is the only record.
 - FIT tab internal states (plain Compose state holder, `BagView`-style, no
