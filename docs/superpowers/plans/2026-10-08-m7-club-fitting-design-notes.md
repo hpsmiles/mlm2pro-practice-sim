@@ -206,17 +206,17 @@ Viewing a history item opens the read-only RESULTS described in §2.1 (viewed-se
 
 These decisions supersede/conflict-resolve the sections above where they differ. Both were user-requested after on-device verification; the designer (des-1, notes commit 0ea32c7) owns §0.1/§2.3 changes; the orchestrator owns this addendum.
 
-### §2.2 AREA column (user request 2026-10-08)
+### §2.2 AREA column (user ruling 2026-10-08 — supersedes the 2σ ellipse definition)
 
-- New metric column **AREA** after OFFLINE (88 dp, unit-less header like all columns).
-- Value = 2σ dispersion ellipse area in m², computed from that club's kept shots via the same `DispersionOval` used by the top-down (`π · σa · σb` at 2σ). Rendered with the unit in the cell per the table convention (e.g. `412 m²`), matching how CARRY/TOTAL carry their `m`.
-- `-` when the club has fewer than 3 kept shots or a degenerate cloud (same guard as rings).
-- **No Δ row** for AREA (area is not signed; deltas of areas are not meaningful for fitting). Implemented via the existing no-delta column convention.
+- Metric column **AREA** after OFFLINE (88 dp, unit-less header like all columns).
+- User ruling: "I want the ring to be a small 5% buffered ring, and the area of this to be the number on the table" (buffer option chosen: **5% of span**). The metric is the **buffered bounding box** of the club's kept shots: each axis of the (side, total) bbox is expanded by 5% of its own span per side (a span-0 axis stays unbuffered); AREA = buffered width × buffered depth in m², rendered unit-in-cell (e.g. `412 m²`).
+- Rationale (lib-1 convention survey, 2026-10-08): consumer apps avoid 2σ covariance contours (they read "too large"); Rapsodo's own native convention is an extreme-shot bbox-extent shape; raw bbox area has no industry namesake — this is our own documented metric. The closest industry relative is Golf Digest's 95% dispersion area (ellipse inscribed in the 95% bbox).
+- `-` when the club has fewer than 3 kept shots (same guard as the ring); **no Δ row** (unchanged).
+- Implementation: `DispersionBox` in `FittingTopDownFit.kt` (`BBOX_BUFFER_FRACTION = 0.05`); the 2σ `DispersionOval` was removed from the app (git-recoverable for M9).
 
-### §2.3 top-down auto-fit (user request 2026-10-08)
+### §2.3 top-down ring + auto-fit (user ruling 2026-10-08 — supersedes the 2σ ring)
 
-- The top-down canvas scales its content window to fit the kept shots **and** each club's 2σ ring extents, plus a buffer — the useless near range is cropped out (a driver fitting no longer shows 0–150 m).
-- Isotropic scale: px/m = min(yFit, xFit); y-window bottom-anchored (shots sit near the bottom, same as the full-range view); x centred.
-- Padding: max(10 m, 6 % of the content span); minimum content span 30 m (keeps a wedge fitting readable); lateral pad 48 px.
-- Empty state falls back to the exact previous full-range mapping (no visual jump).
+- The ring per club is the **buffered bounding box outline** of the kept shots — the same `DispersionBox` the AREA column reports: rectangle, 2 dp stroke, club colour @ 0.55 α, no fill; ≥3 kept shots; a zero-span axis renders as a line (matches the data).
+- Auto-fit bounds use the buffered box extents (min/max side/total grown 5% per axis) across all clubs that have a box; the empty fallback is unchanged (exact previous full-range mapping, no visual jump).
+- Isotropic scale: px/m = min(yFit, xFit); y-window bottom-anchored (shots near the bottom, same as the full-range view); x centred. Padding: max(10 m, 6 % of the content span); minimum content span 30 m; lateral pad 48 px.
 - Grid/boards/mat remain world-anchored and simply fall outside the window; the lateral gridlines still span the full canvas.
