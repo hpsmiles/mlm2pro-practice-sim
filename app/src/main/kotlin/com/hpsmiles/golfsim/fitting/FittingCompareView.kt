@@ -310,10 +310,10 @@ internal fun FittingCompareView(
 /**
  * Count badge (design notes §0.3): 18 dp pill — Line/TextSecondary normally,
  * Amber border+text under the 5-kept target. Amber marks count only, never a
- * club.
+ * club. Shared by the COMPARISON card and the TOP-DOWN legend.
  */
 @Composable
-private fun FittingCountBadge(count: Int) {
+internal fun FittingCountBadge(count: Int) {
     val low = count < ClubQualityGate.TARGET_KEPT
     Box(
         modifier = Modifier

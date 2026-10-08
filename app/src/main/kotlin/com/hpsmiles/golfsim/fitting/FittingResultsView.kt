@@ -33,7 +33,7 @@ import com.hpsmiles.golfsim.range.ChipFont
  * session: exclusion controls are disabled, END COMPARISON is hidden, and the
  * header context line reads the viewed session's date instead of live counts.
  * The TABLE mode renders inside a Card-framed region (notes §2.2); the
- * TOP-DOWN pane is a placeholder until task 9.
+ * TOP-DOWN pane is the coloured canvas + dispersion ovals in FittingTopDown.kt.
  */
 @Composable
 internal fun FittingResultsView(
@@ -162,12 +162,4 @@ private fun resultsContextLine(shots: List<FittingShotEntity>, readOnly: Boolean
     return "${shots.size} shots · $excluded excluded"
 }
 
-/**
- * TOP-DOWN placeholder — the full coloured canvas + dispersion ovals land in
- * task 9. Signature is fixed so task 9's real pane drops in unchanged.
- */
-@Suppress("UNUSED_PARAMETER")
-@Composable
-internal fun FittingTopDownPane(shots: List<FittingShotEntity>, modifier: Modifier = Modifier) {
-    Text("TOP-DOWN — task 9", modifier = modifier.padding(GolfSpacing.Md))
-}
+
