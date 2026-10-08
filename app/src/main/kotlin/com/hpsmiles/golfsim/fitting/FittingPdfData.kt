@@ -23,8 +23,8 @@ import kotlin.math.abs
  */
 object FittingPdfData {
 
-    /** Number of summary metric columns (the table's 11, AREA excluded). */
-    const val SUMMARY_COL_COUNT = 11
+    /** Number of summary metric columns (the table's 12: n … OFFLINE, AREA). */
+    const val SUMMARY_COL_COUNT = 12
 
     /** One drill-down shot row — full record, matching FittingTable's SHOT_COLS. */
     data class ShotRow(
@@ -45,16 +45,18 @@ object FittingPdfData {
         val name: String,
         /** Position in first-appearance order — [FittingColors.clubColor] input. */
         val colorIndex: Int,
-        /** 11 pre-formatted summary cells, in the table's column order. */
+        /** 12 pre-formatted summary cells, in the table's column order. */
         val summary: List<String>,
         val shots: List<ShotRow>,
         /** KEPT (side, total) pairs — the dots and the ellipse inputs. */
         val keptPoints: List<Pair<Double, Double>>,
         /** The kept shots' enclosing ellipse (null < 3 kept or collinear). */
         val ellipse: DispersionEllipse?,
+        /** The drawn ring's post-5%-buffer area in m² (π·a·b) — the table's AREA column; null when [ellipse] is null. */
+        val areaM2: Double?,
     )
 
-    /** One Δ row: label + 11 cells ("-" where the delta is null). */
+    /** One Δ row: label + 12 cells ("-" where the delta is null; AREA is always "-"). */
     data class DeltaRow(
         val label: String,
         val cells: List<String>,
@@ -90,14 +92,16 @@ object FittingPdfData {
             val mine = shots.filter { it.clubId == key.id }
             val kept = mine.filter { !it.excluded }
             val keptPoints = kept.map { it.sideM to it.totalM }
+            val ellipse = DispersionEllipse.fromKept(keptPoints)
             ClubBlock(
                 clubId = key.id,
                 name = key.name,
                 colorIndex = index,
-                summary = summaryCells(summary),
+                summary = summaryCells(summary, ellipse?.areaM2()),
                 shots = mine.map { shotRow(it) },
                 keptPoints = keptPoints,
-                ellipse = DispersionEllipse.fromKept(keptPoints),
+                ellipse = ellipse,
+                areaM2 = ellipse?.areaM2(),
             )
         }
         val deltaRows = buildDeltaRows(shots, clubs)
@@ -111,9 +115,9 @@ object FittingPdfData {
         )
     }
 
-    // ---- summary cells (FittingTable COLS formatters, 11 columns, AREA out) ----
+    // ---- summary cells (FittingTable COLS formatters, 12 columns incl. AREA) ----
 
-    private fun summaryCells(s: FittingStats.ClubSummary): List<String> = listOf(
+    private fun summaryCells(s: FittingStats.ClubSummary, areaM2: Double?): List<String> = listOf(
         "${s.kept}",
         s.chs?.let { FittingFormats.mph(it) } ?: "-",
         s.ballSpeed?.let { FittingFormats.mph(it) } ?: "-",
@@ -129,6 +133,10 @@ object FittingPdfData {
         } else {
             "-"
         },
+        // AREA (device ruling 2026-10-08): the drawn ring's area in m² (π·a·b of
+        // the buffered rotated MVEE) — the same ellipse the top-down ring draws.
+        // Mirrors FittingTable's AREA Col: "%.0f m²" or "-" (< 3 kept / collinear).
+        areaM2?.let { String.format(Locale.US, "%.0f m²", it) } ?: "-",
     )
 
     // ---- Δ rows (FittingTable DeltaRow semantics: pick + noise + fmt) ----
@@ -162,6 +170,9 @@ object FittingPdfData {
             { d -> String.format(Locale.US, "%+.1f°", d) }),
         DeltaSpec({ it.offlineAvg }, FittingStats.NOISE_OFFLINE_M,
             { d -> String.format(Locale.US, "%+.1f m", d) }),
+        // AREA: no Δ row in the app (quadratic noise — deliberately excluded);
+        // pick → null renders "-" exactly like FittingTable's AREA Col.
+        DeltaSpec({ null }, 0.0, { "-" }),
     )
 
     private fun buildDeltaRows(shots: List<FittingShotEntity>, clubs: List<ClubBlock>): List<DeltaRow> {

@@ -108,8 +108,9 @@ object FittingPdfWriter {
 
             // Summary column geometry: FittingTable dp proportions (CLUB 150 /
             // n 40 / SMASH 64 / rest 88) scaled proportionally into the content
-            // width. Index 0 = frozen CLUB column, 1..11 = the 11 metrics.
-            val widths = listOf(150f, 40f, 88f, 88f, 64f, 88f, 88f, 88f, 88f, 88f, 88f, 88f)
+            // width. Index 0 = frozen CLUB column, 1..12 = the 12 metrics
+            // (… OFFLINE, AREA). The scale shrinks automatically to fit 13 columns.
+            val widths = listOf(150f, 40f, 88f, 88f, 64f, 88f, 88f, 88f, 88f, 88f, 88f, 88f, 88f)
             val scale = (PAGE_W - 2 * MARGIN_X) / widths.sum()
             val colW = widths.map { it * scale }
             val colX = FloatArray(colW.size + 1)
@@ -214,7 +215,7 @@ object FittingPdfWriter {
     // ---- table rows (rowTop = the row's top edge on the current page) ----
 
     private fun drawSummaryHeader(canvas: Canvas, colX: FloatArray, colW: List<Float>, rowTop: Float, paints: Paints) {
-        val labels = listOf("CLUB", "n", "CHS", "BALL\nSPEED", "SMASH", "CARRY", "TOTAL", "LAUNCH", "DIR", "SPIN", "SPIN\nAXIS", "OFFLINE")
+        val labels = listOf("CLUB", "n", "CHS", "BALL\nSPEED", "SMASH", "CARRY", "TOTAL", "LAUNCH", "DIR", "SPIN", "SPIN\nAXIS", "OFFLINE", "AREA")
         paints.header.textAlign = Paint.Align.CENTER
         labels.forEachIndexed { i, label ->
             val x = colX[i] + colW[i] / 2f

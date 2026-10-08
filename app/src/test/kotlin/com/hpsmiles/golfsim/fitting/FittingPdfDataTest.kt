@@ -85,7 +85,7 @@ class FittingPdfDataTest {
         val pdf = FittingPdfData.build(shots)
         assertEquals(1, pdf.deltaRows.size)
         val cells = pdf.deltaRows[0].cells
-        assertEquals(11, cells.size)
+        assertEquals(12, cells.size)
         cells.forEach { assertEquals("-", it) }
     }
 
@@ -97,7 +97,7 @@ class FittingPdfDataTest {
         )
         val pdf = FittingPdfData.build(shots)
         val cells = pdf.deltaRows[0].cells
-        assertEquals(11, cells.size)
+        assertEquals(12, cells.size)
         assertEquals("-", cells[0]) // n column has no delta, same as the table
         assertEquals(
             String.format(Locale.US, "%+.1f", 2.0 * FittingFormats.MPH_PER_MS),
@@ -105,6 +105,7 @@ class FittingPdfDataTest {
         )
         assertEquals("+10 m", cells[4])  // CARRY
         assertEquals("+10 m", cells[5])  // TOTAL
+        assertEquals("-", cells[11])     // AREA has no Δ row, same as the table
     }
 
     @Test
@@ -114,8 +115,9 @@ class FittingPdfDataTest {
             shot(2, 1, "A", carry = 150.0, total = 160.0, chs = 33.0, ball = 50.0, side = 4.0, ts = 200),
         )
         val pdf = FittingPdfData.build(shots)
-        val summary = pdf.clubs.single().summary
-        assertEquals(11, summary.size)
+        val block = pdf.clubs.single()
+        val summary = block.summary
+        assertEquals(12, summary.size)
         assertEquals("2", summary[0])                                    // n
         assertEquals(FittingFormats.mph(33.0), summary[1])               // CHS mean 33.0
         assertEquals(FittingFormats.mph(49.0), summary[2])               // BALL mean 49.0
@@ -127,6 +129,9 @@ class FittingPdfDataTest {
         assertEquals(FittingFormats.rpm(8000.0), summary[8])             // SPIN
         assertEquals(FittingFormats.degSigned(-4.0), summary[9])         // SPIN AXIS
         assertEquals("3 / 4", summary[10])                               // OFFLINE avg |−2|,|4| → 3 / worst 4
+        // AREA: 2 kept shots → no enclosing ellipse → "-" and null area.
+        assertEquals("-", summary[11])
+        assertNull(block.areaM2)
     }
 
     @Test
@@ -135,6 +140,50 @@ class FittingPdfDataTest {
         val summary = FittingPdfData.build(shots).clubs.single().summary
         assertEquals("0", summary[0])
         assertTrue(summary.drop(1).all { it == "-" })
+    }
+
+    @Test
+    fun `area cell - club with three kept shots reports the ring area`() {
+        // 3 kept shots → a buffered rotated MVEE exists; the AREA cell is the
+        // ring's π·a·b in m², matching FittingTable's AREA Col formatting.
+        val shots = listOf(
+            shot(1, 1, "A", side = 0.0, total = 100.0, ts = 100),
+            shot(2, 1, "A", side = 10.0, total = 110.0, ts = 200),
+            shot(3, 1, "A", side = 5.0, total = 95.0, ts = 300),
+        )
+        val block = FittingPdfData.build(shots).clubs.single()
+        assertNotNull(block.ellipse)
+        val area = block.areaM2
+        assertNotNull(area)
+        assertEquals(String.format(Locale.US, "%.0f m²", area!!), block.summary[11])
+        // AREA is the last of the 12 summary columns.
+        assertEquals(12, block.summary.size)
+    }
+
+    @Test
+    fun `area cell - under three kept shots renders dash`() {
+        // 2 kept shots → no enclosing ellipse → the AREA cell is "-" like the table.
+        val shots = listOf(
+            shot(1, 1, "A", side = 0.0, total = 100.0, ts = 100),
+            shot(2, 1, "A", side = 10.0, total = 110.0, ts = 200),
+        )
+        val block = FittingPdfData.build(shots).clubs.single()
+        assertNull(block.ellipse)
+        assertNull(block.areaM2)
+        assertEquals("-", block.summary[11])
+    }
+
+    @Test
+    fun `delta row - area cell has no content`() {
+        // The app has no AREA Δ row (area deltas are quadratic noise); the Δ
+        // row's AREA cell renders "-" exactly like FittingTable's AREA Col.
+        val shots = listOf(
+            shot(1, 1, "A", ts = 100),
+            shot(2, 2, "B", ts = 200),
+        )
+        val cells = FittingPdfData.build(shots).deltaRows.single().cells
+        assertEquals(12, cells.size)
+        assertEquals("-", cells[11])
     }
 
     @Test
