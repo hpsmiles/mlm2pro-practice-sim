@@ -29,8 +29,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.hpsmiles.golfsim.bag.ClubQualityGate
@@ -259,10 +262,17 @@ internal fun FittingCompareView(
                     textAlign = TextAlign.Center,
                 )
             }
-            // HISTORY chip (notes §1.2.4): TextMuted count suffix when history
-            // is non-empty.
+            // HISTORY chip (notes §1.2.4): the " · N" count suffix renders in
+            // TextMuted when history is non-empty (label stays TextSecondary).
             Text(
-                if (historyCount > 0) "HISTORY · $historyCount" else "HISTORY",
+                buildAnnotatedString {
+                    append("HISTORY")
+                    if (historyCount > 0) {
+                        withStyle(SpanStyle(color = GolfColors.TextMuted)) {
+                            append(" · $historyCount")
+                        }
+                    }
+                },
                 style = ChipFont,
                 color = GolfColors.TextSecondary,
                 textAlign = TextAlign.Center,
