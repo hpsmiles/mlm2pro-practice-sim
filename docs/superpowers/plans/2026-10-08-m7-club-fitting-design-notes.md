@@ -201,3 +201,22 @@ Viewing a history item opens the read-only RESULTS described in §2.1 (viewed-se
 3. **Delta colouring.** Spec says dim-below-noise only; a natural temptation is green/red deltas. I explicitly fixed deltas to `TextMuted` (noise) vs `TextPrimary` (signal) to avoid implying good/bad, since favourable direction differs per metric.
 4. **Drill-down inside a horizontally-scrolling table** is the one layout that needs care: the drill-down must span the full card width, not live inside the scrollable row — implementers often nest it inside the scrolled Row by accident.
 5. **Palette + ring revision (2026-10-08 device feedback).** User findings: nested 1σ+2σ rings read as "more rings than clubs" (→ one 2σ ring per club, §2.3) and teal+blue as clubs 1–2 were too close (→ palette reordered + blue → indigo, §0.1). One palette (`FittingColors.clubColor`) drives all four views, so the fixer changes values/order once in `GolfColors.Comparison` and every view follows; `GolfColorsTest` B/C/D expectations must move with the hexes.
+
+## Addendum (2026-10-08, device feedback — post-Task 11)
+
+These decisions supersede/conflict-resolve the sections above where they differ. Both were user-requested after on-device verification; the designer (des-1, notes commit 0ea32c7) owns §0.1/§2.3 changes; the orchestrator owns this addendum.
+
+### §2.2 AREA column (user request 2026-10-08)
+
+- New metric column **AREA** after OFFLINE (88 dp, unit-less header like all columns).
+- Value = 2σ dispersion ellipse area in m², computed from that club's kept shots via the same `DispersionOval` used by the top-down (`π · σa · σb` at 2σ). Rendered with the unit in the cell per the table convention (e.g. `412 m²`), matching how CARRY/TOTAL carry their `m`.
+- `-` when the club has fewer than 3 kept shots or a degenerate cloud (same guard as rings).
+- **No Δ row** for AREA (area is not signed; deltas of areas are not meaningful for fitting). Implemented via the existing no-delta column convention.
+
+### §2.3 top-down auto-fit (user request 2026-10-08)
+
+- The top-down canvas scales its content window to fit the kept shots **and** each club's 2σ ring extents, plus a buffer — the useless near range is cropped out (a driver fitting no longer shows 0–150 m).
+- Isotropic scale: px/m = min(yFit, xFit); y-window bottom-anchored (shots sit near the bottom, same as the full-range view); x centred.
+- Padding: max(10 m, 6 % of the content span); minimum content span 30 m (keeps a wedge fitting readable); lateral pad 48 px.
+- Empty state falls back to the exact previous full-range mapping (no visual jump).
+- Grid/boards/mat remain world-anchored and simply fall outside the window; the lateral gridlines still span the full canvas.
