@@ -23,6 +23,24 @@ $env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"
 
 **Deviation from spec §1 (agreed during planning):** no `onCollectingChange` seam — `routeShot` gates directly on `tab == RangeTab.FIT`, so capture stays live across COMPARE/RESULTS (one comparison per session) and stops when the tab changes. FIT has no guided collector state, so the BAG seam is redundant.
 
+## Execution status
+
+| Task | Status |
+|---|---|
+| 1. Room v5 tables/DAOs/migration | ✅ done — 649b6fe, spec ✅, quality ✅ approve (minor follow-ups ride with Task 3: DAO ORDER BY guards, status-literal interpolation, ordering comment) |
+| 2. FittingStats (TDD) | in progress |
+| 3. Repository fitting API (TDD) | pending |
+| 4. DispersionOval (TDD) | pending |
+| 5. FittingController + AppRoot wiring | pending |
+| 6. UI design pass (designer) | pending |
+| 7. COMPARE view | pending |
+| 8. RESULTS table | pending |
+| 9. RESULTS top-down | pending |
+| 10. HISTORY | pending |
+| 11. Build/tests/conventions/device | pending |
+
+Notes for implementers: repo convention is `src/main/kotlin` (plan paths say `java` — follow repo). `ShotResult` lives in `core.physics` with required `rolloutM`.
+
 ---
 
 ## File Structure
