@@ -47,8 +47,8 @@ import java.util.Locale
 /**
  * M7 results table (design notes §2.2): frozen CLUB column (150 dp, Panel)
  * + a horizontally scrollable metric row (n · CHS · BALL SPEED · SMASH ·
- * CARRY · TOTAL · LAUNCH · DIR · SPIN · SPIN AXIS · OFFLINE), a Δ row per
- * non-baseline club (3+ clubs) or one Δ B−A under the pair (2 clubs), and a
+ * CARRY · TOTAL · LAUNCH · DIR · SPIN · SPIN AXIS · OFFLINE · AREA), a Δ row
+ * per non-baseline club (3+ clubs) or one Δ B−A under the pair (2 clubs), and a
  * tap-to-expand drill-down below each club's rows. Excluded shots drop from
  * every aggregate — single source of truth: fitting_shots.excluded.
  *
@@ -68,10 +68,20 @@ internal fun FittingTable(
     distanceMode: FittingDistanceMode,
     modifier: Modifier = Modifier,
 ) {
-    val (order, summaries) = remember(shots) {
+    val (order, summaries, areaByClub) = remember(shots) {
         val o = FittingStats.clubOrder(shots)
-        o to o.map { FittingStats.summarize(it, shots) }
+        val sums = o.map { FittingStats.summarize(it, shots) }
+        // AREA column (device feedback 2026-10-08): 2σ dispersion-ellipse area
+        // in m² per club, computed from the club's KEPT shots' (side, total)
+        // pairs. null when < 3 kept shots or the cloud is degenerate/collinear
+        // (DispersionOval.compute's own null contract).
+        val areas = o.associate { key ->
+            val kept = shots.filter { it.clubId == key.id && !it.excluded }
+            key.id to DispersionOval.compute(kept.map { it.sideM to it.totalM })?.let { DispersionOval.area(it, 2.0) }
+        }
+        Triple(o, sums, areas)
     }
+    val cols = COLS(areaByClub)
     val baseline = summaries.firstOrNull { it.key.id == baselineClubId } ?: summaries.firstOrNull()
     var expandedId by remember { mutableStateOf<Long?>(null) }
     // One shared horizontal scroll so the header, every club row and every Δ
@@ -83,7 +93,7 @@ internal fun FittingTable(
         Row(verticalAlignment = Alignment.CenterVertically) {
             FrozenHeaderCell()
             Row(Modifier.horizontalScroll(metricScroll)) {
-                COLS.forEach { col -> MetricHeaderCell(col, distanceMode) }
+                cols.forEach { col -> MetricHeaderCell(col, distanceMode) }
             }
         }
         RowSeparator()
@@ -112,13 +122,14 @@ internal fun FittingTable(
                     showBaselineControl = summaries.size >= 3,
                     metricScroll = metricScroll,
                     distanceMode = distanceMode,
+                    cols = cols,
                     onToggle = { expandedId = if (expandedId == s.key.id) null else s.key.id },
                     onBaselineChange = { onBaselineChange(s.key.id) },
                 )
                 RowSeparator()
                 // Δ rows: 3+ clubs → a Δ row directly under each non-baseline club.
                 if (summaries.size >= 3 && baseline != null && !isBaseline) {
-                    DeltaRow(label = "Δ ${s.key.name}", other = s, baseline = baseline, metricScroll = metricScroll)
+                    DeltaRow(label = "Δ ${s.key.name}", other = s, baseline = baseline, metricScroll = metricScroll, cols = cols)
                 }
                 // Drill-down: full card width, below this club's rows — NOT
                 // inside the horizontal scroll (design notes §2.2.1, §4.4).
@@ -142,6 +153,7 @@ internal fun FittingTable(
                 other = other,
                 baseline = baseline,
                 metricScroll = metricScroll,
+                cols = cols,
             )
         }
     }
@@ -196,6 +208,7 @@ private fun ClubRow(
     showBaselineControl: Boolean,
     metricScroll: ScrollState,
     distanceMode: FittingDistanceMode,
+    cols: List<Col>,
     onToggle: () -> Unit,
     onBaselineChange: () -> Unit,
 ) {
@@ -230,7 +243,7 @@ private fun ClubRow(
             CountBadge(s.kept)
         }
         Row(Modifier.horizontalScroll(metricScroll), verticalAlignment = Alignment.CenterVertically) {
-            COLS.forEach { col -> MetricValueCell(col, s, distanceMode) }
+            cols.forEach { col -> MetricValueCell(col, s, distanceMode) }
         }
     }
 }
@@ -299,6 +312,7 @@ private fun DeltaRow(
     other: FittingStats.ClubSummary,
     baseline: FittingStats.ClubSummary,
     metricScroll: ScrollState,
+    cols: List<Col>,
 ) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Text(
@@ -313,7 +327,7 @@ private fun DeltaRow(
                 .padding(horizontal = GolfSpacing.Sm, vertical = 4.dp),
         )
         Row(Modifier.horizontalScroll(metricScroll), verticalAlignment = Alignment.CenterVertically) {
-            COLS.forEach { col ->
+            cols.forEach { col ->
                 // Named args on purpose: (other, baseline) positional is
                 // silently swappable and flips the delta sign.
                 val verdict = FittingStats.delta(
@@ -515,7 +529,7 @@ private class Col(
     }
 }
 
-private enum class Metric { N, CHS, BALL, SMASH, CARRY, TOTAL, LAUNCH, DIR, SPIN, AXIS, OFFLINE }
+private enum class Metric { N, CHS, BALL, SMASH, CARRY, TOTAL, LAUNCH, DIR, SPIN, AXIS, OFFLINE, AREA }
 
 /**
  * Column set (design notes §2.2): n 40 dp, SMASH 64 dp, all others 88 dp.
@@ -526,11 +540,18 @@ private enum class Metric { N, CHS, BALL, SMASH, CARRY, TOTAL, LAUNCH, DIR, SPIN
  * are m/s. Values/headers: MetricLabel TextSecondary (TextPrimary + 1 dp
  * Teal top border when the distance mode emphasises the column).
  *
+ * AREA (device feedback 2026-10-08): the club's 2σ dispersion-ellipse area
+ * in m² (DispersionOval.area over the KEPT shots' side/total pairs) — a
+ * data-column with no Δ row (area deltas are quadratic noise, deliberately
+ * excluded). [Col.pick] → null renders "-" directly, the same no-delta
+ * convention N already uses.
+ *
  * Three formatters are structurally unreachable but kept so every Col is
- * uniform: N's [Col.deltaFmt] (pick → null renders "-" directly) and the
- * CARRY/TOTAL [Col.club] lambdas (those cells render via TwoLineCell).
+ * uniform: N's [Col.deltaFmt] (pick → null renders "-" directly), the
+ * CARRY/TOTAL [Col.club] lambdas (those cells render via TwoLineCell), and
+ * AREA's pick/deltaFmt (pick → null renders "-" directly).
  */
-private val COLS = listOf(
+private fun COLS(areaByClub: Map<Long, Double?>): List<Col> = listOf(
     Col(Metric.N, "n", 40.dp, { null }, { s -> "${s.kept}" }, { "-" }, 0.0),
     Col(Metric.CHS, "CHS", 88.dp, { it.chs }, { s -> s.chs?.let { FittingFormats.mph(it) } ?: "-" },
         { d -> String.format(Locale.US, "%+.1f", d * FittingFormats.MPH_PER_MS) }, FittingStats.NOISE_CHS_MPS),
@@ -553,6 +574,13 @@ private val COLS = listOf(
     Col(Metric.OFFLINE, "OFFLINE", 88.dp, { it.offlineAvg },
         { s -> if (s.offlineAvg != null && s.offlineWorst != null) String.format(Locale.US, "%.0f / %.0f", s.offlineAvg, s.offlineWorst) else "-" },
         { d -> String.format(Locale.US, "%+.1f m", d) }, FittingStats.NOISE_OFFLINE_M),
+    // AREA: 2σ dispersion-ellipse area in m² (device feedback 2026-10-08).
+    // pick → null = no Δ row (quadratic noise — deliberately excluded); the
+    // "-" renders for < 3 kept shots or a degenerate/collinear cloud.
+    Col(Metric.AREA, "AREA", 88.dp,
+        { null },
+        { s -> areaByClub[s.key.id]?.let { String.format(Locale.US, "%.0f m²", it) } ?: "-" },
+        { "-" }, 0.0),
 )
 
 /** Drill-down shot columns (design notes §2.2.1): carry · total · ball · CHS · smash · spin · dir. */

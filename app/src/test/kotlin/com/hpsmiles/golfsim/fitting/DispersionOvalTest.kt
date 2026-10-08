@@ -41,6 +41,17 @@ class DispersionOvalTest {
     }
 
     @Test
+    fun `area - sigma squared scaling`() {
+        // Unit-ish circle (a = b = 1) at 2σ → π·4·1·1 = 4π ≈ 12.566.
+        val circle = DispersionOval.Oval(0.0, 0.0, 1.0, 1.0, 0.0)
+        assertEquals(4.0 * PI, DispersionOval.area(circle, 2.0), 1e-9)
+        // Ellipse a=2, b=1 at 2σ → π·4·2·1 = 8π; at 1σ → π·2·1 = 2π.
+        val ellipse = DispersionOval.Oval(0.0, 0.0, 2.0, 1.0, 0.0)
+        assertEquals(8.0 * PI, DispersionOval.area(ellipse, 2.0), 1e-9)
+        assertEquals(2.0 * PI, DispersionOval.area(ellipse, 1.0), 1e-9)
+    }
+
+    @Test
     fun `polygon - sigma scaling and vertex placement`() {
         val pts = DispersionOval.polygon(DispersionOval.Oval(0.0, 0.0, 1.0, 1.0, 0.0), sigmaScale = 2.0, segments = 4)
         // t = 0, π/2, π, 3π/2 on a radius-2 circle.

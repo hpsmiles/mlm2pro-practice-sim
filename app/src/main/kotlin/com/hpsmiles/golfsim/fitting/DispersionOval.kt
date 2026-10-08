@@ -50,6 +50,13 @@ object DispersionOval {
         return Oval(mx, my, sqrt(lambda1), sqrt(lambda2), angle)
     }
 
+    /**
+     * Area of the ellipse at [sigmaScale]·1σ: π·(σa)·(σb) m² (area scales
+     * quadratically with σ — the 2σ ring covers ~86 % of a bivariate normal).
+     */
+    fun area(oval: Oval, sigmaScale: Double): Double =
+        PI * sigmaScale * sigmaScale * oval.a * oval.b
+
     /** Ellipse outline points (x, y) at [sigmaScale]·1σ, CCW, [segments] vertices. */
     fun polygon(oval: Oval, sigmaScale: Double, segments: Int = 32): List<Pair<Double, Double>> {
         val a = oval.a * sigmaScale

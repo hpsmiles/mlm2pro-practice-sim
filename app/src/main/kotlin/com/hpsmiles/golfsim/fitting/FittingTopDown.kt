@@ -39,6 +39,10 @@ import com.hpsmiles.golfsim.range.ChipFont
 import com.hpsmiles.golfsim.range.RangeMat
 import com.hpsmiles.golfsim.range.RangeScene
 import com.hpsmiles.golfsim.range.RangeSigns
+import kotlin.math.abs
+import kotlin.math.cos
+import kotlin.math.sin
+import kotlin.math.sqrt
 
 /**
  * M7 top-down (design notes §2.3): kept shots as per-club coloured dots over
@@ -100,11 +104,48 @@ internal fun FittingTopDownPane(
                 val w = size.width
                 val h = size.height
                 drawRect(GolfColors.Base)
-                // World mapping identical to TopDownCanvas: origin bottom-centre,
-                // x lateral (side), y 0..GROUND_END_Y, full ground extent fitted.
-                val pxPerM = h / RangeScene.GROUND_END_Y.toFloat()
-                val originX = w / 2f
-                val originY = h - 8.sp.toPx()
+                // Content-fit mapping (device feedback 2026-10-08): fits the
+                // kept shots AND their 2σ ring extents plus a buffer — 0–150 m
+                // of empty range is useless on a driver fitting. Falls back to
+                // the full-range mapping when there are no kept shots. World
+                // mapping otherwise identical to TopDownCanvas: origin
+                // bottom-centre, x lateral (side), y rest-distance (total).
+                val ovals = order.map { key ->
+                    val kept = keptByClub[key].orEmpty()
+                    DispersionOval.compute(kept.map { it.sideM to it.totalM })
+                }
+                var minY = Double.POSITIVE_INFINITY
+                var maxY = Double.NEGATIVE_INFINITY
+                var maxAbsX = 0.0
+                var hasData = false
+                order.forEachIndexed { index, key ->
+                    val kept = keptByClub[key].orEmpty()
+                    if (kept.isNotEmpty()) hasData = true
+                    kept.forEach { s ->
+                        minY = minOf(minY, s.totalM)
+                        maxY = maxOf(maxY, s.totalM)
+                        maxAbsX = maxOf(maxAbsX, abs(s.sideM))
+                    }
+                    // 2σ ring outer extents: mean ± 2·projected semi-axes.
+                    val oval = ovals[index]
+                    if (oval != null) {
+                        val cosA = cos(oval.angleRad)
+                        val sinA = sin(oval.angleRad)
+                        val xHalf = 2.0 * sqrt(oval.a * oval.a * cosA * cosA + oval.b * oval.b * sinA * sinA)
+                        val yHalf = 2.0 * sqrt(oval.a * oval.a * sinA * sinA + oval.b * oval.b * cosA * cosA)
+                        minY = minOf(minY, oval.cy - yHalf)
+                        maxY = maxOf(maxY, oval.cy + yHalf)
+                        maxAbsX = maxOf(maxAbsX, abs(oval.cx) + xHalf)
+                    }
+                }
+                val fit = computeTopDownFit(
+                    width = w.toDouble(), height = h.toDouble(),
+                    minY = minY, maxY = maxY, maxAbsX = maxAbsX, hasData = hasData,
+                    bottomMarginPx = 8.sp.toPx().toDouble(),
+                )
+                val pxPerM = fit.pxPerM.toFloat()
+                val originX = fit.originX.toFloat()
+                val originY = fit.originY.toFloat()
 
                 // Standing distance boards (RangeSigns) — same fixed-size icons
                 // as TopDownCanvas, not world-scaled (readability at 300+ m).
@@ -196,12 +237,11 @@ internal fun FittingTopDownPane(
                 // Dispersion rings FIRST (rings under dots).
                 // Notes §2.3 (binding overrides): ONE 2σ ring @ 55 % alpha,
                 // 2 dp stroke, no fill — replaces the plan's nested 1σ+2σ pass.
-                order.forEachIndexed { index, key ->
+                order.forEachIndexed { index, _ ->
                     // compute returns null for a degenerate cloud — zero
                     // variance OR collinear (λ2 ≈ 0 with λ1 > 0, a half-line):
                     // the ring is skipped, dots below are still drawn.
-                    val kept = keptByClub[key].orEmpty()
-                    val oval = DispersionOval.compute(kept.map { it.sideM to it.totalM }) ?: return@forEachIndexed
+                    val oval = ovals[index] ?: return@forEachIndexed
                     val color = FittingColors.clubColor(index)
                     val pts = DispersionOval.polygon(oval, sigmaScale = 2.0)
                     val path = Path()
