@@ -98,9 +98,13 @@ Five post-M6 refinements (design: `docs/superpowers/specs/2026-10-07-bag-rollout
 
 **Exit:** full build + all module tests green; cross-lane review approved; pushed as `b3fb514`.
 
-## M7 — Club & Shaft Testing Engine
+## M7 — Club & Shaft Testing Engine (shipped 2026-10-08)
 
 Head-to-head A/B sessions (shaft vs shaft, head vs head), side-by-side metric overlays, standard deviations, dispersion ovals. UI design pass on design system.
+
+**Shipped 2026-10-08.** FIT tab: live COMPARE comparison card (ADD COMPARISON, per-club colours), RESULTS table (per-club metrics, noise-dimmed deltas, per-shot exclusion, AREA), TOP-DOWN with rotated minimum-enclosing-ellipse dispersion rings + auto-fit, read-only HISTORY, persisted Room v5 with kill/resume, PDF export via share sheet. Spec: `docs/superpowers/specs/2026-10-08-m7-club-fitting-design.md`.
+
+**Follow-up (roadmap 2026-10-08):** top-down view should show the same fairway width as the range view.
 
 **Exit:** Shaft A vs Shaft B comparison report.
 

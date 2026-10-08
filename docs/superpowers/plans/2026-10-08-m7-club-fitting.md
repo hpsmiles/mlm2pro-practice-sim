@@ -37,7 +37,7 @@ $env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"
 | 8. RESULTS table | ✅ done — 7f58008+1497fd3 (MPH ruling), spec ✅, quality ✅ approve (polish rides with Task 11: remember(shots) summaries, dead Col formatters comment, centered empty state, header single-Spacer) |
 | 9. RESULTS top-down | ✅ done — d041904 + 45fa44a (E/F promotion), spec ✅, quality ✅ approve (polish rides with Task 11: keptByClub single-sourcing, degenerate-cloud comment, trailing blank lines) |
 | 10. HISTORY | ✅ done — acf8867 (details flow) + 3ac3058 (HISTORY view), spec ✅, quality ✅ approve (4 optional minors deferred) |
-| 11. Build/tests/conventions/device | in progress |
+| 11. Build/tests/conventions/device | ✅ done — sweep 7b81b48/fe2cf6b/e0b0942/dd0e68b, full `gradlew build` green, device-verified 2026-10-08 (rings, AREA, PDF export; "Confirmed working") |
 
 Notes for implementers: repo convention is `src/main/kotlin` (plan paths say `java` — follow repo). `ShotResult` lives in `core.physics` with required `rolloutM`.
 
