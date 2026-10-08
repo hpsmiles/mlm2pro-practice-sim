@@ -30,8 +30,8 @@ $env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"
 | 1. Room v5 tables/DAOs/migration | ✅ done — 649b6fe, spec ✅, quality ✅ approve (minor follow-ups ride with Task 3: DAO ORDER BY guards, status-literal interpolation, ordering comment) |
 | 2. FittingStats (TDD) | ✅ done — 401a475, spec ✅, quality ✅ approve (5 minor backlog items, none blocking) |
 | 3. Repository fitting API (TDD) | ✅ done — 6a4d2e2 (Task-1 DAO follow-ups) + ab7f860, spec ✅, quality ✅ approve (4 minor: no session scoping on setFittingShotsExcluded — bag-consistent, KDoc candidate; untested empty-ids/stale-id branches; missing restart-cycle assertion — all ride with Task 11 test sweep) |
-| 4. DispersionOval (TDD) | in progress |
-| 5. FittingController + AppRoot wiring | pending |
+| 4. DispersionOval (TDD) | ✅ done — f903f08, spec ✅, quality ✅ approve (3 polish-only minors queued for Task 11) |
+| 5. FittingController + AppRoot wiring | in progress |
 | 6. UI design pass (designer) | pending |
 | 7. COMPARE view | pending |
 | 8. RESULTS table | pending |
