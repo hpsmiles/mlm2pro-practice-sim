@@ -34,8 +34,8 @@ $env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"
 | 5. FittingController + AppRoot wiring | ✅ done — c36b0e6, spec ✅, quality ✅ approve (ora-10; latent stale-id race found). Task 7 MUST first land hardening commit: bind sessionId from Room via `LaunchedEffect(fitActive?.id) { fittingController.sessionId = fitActive?.id ?: 0 }` + drop the `.also` write-back in routeShot; `sessionId` → mutableStateOf; add fitSession to green/turf surface LaunchedEffects (RANGE parity). Misread-pill decision: none on FIT in v1 (GAMES precedent — FIT misreads attribute to range session; no signature change) |
 | 6. UI design pass (designer) | ✅ done — design notes committed; **visual overrides for Tasks 8/9** (design notes are authority): ovals 1σ α0.55 / 2σ α0.25 (NOT Task 9's 0.45/0.9), baseline club marked by 1 dp Teal row border (NOT BASE chip), drill-down spans full card width OUTSIDE the horizontal scroll, COMPARE canvas VIEW chip omitted in v1, club colours by positional slot incl. NEW `Comparison.E 0xFF6FD86F` / `F 0xFFE85C7A` |
 | 7. COMPARE view | ✅ done — 900503b (hardening: sessionId from Room via LaunchedEffect, .also dropped, mutableStateOf, fitSession surface parity) + ad30e35 + be59e83 + 352d5b3 (review fixes: VIEW chip omitted, HISTORY · N TextMuted suffix) + 3ba9946 (polish: mph helper, remembered summaries, gated unit). spec ✅ 3 rounds, quality ✅ approve (follow-ups ride with Task 9: E/F + ActiveClubButton/speed-chip promotion, shared LastShotChips) |
-| 8. RESULTS table | in progress |
-| 9. RESULTS top-down | pending |
+| 8. RESULTS table | ✅ done — 7f58008+1497fd3 (MPH ruling), spec ✅, quality ✅ approve (polish rides with Task 11: remember(shots) summaries, dead Col formatters comment, centered empty state, header single-Spacer) |
+| 9. RESULTS top-down | in progress |
 | 10. HISTORY | pending |
 | 11. Build/tests/conventions/device | pending |
 
