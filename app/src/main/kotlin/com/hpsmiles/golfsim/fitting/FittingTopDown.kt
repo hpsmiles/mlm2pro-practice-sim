@@ -251,7 +251,12 @@ internal fun FittingTopDownPane(
                     val aPx = (ell.semiAxisM * pxPerM).toFloat()
                     val bPx = (ell.semiCrossM * pxPerM).toFloat()
                     rotate(
-                        degrees = Math.toDegrees(ell.angleRad).toFloat(),
+                        // Screen y grows DOWN but world total grows UP (the
+                        // canvas y-flips), so a +θ rotation computed in math
+                        // space renders as −θ here — negate so the ring tilts
+                        // the same way as the dots it encloses (device
+                        // feedback 2026-10-08).
+                        degrees = -Math.toDegrees(ell.angleRad).toFloat(),
                         pivot = Offset(centreX, centreY),
                     ) {
                         drawOval(

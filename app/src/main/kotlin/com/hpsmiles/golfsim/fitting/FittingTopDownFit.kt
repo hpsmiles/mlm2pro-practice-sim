@@ -53,7 +53,7 @@ data class DispersionEllipse(
     val semiAxisM: Double,
     /** Semi-axis perpendicular to [angleRad], metres. */
     val semiCrossM: Double,
-    /** Rotation of the a-axis in radians, side↔total frame (x = side, y = total). */
+    /** Rotation of the a-axis in radians, side↔total frame (x = side, y = total) — world/math space; the top-down draw site negates it for the screen's flipped y-axis. */
     val angleRad: Double,
 ) {
     /** Area of the drawn ring = the AREA column's metric (post-5%-buffer). */
