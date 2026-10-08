@@ -513,17 +513,19 @@ private enum class Metric { N, CHS, BALL, SMASH, CARRY, TOTAL, LAUNCH, DIR, SPIN
 
 /**
  * Column set (design notes §2.2): n 40 dp, SMASH 64 dp, all others 88 dp.
- * CHS/ball speed are rendered in m/s (notes' cell formats) — the table's one
- * deliberate unit difference from COMPARE's MPH card. Values/headers:
- * MetricLabel TextSecondary (TextPrimary + 1 dp Teal top border when the
- * distance mode emphasises the column).
+ * CHS/ball speed DISPLAY in MPH (× FittingFormats.MPH_PER_MS) per the
+ * 2026-10-08 user ruling (notes' "(m/s)" formats superseded for display);
+ * the noise-band delta comparison stays in the m/s domain — [Col.pick]
+ * returns m/s and [FittingStats.NOISE_CHS_MPS] / [NOISE_BALL_SPEED_MPS]
+ * are m/s. Values/headers: MetricLabel TextSecondary (TextPrimary + 1 dp
+ * Teal top border when the distance mode emphasises the column).
  */
 private val COLS = listOf(
     Col(Metric.N, "n", 40.dp, { null }, { s -> "${s.kept}" }, { "-" }, 0.0),
-    Col(Metric.CHS, "CHS", 88.dp, { it.chs }, { s -> s.chs?.let { String.format(Locale.US, "%.1f", it) } ?: "-" },
-        { d -> String.format(Locale.US, "%+.1f", d) }, FittingStats.NOISE_CHS_MPS),
-    Col(Metric.BALL, "BALL\nSPEED", 88.dp, { it.ballSpeed }, { s -> s.ballSpeed?.let { String.format(Locale.US, "%.1f", it) } ?: "-" },
-        { d -> String.format(Locale.US, "%+.1f", d) }, FittingStats.NOISE_BALL_SPEED_MPS),
+    Col(Metric.CHS, "CHS", 88.dp, { it.chs }, { s -> s.chs?.let { FittingFormats.mph(it) } ?: "-" },
+        { d -> String.format(Locale.US, "%+.1f", d * FittingFormats.MPH_PER_MS) }, FittingStats.NOISE_CHS_MPS),
+    Col(Metric.BALL, "BALL\nSPEED", 88.dp, { it.ballSpeed }, { s -> s.ballSpeed?.let { FittingFormats.mph(it) } ?: "-" },
+        { d -> String.format(Locale.US, "%+.1f", d * FittingFormats.MPH_PER_MS) }, FittingStats.NOISE_BALL_SPEED_MPS),
     Col(Metric.SMASH, "SMASH", 64.dp, { it.smash }, { s -> s.smash?.let { String.format(Locale.US, "%.2f", it) } ?: "-" },
         { d -> String.format(Locale.US, "%+.2f", d) }, FittingStats.NOISE_SMASH),
     Col(Metric.CARRY, "CARRY", 88.dp, { it.carry }, { s -> FittingFormats.avgSigma(s.carry, s.carrySigma) },
@@ -549,8 +551,8 @@ private data class ShotCol(val label: String, val width: Dp, val fmt: (FittingSh
 private val SHOT_COLS = listOf(
     ShotCol("CARRY", 64.dp) { String.format(Locale.US, "%.0f m", it.carryM) },
     ShotCol("TOTAL", 64.dp) { String.format(Locale.US, "%.0f m", it.totalM) },
-    ShotCol("BALL", 64.dp) { String.format(Locale.US, "%.1f m/s", it.ballSpeedMps) },
-    ShotCol("CHS", 64.dp) { String.format(Locale.US, "%.1f m/s", it.clubHeadSpeedMps) },
+    ShotCol("BALL", 64.dp) { String.format(Locale.US, "%.1f MPH", it.ballSpeedMps * FittingFormats.MPH_PER_MS) },
+    ShotCol("CHS", 64.dp) { String.format(Locale.US, "%.1f MPH", it.clubHeadSpeedMps * FittingFormats.MPH_PER_MS) },
     ShotCol("SMASH", 56.dp) {
         if (it.clubHeadSpeedMps > 0.0) String.format(Locale.US, "%.2f", it.ballSpeedMps / it.clubHeadSpeedMps) else "-"
     },
