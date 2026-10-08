@@ -36,5 +36,9 @@ object GolfColors {
         val B = Color(0xFF5B9DF9)
         val C = Color(0xFFD66FD8)
         val D = Color(0xFFF0D64A)
+
+        /** M7 fitting palette extensions (first-appearance slots 5–6). */
+        val E = Color(0xFF6FD86F)
+        val F = Color(0xFFE85C7A)
     }
 }
