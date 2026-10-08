@@ -50,6 +50,8 @@ fun ClubPickerOverlay(
     onDismiss: () -> Unit,
     onSelectClub: (String?) -> Unit,
     onAddClub: suspend (String, ClubType, Boolean) -> Boolean,
+    addLabel: String = "＋ ADD",
+    initialTest: Boolean = false,
 ) {
     var adding by remember { mutableStateOf(false) }
     // The list column caps at 324dp and new clubs append at the end, so a
@@ -138,7 +140,7 @@ fun ClubPickerOverlay(
                 }
                 // The row remains a tile so the reveal pattern is unchanged.
                 ClubTile(
-                    label = if (adding) "×" else "＋ ADD",
+                    label = if (adding) "×" else addLabel,
                     active = false,
                     onClick = { adding = !adding },
                 )
@@ -147,6 +149,7 @@ fun ClubPickerOverlay(
                         onSubmit = onAddClub,
                         onAdded = { adding = false },
                         onCancel = { adding = false },
+                        initialTest = initialTest,
                     )
                 }
             }

@@ -49,10 +49,13 @@ fun AddClubForm(
     onSubmit: suspend (name: String, type: ClubType, isTest: Boolean) -> Boolean,
     onAdded: () -> Unit,
     onCancel: (() -> Unit)? = null,
+    initialTest: Boolean = false,
 ) {
     var name by remember { mutableStateOf("") }
     var type by remember { mutableStateOf(ClubType.IRON) }
-    var isTest by remember { mutableStateOf(false) }
+    // M7: the FIT picker pre-checks TEST (spec §3); the range default (false)
+    // keeps existing add behaviour byte-identical.
+    var isTest by remember { mutableStateOf(initialTest) }
     var rejected by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 

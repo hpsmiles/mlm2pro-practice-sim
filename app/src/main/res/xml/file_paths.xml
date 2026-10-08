@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- M7 PDF export (2026-10-08): expose the exports cache dir to the share
+     sheet via FileProvider. No storage permission — the picker holds the
+     read grant for the single file (ACTION_SEND + EXTRA_STREAM). -->
+<paths xmlns:android="http://schemas.android.com/apk/res/android">
+    <cache-path name="exports" path="exports/" />
+</paths>

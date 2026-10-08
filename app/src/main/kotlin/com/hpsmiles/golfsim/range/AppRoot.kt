@@ -64,6 +64,11 @@ import com.hpsmiles.golfsim.core.designsystem.NavRailButton
 import com.hpsmiles.golfsim.core.designsystem.StatusStrip
 import com.hpsmiles.golfsim.core.physics.GreenCondition
 import com.hpsmiles.golfsim.core.physics.TurfCondition
+import com.hpsmiles.golfsim.fitting.FittingController
+import com.hpsmiles.golfsim.fitting.FittingPdfData
+import com.hpsmiles.golfsim.fitting.FittingPdfWriter
+import com.hpsmiles.golfsim.fitting.FittingScreen
+import com.hpsmiles.golfsim.fitting.FittingView
 import com.hpsmiles.golfsim.games.BreakThePaneGame
 import com.hpsmiles.golfsim.games.GameMode
 import com.hpsmiles.golfsim.games.GameRecord
@@ -77,6 +82,7 @@ import com.hpsmiles.golfsim.settings.GreenConditionStore
 import com.hpsmiles.golfsim.settings.SettingsScreen
 import com.hpsmiles.golfsim.settings.SoundPrefStore
 import com.hpsmiles.golfsim.settings.TurfConditionStore
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
@@ -84,9 +90,10 @@ import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 
-private enum class RangeTab { RANGE, GAMES, BAG, SETTINGS, HISTORY }
+private enum class RangeTab { RANGE, GAMES, BAG, FIT, SETTINGS, HISTORY }
 
 /** The bench device session key convention (same bytes the auth write carries raw). */
 private fun benchSessionKey(): ByteArray = ByteArray(32) { it.toByte() }
@@ -122,6 +129,15 @@ fun AppRoot() {
     // M6: the latest accepted bag shot, rendered on the bag collecting view's
     // live range tracer. Display-only — bag shots never enter session.shots.
     var bagDisplayShot by remember { mutableStateOf<DisplayShot?>(null) }
+
+    // M7: club fitting. Same architecture as bag mapping — Room truth, plain
+    // UI state, write-through per shot, never enters range sessions.
+    // fitSession is a separate RangeSession instance used ONLY for physics +
+    // live display; its shots never reach persist().
+    val fittingController = remember { FittingController() }
+    val fitSession = remember { RangeSession() }
+    // M7 PDF export (2026-10-08): re-tap guard while a render is in flight.
+    var exportingPdf by remember { mutableStateOf(false) }
 
     // M5: persistence facade — one per composition. Bag seeding, DB probe and
     // open-session restore run once at startup; appends ride the existing
@@ -167,17 +183,21 @@ fun AppRoot() {
 
     // Keep the simulated surfaces in sync with Settings > GREEN / TURF for the
     // range oval and both games (their default simulators read these fields).
+    // M7 (task 5 review): fitSession gets the same sync so FIT physics match
+    // the user's surfaces exactly like RANGE.
     LaunchedEffect(greenCondition) {
         val surface = greenCondition.surface()
         session.greenSurface = surface
         targetPractice.greenSurface = surface
         breakPane.greenSurface = surface
+        fitSession.greenSurface = surface
     }
     LaunchedEffect(turfCondition) {
         val surface = turfCondition.surface()
         session.turfSurface = surface
         targetPractice.fairwaySurface = surface
         breakPane.fairwaySurface = surface
+        fitSession.turfSurface = surface
     }
 
     // Post-merge fix (final-review follow-up): the Room-backed getter-flow
@@ -262,6 +282,26 @@ fun AppRoot() {
      * games emit exactly one summary row via takeResult().
      */
     fun routeShot(ballData: com.hpsmiles.golfsim.core.ble.BallData, source: com.hpsmiles.golfsim.core.data.record.ShotSource) {
+        // M7: fitting captures whenever the FIT tab is up (any sub-view) —
+        // one comparison per session; shots never enter range sessions and
+        // are write-through persisted to fitting_shots with a club snapshot.
+        if (tab == RangeTab.FIT) {
+            val club = clubRecords.find { it.name == activeClubName }
+            if (club == null) return  // no active club → nothing to compare
+            val shot = fitSession.add(ballData) ?: return
+            scope.launch {
+                // M7 (task 5 review): sessionId is bound from Room by a
+                // LaunchedEffect — never written back from here, so a late
+                // append can never re-bind a COMPLETED session after END
+                // COMPARISON.
+                val id = fittingController.sessionId.takeIf { it > 0 }
+                    ?: sessionRepository.startFittingSession(System.currentTimeMillis())
+                if (id != null) {
+                    sessionRepository.appendFittingShot(id, club, ballData, shot.shotResult, shot.timestampMs)
+                }
+            }
+            return
+        }
         // M6: mapping collection captures ONLY while the guided COLLECTING
         // view is up on the BAG tab (spec §4). Leaving the tab pauses
         // capture; progress persists and the range keeps its own shots.
@@ -560,6 +600,40 @@ fun AppRoot() {
         bagShotCounts = sessionRepository.bagMappingShotCounts()
     }
 
+    // M7: fitting flows — Room truth, gated like the bag captures. Kill/resume
+    // is FREE: these re-derive from the current db, so they survive process
+    // death (and the corrupt-file recovery swap).
+    val fitActive by remember(sessionRepository, repoReady) {
+        gatedFlow(repoReady, { sessionRepository.fittingActive }, flowOf(null))
+    }.collectAsState(initial = null)
+    val fitHistory by remember(sessionRepository, repoReady) {
+        gatedFlow(repoReady, { sessionRepository.fittingHistory }, flowOf(emptyList()))
+    }.collectAsState(initial = emptyList())
+    val fitHistoryDetails by remember(sessionRepository, repoReady) {
+        gatedFlow(repoReady, { sessionRepository.fittingHistoryDetails }, flowOf(emptyMap()))
+    }.collectAsState(initial = emptyMap())
+    val fitShots by remember(sessionRepository, repoReady, fitActive?.id) {
+        gatedFlow(
+            repoReady,
+            { fitActive?.let { sessionRepository.observeFittingShots(it.id) } ?: flowOf(emptyList()) },
+            flowOf(emptyList()),
+        )
+    }.collectAsState(initial = emptyList())
+    val fitViewedShots by remember(sessionRepository, repoReady, fittingController.viewedSessionId) {
+        gatedFlow(
+            repoReady,
+            { fittingController.viewedSessionId?.let { sessionRepository.observeFittingShots(it) } ?: flowOf(emptyList()) },
+            flowOf(emptyList()),
+        )
+    }.collectAsState(initial = emptyList())
+
+    // M7 (task 5 review): sessionId is derived from Room truth, never cached
+    // across completion — prevents a late write-back from re-binding a
+    // COMPLETED session after END COMPARISON.
+    LaunchedEffect(fitActive?.id) {
+        fittingController.sessionId = fitActive?.id ?: 0
+    }
+
     // M6: auto-bind the collector to an open session (process death, tab
     // re-entry). Resume index = first club below the 5-shot target; when
     // every club has >= 5 kept, re-run the gate on the last club. The shot
@@ -599,6 +673,45 @@ fun AppRoot() {
         scope.launch {
             sessionRepository.completeBagMappingSession(active.id, System.currentTimeMillis())
             bagCollector.reset()
+        }
+    }
+
+    /** M7: END COMPARISON → the session completes; compare view resets. */
+    fun completeFittingTest() {
+        val active = fitActive ?: return
+        scope.launch {
+            sessionRepository.completeFittingSession(active.id, System.currentTimeMillis())
+            fittingController.sessionId = 0
+            fittingController.baselineClubId = null
+            fittingController.view = FittingView.COMPARE
+            fitSession.clearForEndedSession()
+        }
+    }
+
+    /**
+     * M7 PDF export (2026-10-08): builds + renders the currently viewed
+     * session (live or read-only history) off the main thread, then fires the
+     * share sheet on the main dispatcher. Re-taps are ignored while running;
+     * failures are logged and swallowed (no UI surface — spec).
+     */
+    fun exportFittingPdf() {
+        if (exportingPdf) return
+        val shots = if (fittingController.viewedSessionId != null) fitViewedShots else fitShots
+        if (shots.isEmpty()) return
+        exportingPdf = true
+        scope.launch {
+            try {
+                val file = withContext(Dispatchers.Default) {
+                    FittingPdfWriter.writeToCache(context, FittingPdfData.build(shots, System.currentTimeMillis()))
+                }
+                if (file != null) {
+                    FittingPdfWriter.share(context, file)
+                }
+            } catch (t: Throwable) {
+                Log.w("FittingPdf", "export failed", t)
+            } finally {
+                exportingPdf = false
+            }
         }
     }
 
@@ -647,11 +760,15 @@ fun AppRoot() {
                 .background(GolfColors.Base)
                 .windowInsetsPadding(WindowInsets.safeDrawing),
         ) {
+            // Collected above the tab switch so every tab (incl. FIT) can
+            // surface the DB-write-failure override in its status info.
+            val persistError by sessionRepository.persistError.collectAsState()
             Row(modifier = Modifier.weight(1f)) {
                 NavRail {
                     NavRailButton("RANGE", tab == RangeTab.RANGE, onClick = { requestTab(RangeTab.RANGE) })
                     NavRailButton("GAMES", tab == RangeTab.GAMES, onClick = { tab = RangeTab.GAMES })
                     NavRailButton("BAG", tab == RangeTab.BAG, onClick = { requestTab(RangeTab.BAG) })
+                    NavRailButton("FIT", tab == RangeTab.FIT, onClick = { requestTab(RangeTab.FIT) })
                     NavRailButton("SETTINGS", tab == RangeTab.SETTINGS, onClick = { requestTab(RangeTab.SETTINGS) })
                     NavRailButton("HISTORY", tab == RangeTab.HISTORY, onClick = { requestTab(RangeTab.HISTORY) })
 
@@ -771,6 +888,43 @@ fun AppRoot() {
                             latestShot = bagDisplayShot,
                         )
                     }
+                    RangeTab.FIT -> {
+                        FittingScreen(
+                            modifier = Modifier.weight(1f),
+                            controller = fittingController,
+                            clubs = clubRecords,
+                            activeClubName = activeClubName,
+                            activeSession = fitActive,
+                            history = fitHistory,
+                            historyDetails = fitHistoryDetails,
+                            liveShots = fitSession.shots,
+                            sessionShots = fitShots,
+                            viewedShots = fitViewedShots,
+                            armed = demo || connectionState is ConnectionState.Armed,
+                            info = if (persistError) {
+                                "DB WRITE FAILING"
+                            } else {
+                                describe(
+                                    connectionState,
+                                    demo = demo,
+                                    scanning = scanning,
+                                    retryLabel = autoRetryLabel,
+                                    failureReason = lastFailure,
+                                )
+                            },
+                            onSelectClub = ::selectClub,
+                            onAddClub = { name, type, isTest ->
+                                val ok = sessionRepository.addClub(name, type, isTest)
+                                if (ok) selectClub(name.trim())   // spec §3: auto-active on add
+                                ok
+                            },
+                            onComplete = ::completeFittingTest,
+                            onSetExcluded = { ids, excluded ->
+                                scope.launch { sessionRepository.setFittingShotsExcluded(ids, excluded) }
+                            },
+                            onExportPdf = ::exportFittingPdf,
+                        )
+                    }
                     RangeTab.SETTINGS -> {
                         SettingsScreen(
                             captureLog = captureLog,
@@ -832,7 +986,6 @@ fun AppRoot() {
                     }
                 }
             }
-            val persistError by sessionRepository.persistError.collectAsState()
             StatusStrip(
                 armed = demo || connectionState is ConnectionState.Armed,
                 info = if (persistError) {

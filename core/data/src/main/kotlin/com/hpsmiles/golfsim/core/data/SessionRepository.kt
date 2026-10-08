@@ -10,6 +10,9 @@ import com.hpsmiles.golfsim.core.data.entity.BagMappingSessionEntity
 import com.hpsmiles.golfsim.core.data.entity.BagMappingShotEntity
 import com.hpsmiles.golfsim.core.data.entity.BagMappingStatus
 import com.hpsmiles.golfsim.core.data.entity.ClubEntity
+import com.hpsmiles.golfsim.core.data.entity.FittingSessionEntity
+import com.hpsmiles.golfsim.core.data.entity.FittingShotEntity
+import com.hpsmiles.golfsim.core.data.entity.FittingStatus
 import com.hpsmiles.golfsim.core.data.entity.GameResultEntity
 import com.hpsmiles.golfsim.core.data.entity.SessionEntity
 import com.hpsmiles.golfsim.core.data.record.ClubRecord
@@ -43,6 +46,8 @@ class SessionRepository private constructor(private val context: Context) {
     private val gameResultDao get() = db.gameResultDao()
     private val bagMappingSessionDao get() = db.bagMappingSessionDao()
     private val bagMappingShotDao get() = db.bagMappingShotDao()
+    private val fittingSessionDao get() = db.fittingSessionDao()
+    private val fittingShotDao get() = db.fittingShotDao()
 
     /** True once a write/open failure has been seen; cleared on next success. */
     val persistError = MutableStateFlow(false)
@@ -392,6 +397,7 @@ class SessionRepository private constructor(private val context: Context) {
                 Mlm2proDatabase.MIGRATION_1_2,
                 Mlm2proDatabase.MIGRATION_2_3,
                 Mlm2proDatabase.MIGRATION_3_4,
+                Mlm2proDatabase.MIGRATION_4_5,
             )
             .build()
 
@@ -550,6 +556,139 @@ class SessionRepository private constructor(private val context: Context) {
         } catch (t: Throwable) {
             if (t is CancellationException) throw t
             Log.e(TAG, "completeBagMappingSession failed", t)
+            persistError.value = true
+        }
+    }
+
+    // --- Club fitting (M7, spec §2) --------------------------------------
+
+    /**
+     * Room-v5 fitting surface. Write-through shot storage with club
+     * snapshots, manual exclusion toggles, and an at-most-one-IN_PROGRESS
+     * session lifecycle (bag-mapping pattern). Aggregates/stats live in
+     * FittingStats (pure), not here.
+     */
+
+    /** Open (in-progress) fitting session, or null. Getter-flow — survives corrupt-file recovery. */
+    val fittingActive: Flow<FittingSessionEntity?>
+        get() = fittingSessionDao.observeInProgress()
+
+    /** All completed fitting sessions, newest first. Getter-flow. */
+    val fittingHistory: Flow<List<FittingSessionEntity>>
+        get() = fittingSessionDao.observeHistory()
+
+    /**
+     * M7 task 10: sessionId -> ordered (clubName, shotCount) rows for HISTORY
+     * list rows. Order = each session's club first-appearance order (the DAO
+     * groups by MIN(id)), so colour-dot index 0 is that session's first club.
+     * Getter-flow.
+     */
+    val fittingHistoryDetails: Flow<Map<Long, List<Pair<String, Int>>>>
+        get() = fittingShotDao.observeClubCounts().map { rows ->
+            rows.groupBy({ it.sessionId }, { it.clubName to it.shotCount })
+        }
+
+    /** Every stored shot of one fitting session, in insertion order. */
+    fun observeFittingShots(sessionId: Long): Flow<List<FittingShotEntity>> =
+        fittingShotDao.observeBySession(sessionId)
+
+    /**
+     * Creates the IN_PROGRESS fitting session (M7 spec §2). At most one
+     * IN_PROGRESS session exists (repository-enforced): when one is open its
+     * id is returned untouched — START is idempotent, never destructive
+     * (bag-mapping pattern). Returns null only on a persistence failure
+     * (persistError flags; never throws — appendShot contract).
+     */
+    suspend fun startFittingSession(startedAtMs: Long): Long? =
+        try {
+            db.withTransaction {
+                val existing = fittingSessionDao.findInProgress()
+                existing?.id
+                    ?: fittingSessionDao.insert(
+                        FittingSessionEntity(
+                            startedAtMs = startedAtMs,
+                            completedAtMs = null,
+                            status = FittingStatus.IN_PROGRESS,
+                        ),
+                    )
+            }.also { persistError.value = false }
+        } catch (t: Throwable) {
+            if (t is CancellationException) throw t
+            Log.e(TAG, "startFittingSession failed", t)
+            persistError.value = true
+            null
+        }
+
+    /**
+     * Write-through append for one fitting shot (M7 spec §2). Club fields
+     * are snapshotted from [club] (id/name/type/isTemp) so the end-of-
+     * session temp-club purge never rewrites fitting history; the physics
+     * scalars come from [result] (ShotResult), written once at capture.
+     * Returns the new row id, or null on failure (persistError flags; never
+     * throws).
+     */
+    suspend fun appendFittingShot(
+        sessionId: Long,
+        club: ClubRecord,
+        ballData: BallData,
+        result: ShotResult,
+        timestampMs: Long,
+    ): Long? = try {
+        fittingShotDao.insert(
+            FittingShotEntity(
+                sessionId = sessionId,
+                clubId = club.id,
+                clubName = club.name,
+                clubType = club.type.name,
+                clubWasTemp = club.isTemp,
+                timestampMs = timestampMs,
+                clubHeadSpeedMps = ballData.clubHeadSpeed,
+                ballSpeedMps = ballData.ballSpeed,
+                launchAngleDeg = ballData.launchAngle,
+                launchDirDeg = ballData.launchDirection,
+                spinAxisDeg = ballData.spinAxis,
+                totalSpinRpm = ballData.totalSpin,
+                carryM = result.carryM,
+                totalM = result.totalM,
+                sideM = result.sideM,
+                apexM = result.apexM,
+                flightTimeSec = result.flightTimeSec,
+            ),
+        ).also { persistError.value = false }
+    } catch (t: Throwable) {
+        if (t is CancellationException) throw t
+        Log.e(TAG, "appendFittingShot failed", t)
+        persistError.value = true
+        null
+    }
+
+    /**
+     * Batch-flips the manual exclusion flag for a set of fitting shots.
+     * Fitting has no auto-filter — exclusion is manual or one-tap via the
+     * UI (M7 spec §2). Never throws — bag-mapping contract; flows re-emit.
+     * [ids] are global row ids by design under the single-writer discipline
+     * (the fitting UI only ever passes ids from the session being viewed).
+     */
+    suspend fun setFittingShotsExcluded(ids: List<Long>, excluded: Boolean) {
+        if (ids.isEmpty()) return
+        try {
+            fittingShotDao.setExcluded(ids, excluded)
+            persistError.value = false
+        } catch (t: Throwable) {
+            if (t is CancellationException) throw t
+            Log.e(TAG, "setFittingShotsExcluded failed", t)
+            persistError.value = true
+        }
+    }
+
+    /** Marks the session COMPLETED. Never throws — bag-mapping contract. */
+    suspend fun completeFittingSession(id: Long, completedAtMs: Long) {
+        try {
+            fittingSessionDao.complete(id, completedAtMs)
+            persistError.value = false
+        } catch (t: Throwable) {
+            if (t is CancellationException) throw t
+            Log.e(TAG, "completeFittingSession failed", t)
             persistError.value = true
         }
     }

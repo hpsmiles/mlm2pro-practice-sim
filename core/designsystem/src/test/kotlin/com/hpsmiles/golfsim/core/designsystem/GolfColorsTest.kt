@@ -38,9 +38,9 @@ class GolfColorsTest {
 
     @Test fun comparisonHuesAreWideSpread() {
         assertEquals(Color(0xFF3FA7A0), GolfColors.Comparison.A)
-        assertEquals(Color(0xFF5B9DF9), GolfColors.Comparison.B)
-        assertEquals(Color(0xFFD66FD8), GolfColors.Comparison.C)
-        assertEquals(Color(0xFFF0D64A), GolfColors.Comparison.D)
+        assertEquals(Color(0xFFE85C7A), GolfColors.Comparison.B)
+        assertEquals(Color(0xFFF0D64A), GolfColors.Comparison.C)
+        assertEquals(Color(0xFF6E7BF2), GolfColors.Comparison.D)
     }
 
     @Test fun semanticColorsMatchSpec() {

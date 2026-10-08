@@ -23,6 +23,24 @@ $env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"
 
 **Deviation from spec §1 (agreed during planning):** no `onCollectingChange` seam — `routeShot` gates directly on `tab == RangeTab.FIT`, so capture stays live across COMPARE/RESULTS (one comparison per session) and stops when the tab changes. FIT has no guided collector state, so the BAG seam is redundant.
 
+## Execution status
+
+| Task | Status |
+|---|---|
+| 1. Room v5 tables/DAOs/migration | ✅ done — 649b6fe, spec ✅, quality ✅ approve (minor follow-ups ride with Task 3: DAO ORDER BY guards, status-literal interpolation, ordering comment) |
+| 2. FittingStats (TDD) | ✅ done — 401a475, spec ✅, quality ✅ approve (5 minor backlog items, none blocking) |
+| 3. Repository fitting API (TDD) | ✅ done — 6a4d2e2 (Task-1 DAO follow-ups) + ab7f860, spec ✅, quality ✅ approve (4 minor: no session scoping on setFittingShotsExcluded — bag-consistent, KDoc candidate; untested empty-ids/stale-id branches; missing restart-cycle assertion — all ride with Task 11 test sweep) |
+| 4. DispersionOval (TDD) | ✅ done — f903f08, spec ✅, quality ✅ approve (3 polish-only minors queued for Task 11) |
+| 5. FittingController + AppRoot wiring | ✅ done — c36b0e6, spec ✅, quality ✅ approve (ora-10; latent stale-id race found). Task 7 MUST first land hardening commit: bind sessionId from Room via `LaunchedEffect(fitActive?.id) { fittingController.sessionId = fitActive?.id ?: 0 }` + drop the `.also` write-back in routeShot; `sessionId` → mutableStateOf; add fitSession to green/turf surface LaunchedEffects (RANGE parity). Misread-pill decision: none on FIT in v1 (GAMES precedent — FIT misreads attribute to range session; no signature change) |
+| 6. UI design pass (designer) | ✅ done — design notes committed; **visual overrides for Tasks 8/9** (design notes are authority): ovals 1σ α0.55 / 2σ α0.25 (NOT Task 9's 0.45/0.9), baseline club marked by 1 dp Teal row border (NOT BASE chip), drill-down spans full card width OUTSIDE the horizontal scroll, COMPARE canvas VIEW chip omitted in v1, club colours by positional slot incl. NEW `Comparison.E 0xFF6FD86F` / `F 0xFFE85C7A` |
+| 7. COMPARE view | ✅ done — 900503b (hardening: sessionId from Room via LaunchedEffect, .also dropped, mutableStateOf, fitSession surface parity) + ad30e35 + be59e83 + 352d5b3 (review fixes: VIEW chip omitted, HISTORY · N TextMuted suffix) + 3ba9946 (polish: mph helper, remembered summaries, gated unit). spec ✅ 3 rounds, quality ✅ approve (follow-ups ride with Task 9: E/F + ActiveClubButton/speed-chip promotion, shared LastShotChips) |
+| 8. RESULTS table | ✅ done — 7f58008+1497fd3 (MPH ruling), spec ✅, quality ✅ approve (polish rides with Task 11: remember(shots) summaries, dead Col formatters comment, centered empty state, header single-Spacer) |
+| 9. RESULTS top-down | ✅ done — d041904 + 45fa44a (E/F promotion), spec ✅, quality ✅ approve (polish rides with Task 11: keptByClub single-sourcing, degenerate-cloud comment, trailing blank lines) |
+| 10. HISTORY | ✅ done — acf8867 (details flow) + 3ac3058 (HISTORY view), spec ✅, quality ✅ approve (4 optional minors deferred) |
+| 11. Build/tests/conventions/device | ✅ done — sweep 7b81b48/fe2cf6b/e0b0942/dd0e68b, full `gradlew build` green, device-verified 2026-10-08 (rings, AREA, PDF export; "Confirmed working") |
+
+Notes for implementers: repo convention is `src/main/kotlin` (plan paths say `java` — follow repo). `ShotResult` lives in `core.physics` with required `rolloutM`.
+
 ---
 
 ## File Structure
