@@ -7,7 +7,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -41,7 +40,6 @@ import com.hpsmiles.golfsim.core.designsystem.GolfColors
 import com.hpsmiles.golfsim.core.designsystem.GolfSpacing
 import com.hpsmiles.golfsim.core.designsystem.GolfTheme
 import com.hpsmiles.golfsim.core.designsystem.GolfTypography
-import com.hpsmiles.golfsim.core.designsystem.MetricChip
 import com.hpsmiles.golfsim.core.designsystem.MetricRow
 import com.hpsmiles.golfsim.core.designsystem.SectionCard
 import java.util.Locale
@@ -65,9 +63,6 @@ internal fun OverlayChip(text: String, active: Boolean, onClick: () -> Unit) {
 }
 
 internal val ChipFont = GolfTypography.Status.copy(fontSize = 15.sp)
-
-/** Metres/second to mph for display. */
-private const val MPH_PER_MS = 2.23694
 
 internal enum class SpeedMult(val label: String, val divisor: Float) {
     X1("1x", 1f), X15("1.5x", 1.5f), X2("2x", 2f), X4("4x", 4f);
@@ -227,37 +222,7 @@ fun RangeScreen(
                 if (shot == null) {
                     Text("Fire a shot", style = GolfTypography.BodySmall, color = GolfColors.TextMuted)
                 } else {
-                    val r = shot.shotResult
-                    MetricChip("carry", String.format(Locale.US, "%.0f", r.carryM), "M")
-                    Spacer(Modifier.size(GolfSpacing.Xs))
-                    MetricChip("total", String.format(Locale.US, "%.0f", r.totalM), "M")
-                    Spacer(Modifier.size(GolfSpacing.Xs))
-                    MetricChip(
-                        "ball", String.format(Locale.US, "%.1f", shot.ballData.ballSpeed * MPH_PER_MS), "MPH",
-                        accent = GolfColors.Amber,
-                    )
-                    Spacer(Modifier.size(GolfSpacing.Xs))
-                    // Club head speed is the only club metric the MLM2PRO transmits (MEASUREMENT 0-1);
-                    // smash factor is derived client-side as ball speed / club speed (both m/s).
-                    MetricChip("club", String.format(Locale.US, "%.1f", shot.ballData.clubHeadSpeed * MPH_PER_MS), "MPH")
-                    Spacer(Modifier.size(GolfSpacing.Xs))
-                    MetricChip(
-                        "smash",
-                        if (shot.ballData.clubHeadSpeed > 0.0) {
-                            String.format(Locale.US, "%.2f", shot.ballData.ballSpeed / shot.ballData.clubHeadSpeed)
-                        } else "-",
-                        "",
-                    )
-                    Spacer(Modifier.size(GolfSpacing.Xs))
-                    // totalSpin is an Int (M1 BallData) — %d, not %.0f (IllegalFormatConversionException).
-                    MetricChip("spin", String.format(Locale.US, "%d", shot.ballData.totalSpin), "RPM")
-                    Spacer(Modifier.size(GolfSpacing.Xs))
-                    MetricChip("launch", String.format(Locale.US, "%.1f", shot.ballData.launchAngle), "DEG")
-                    Spacer(Modifier.size(GolfSpacing.Xs))
-                    // HLA sign verified on-device M4c: − left / + right of target.
-                    MetricChip("dir", String.format(Locale.US, "%+.1f", shot.ballData.launchDirection), "DEG")
-                    Spacer(Modifier.size(GolfSpacing.Xs))
-                    MetricChip("axis", String.format(Locale.US, "%.1f", shot.ballData.spinAxis), "DEG")
+                    LastShotChips(shot)
                 }
             }
             SectionCard("SESSION") {

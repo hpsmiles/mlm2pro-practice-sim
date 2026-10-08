@@ -7,7 +7,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -44,14 +43,13 @@ import com.hpsmiles.golfsim.core.data.record.ClubType
 import com.hpsmiles.golfsim.core.designsystem.GolfColors
 import com.hpsmiles.golfsim.core.designsystem.GolfSpacing
 import com.hpsmiles.golfsim.core.designsystem.GolfTypography
-import com.hpsmiles.golfsim.core.designsystem.MetricChip
 import com.hpsmiles.golfsim.core.designsystem.SectionCard
 import com.hpsmiles.golfsim.range.ChipFont
 import com.hpsmiles.golfsim.range.ClubPickerOverlay
 import com.hpsmiles.golfsim.range.DisplayShot
+import com.hpsmiles.golfsim.range.LastShotChips
 import com.hpsmiles.golfsim.range.RangeLiveView
 import com.hpsmiles.golfsim.range.SpeedMult
-import java.util.Locale
 
 /**
  * FIT live view (design notes §1): the extracted M6 range live view + a 210 dp
@@ -137,39 +135,7 @@ internal fun FittingCompareView(
                 if (shot == null) {
                     Text("Fire a shot", style = GolfTypography.BodySmall, color = GolfColors.TextMuted)
                 } else {
-                    val r = shot.shotResult
-                    MetricChip("carry", String.format(Locale.US, "%.0f", r.carryM), "M")
-                    Spacer(Modifier.size(GolfSpacing.Xs))
-                    MetricChip("total", String.format(Locale.US, "%.0f", r.totalM), "M")
-                    Spacer(Modifier.size(GolfSpacing.Xs))
-                    MetricChip(
-                        "ball",
-                        FittingFormats.mph(shot.ballData.ballSpeed),
-                        "MPH",
-                        accent = GolfColors.Amber,
-                    )
-                    Spacer(Modifier.size(GolfSpacing.Xs))
-                    MetricChip(
-                        "club",
-                        FittingFormats.mph(shot.ballData.clubHeadSpeed),
-                        "MPH",
-                    )
-                    Spacer(Modifier.size(GolfSpacing.Xs))
-                    MetricChip(
-                        "smash",
-                        if (shot.ballData.clubHeadSpeed > 0.0) {
-                            String.format(Locale.US, "%.2f", shot.ballData.ballSpeed / shot.ballData.clubHeadSpeed)
-                        } else "-",
-                        "",
-                    )
-                    Spacer(Modifier.size(GolfSpacing.Xs))
-                    MetricChip("spin", String.format(Locale.US, "%d", shot.ballData.totalSpin), "RPM")
-                    Spacer(Modifier.size(GolfSpacing.Xs))
-                    MetricChip("launch", String.format(Locale.US, "%.1f", shot.ballData.launchAngle), "DEG")
-                    Spacer(Modifier.size(GolfSpacing.Xs))
-                    MetricChip("dir", String.format(Locale.US, "%+.1f", shot.ballData.launchDirection), "DEG")
-                    Spacer(Modifier.size(GolfSpacing.Xs))
-                    MetricChip("axis", String.format(Locale.US, "%.1f", shot.ballData.spinAxis), "DEG")
+                    LastShotChips(shot)
                 }
             }
             SectionCard("COMPARISON") {
