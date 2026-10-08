@@ -1,6 +1,7 @@
 package com.hpsmiles.golfsim.fitting
 
 import com.hpsmiles.golfsim.range.RangeScene
+import kotlin.math.PI
 import kotlin.math.max
 import kotlin.math.min
 
@@ -25,11 +26,11 @@ data class TopDownFit(
 /**
  * Buffered kept-shot bounding box (device ruling 2026-10-08): the KEPT
  * shots' (side, total) extremes, each axis expanded by 5 % of its own span
- * per side. The buffered rectangle IS the dispersion metric everywhere —
- * its area is the AREA column's number and its outline is the top-down ring
- * (the 2σ ellipse is superseded; raw bbox area has no industry namesake, so
- * it is documented as our own metric). Metres in, metres out; no framework
- * types.
+ * per side. The ellipse inscribed in the buffered box IS the dispersion
+ * metric everywhere — its area is the AREA column's number and its outline
+ * is the top-down ring (the 2σ ellipse is superseded; raw bbox area has no
+ * industry namesake, so it is documented as our own metric). Metres in,
+ * metres out; no framework types.
  */
 data class DispersionBox(
     val minSideM: Double, val maxSideM: Double,
@@ -42,8 +43,12 @@ data class DispersionBox(
     fun bufferedWidthM(): Double = widthM * (1.0 + 2.0 * BBOX_BUFFER_FRACTION)
     fun bufferedDepthM(): Double = depthM * (1.0 + 2.0 * BBOX_BUFFER_FRACTION)
 
-    /** The number shown in the AREA column: area of the buffered box. */
-    fun bufferedAreaM2(): Double = bufferedWidthM() * bufferedDepthM()
+    /**
+     * Area of the ellipse inscribed in the buffered box (Golf Digest
+     * equipment-testing convention: π/4 × width × depth). This is the drawn
+     * ring's area and the table's AREA metric.
+     */
+    fun ellipseAreaM2(): Double = PI * bufferedWidthM() * bufferedDepthM() / 4.0
 
     /** Ring extents for auto-fit: the buffered box itself. */
     fun bufferedMinSideM(): Double = minSideM - widthM * BBOX_BUFFER_FRACTION

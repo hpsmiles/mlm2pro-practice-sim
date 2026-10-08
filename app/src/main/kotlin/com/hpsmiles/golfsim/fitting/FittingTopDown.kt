@@ -43,9 +43,9 @@ import kotlin.math.abs
 /**
  * M7 top-down (design notes §2.3): kept shots as per-club coloured dots over
  * the same world mapping and grid + distance boards as `TopDownCanvas`
- * (x = side, y = REST position = total), with ONE 5 %-buffered
- * bounding-box ring per club (≥3 kept shots; 55 % alpha, 2 dp stroke, no
- * fill — the same buffered rectangle whose area the table's AREA column
+ * (x = side, y = REST position = total), with ONE ellipse inscribed in the
+ * 5 %-buffered bounding box per club (≥3 kept shots; 55 % alpha, 2 dp stroke,
+ * no fill — the same ellipse whose area the table's AREA column
  * reports, so ring and table agree).
  * Excluded shots are never drawn — they stay visible in the table drill-down.
  * Legend chips (colour dot + name + count badge) wrap to a second row beyond
@@ -231,11 +231,12 @@ internal fun FittingTopDownPane(
                 drawCircle(Color.White, radius = 2.sp.toPx(), center = Offset(originX, originY))
 
                 // Dispersion rings FIRST (rings under dots).
-                // Notes §2.3 (device ruling 2026-10-08): ONE 5 %-buffered
-                // bounding-box ring @ 55 % alpha, 2 dp stroke, no fill — the
-                // buffered box IS the AREA column's rectangle, so ring and
-                // table agree. A degenerate cloud (zero-span axis) renders as
-                // a line — fine, matches the data.
+                // Notes §2.3 (device ruling 2026-10-08): ONE ellipse inscribed
+                // in the 5 %-buffered bounding box @ 55 % alpha, 2 dp stroke,
+                // no fill — the same ellipse whose area the AREA column shows
+                // (Golf Digest equipment-testing convention: π/4 × width ×
+                // depth), so ring and table agree. A degenerate cloud
+                // (zero-span axis) renders as a line — fine, matches the data.
                 order.forEachIndexed { index, _ ->
                     val box = boxes[index] ?: return@forEachIndexed
                     val color = FittingColors.clubColor(index)
@@ -243,7 +244,7 @@ internal fun FittingTopDownPane(
                     val right = originX + (box.bufferedMaxSideM() * pxPerM).toFloat()
                     val top = originY - (box.bufferedMaxTotalM() * pxPerM).toFloat()
                     val bottom = originY - (box.bufferedMinTotalM() * pxPerM).toFloat()
-                    drawRect(
+                    drawOval(
                         color = color.copy(alpha = 0.55f),
                         topLeft = Offset(left, top),
                         size = Size(right - left, bottom - top),

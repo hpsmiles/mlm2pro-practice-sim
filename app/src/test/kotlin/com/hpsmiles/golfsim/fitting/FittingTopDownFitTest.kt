@@ -80,8 +80,9 @@ class FittingTopDownFitTest {
 /**
  * Ground-truth tests for the 5 %-buffered kept-shot bounding box (device
  * ruling 2026-10-08): each axis expanded by 5 % of its own span per side,
- * zero-span axes stay unbuffered; the buffered rectangle's area is what the
- * AREA column shows and its outline is what the top-down ring draws.
+ * zero-span axes stay unbuffered; the inscribed ellipse's area (π/4 × width
+ * × depth) is what the AREA column shows and its outline is what the
+ * top-down ring draws.
  */
 class DispersionBoxTest {
 
@@ -111,10 +112,11 @@ class DispersionBoxTest {
     }
 
     @Test
-    fun `buffered area - 21 percent above raw area`() {
+    fun `ellipse area - pi over 4 times buffered box area`() {
         val box = DispersionBox(-5.0, 5.0, 80.0, 100.0)
-        assertEquals(11.0 * 22.0, box.bufferedAreaM2(), 1e-9)
-        assertEquals(1.21 * 10.0 * 20.0, box.bufferedAreaM2(), 1e-9)
+        // Buffered box 11 × 22 → inscribed ellipse = π × 11 × 22 / 4.
+        assertEquals(kotlin.math.PI * 11.0 * 22.0 / 4.0, box.ellipseAreaM2(), 1e-9)
+        assertEquals(kotlin.math.PI / 4.0 * box.bufferedWidthM() * box.bufferedDepthM(), box.ellipseAreaM2(), 1e-9)
     }
 
     @Test
@@ -124,7 +126,7 @@ class DispersionBoxTest {
         val box = DispersionBox(0.0, 0.0, 80.0, 100.0)
         assertEquals(0.0, box.bufferedWidthM(), 1e-9)
         assertEquals(22.0, box.bufferedDepthM(), 1e-9)
-        assertEquals(0.0, box.bufferedAreaM2(), 1e-9)
+        assertEquals(0.0, box.ellipseAreaM2(), 1e-9)
         assertEquals(0.0, box.bufferedMinSideM(), 1e-9)
         assertEquals(0.0, box.bufferedMaxSideM(), 1e-9)
     }
