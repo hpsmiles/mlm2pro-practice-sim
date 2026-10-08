@@ -30,15 +30,19 @@ object GolfColors {
     val BleArmedGreen = Color(0xFF7BC96F)
     val AlertRed = Color(0xFFE86A5E)
 
-    /** Categorical comparison hues (M7 A/B testing; minimum 90 deg hue separation). */
+    /**
+     * Categorical comparison hues (M7 A/B testing + club fitting), assigned by
+     * club position per design notes §0.1: letter = Nth distinct club, so the
+     * values are ordered for consecutive hue separation on-device
+     * (consecutive separations 173°/67°/179°/64°/179°; A teal = the reference).
+     * Amber stays RESERVED for the live moment — never a category hue here.
+     */
     object Comparison {
-        val A = Color(0xFF3FA7A0)
-        val B = Color(0xFF5B9DF9)
-        val C = Color(0xFFD66FD8)
-        val D = Color(0xFFF0D64A)
-
-        /** M7 fitting palette extensions (first-appearance slots 5–6). */
-        val E = Color(0xFF6FD86F)
-        val F = Color(0xFFE85C7A)
+        val A = Color(0xFF3FA7A0) // teal — club 1
+        val B = Color(0xFFE85C7A) // rose — club 2
+        val C = Color(0xFFF0D64A) // yellow — club 3
+        val D = Color(0xFF6E7BF2) // indigo — club 4 (was blue 0xFF5B9DF9)
+        val E = Color(0xFFD66FD8) // magenta — club 5
+        val F = Color(0xFF6FD86F) // green — club 6
     }
 }

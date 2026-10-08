@@ -43,8 +43,9 @@ import com.hpsmiles.golfsim.range.RangeSigns
 /**
  * M7 top-down (design notes §2.3): kept shots as per-club coloured dots over
  * the same world mapping and grid + distance boards as `TopDownCanvas`
- * (x = side, y = REST position = total), with 1σ and 2σ dispersion ovals per
- * club (≥3 kept shots; 1σ @ 55 % alpha, 2σ @ 25 %, 2 dp stroke, no fill).
+ * (x = side, y = REST position = total), with ONE 2σ dispersion ring per
+ * club (≥3 kept shots; 55 % alpha, 2 dp stroke, no fill — the nested
+ * 1σ+2σ pass read on-device as "more rings than clubs").
  * Excluded shots are never drawn — they stay visible in the table drill-down.
  * Legend chips (colour dot + name + count badge) wrap to a second row beyond
  * 4 clubs and are not tappable in v1.
@@ -192,9 +193,9 @@ internal fun FittingTopDownPane(
                 // Ball dot at the origin (same world point as the POV tee ball).
                 drawCircle(Color.White, radius = 2.sp.toPx(), center = Offset(originX, originY))
 
-                // Dispersion ovals FIRST (rings under dots).
-                // Notes §2.3 (binding overrides): 1σ @ 55 % alpha, 2σ @ 25 %,
-                // 2 dp stroke, no fill — replaces the plan's 0.9/0.45 @ 1.5 dp.
+                // Dispersion rings FIRST (rings under dots).
+                // Notes §2.3 (binding overrides): ONE 2σ ring @ 55 % alpha,
+                // 2 dp stroke, no fill — replaces the plan's nested 1σ+2σ pass.
                 order.forEachIndexed { index, key ->
                     // compute returns null for a degenerate cloud — zero
                     // variance OR collinear (λ2 ≈ 0 with λ1 > 0, a half-line):
@@ -202,17 +203,15 @@ internal fun FittingTopDownPane(
                     val kept = keptByClub[key].orEmpty()
                     val oval = DispersionOval.compute(kept.map { it.sideM to it.totalM }) ?: return@forEachIndexed
                     val color = FittingColors.clubColor(index)
-                    listOf(2.0 to 0.25f, 1.0 to 0.55f).forEach { (scale, alpha) ->
-                        val pts = DispersionOval.polygon(oval, scale)
-                        val path = Path()
-                        pts.forEachIndexed { j, (x, y) ->
-                            val px = originX + (x * pxPerM).toFloat()
-                            val py = originY - (y * pxPerM).toFloat()
-                            if (j == 0) path.moveTo(px, py) else path.lineTo(px, py)
-                        }
-                        path.close()
-                        drawPath(path, color.copy(alpha = alpha), style = Stroke(width = 2.dp.toPx()))
+                    val pts = DispersionOval.polygon(oval, sigmaScale = 2.0)
+                    val path = Path()
+                    pts.forEachIndexed { j, (x, y) ->
+                        val px = originX + (x * pxPerM).toFloat()
+                        val py = originY - (y * pxPerM).toFloat()
+                        if (j == 0) path.moveTo(px, py) else path.lineTo(px, py)
                     }
+                    path.close()
+                    drawPath(path, color.copy(alpha = 0.55f), style = Stroke(width = 2.dp.toPx()))
                 }
 
                 // Kept shot dots (6 dp), coloured per club (notes §2.3 —
