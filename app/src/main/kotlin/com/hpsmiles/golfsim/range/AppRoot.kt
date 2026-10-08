@@ -65,6 +65,8 @@ import com.hpsmiles.golfsim.core.designsystem.StatusStrip
 import com.hpsmiles.golfsim.core.physics.GreenCondition
 import com.hpsmiles.golfsim.core.physics.TurfCondition
 import com.hpsmiles.golfsim.fitting.FittingController
+import com.hpsmiles.golfsim.fitting.FittingPdfData
+import com.hpsmiles.golfsim.fitting.FittingPdfWriter
 import com.hpsmiles.golfsim.fitting.FittingScreen
 import com.hpsmiles.golfsim.fitting.FittingView
 import com.hpsmiles.golfsim.games.BreakThePaneGame
@@ -80,6 +82,7 @@ import com.hpsmiles.golfsim.settings.GreenConditionStore
 import com.hpsmiles.golfsim.settings.SettingsScreen
 import com.hpsmiles.golfsim.settings.SoundPrefStore
 import com.hpsmiles.golfsim.settings.TurfConditionStore
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
@@ -87,6 +90,7 @@ import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 
 private enum class RangeTab { RANGE, GAMES, BAG, FIT, SETTINGS, HISTORY }
@@ -132,6 +136,8 @@ fun AppRoot() {
     // live display; its shots never reach persist().
     val fittingController = remember { FittingController() }
     val fitSession = remember { RangeSession() }
+    // M7 PDF export (2026-10-08): re-tap guard while a render is in flight.
+    var exportingPdf by remember { mutableStateOf(false) }
 
     // M5: persistence facade — one per composition. Bag seeding, DB probe and
     // open-session restore run once at startup; appends ride the existing
@@ -682,6 +688,33 @@ fun AppRoot() {
         }
     }
 
+    /**
+     * M7 PDF export (2026-10-08): builds + renders the currently viewed
+     * session (live or read-only history) off the main thread, then fires the
+     * share sheet on the main dispatcher. Re-taps are ignored while running;
+     * failures are logged and swallowed (no UI surface — spec).
+     */
+    fun exportFittingPdf() {
+        if (exportingPdf) return
+        val shots = if (fittingController.viewedSessionId != null) fitViewedShots else fitShots
+        if (shots.isEmpty()) return
+        exportingPdf = true
+        scope.launch {
+            try {
+                val file = withContext(Dispatchers.Default) {
+                    FittingPdfWriter.writeToCache(context, FittingPdfData.build(shots, System.currentTimeMillis()))
+                }
+                if (file != null) {
+                    FittingPdfWriter.share(context, file)
+                }
+            } catch (t: Throwable) {
+                Log.w("FittingPdf", "export failed", t)
+            } finally {
+                exportingPdf = false
+            }
+        }
+    }
+
     // M6: the last club advancing past the plan completes the session.
     LaunchedEffect(bagCollector.done, bagActive?.id) {
         if (bagCollector.done && bagActive != null) completeBagTest()
@@ -889,6 +922,7 @@ fun AppRoot() {
                             onSetExcluded = { ids, excluded ->
                                 scope.launch { sessionRepository.setFittingShotsExcluded(ids, excluded) }
                             },
+                            onExportPdf = ::exportFittingPdf,
                         )
                     }
                     RangeTab.SETTINGS -> {

@@ -30,6 +30,7 @@ fun FittingScreen(
     onAddClub: suspend (String, ClubType, Boolean) -> Boolean,
     onComplete: () -> Unit,
     onSetExcluded: (List<Long>, Boolean) -> Unit,
+    onExportPdf: () -> Unit,
 ) {
     when (controller.view) {
         FittingView.COMPARE -> FittingCompareView(
@@ -65,6 +66,7 @@ fun FittingScreen(
                 },
                 onComplete = onComplete,
                 onSetExcluded = onSetExcluded,
+                onExportPdf = onExportPdf,
             )
         }
         FittingView.HISTORY -> FittingHistoryView(

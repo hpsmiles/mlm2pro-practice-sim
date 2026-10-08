@@ -33,6 +33,8 @@ import com.hpsmiles.golfsim.range.ChipFont
  * header context line reads the viewed session's date instead of live counts.
  * The TABLE mode renders inside a Card-framed region (notes §2.2); the
  * TOP-DOWN pane is the coloured canvas + buffered-box rings in FittingTopDown.kt.
+ * SAVE PDF (2026-10-08) exports the viewed shots — live or read-only — via the
+ * share sheet ([onExportPdf] is threaded from AppRoot, which renders + shares).
  */
 @Composable
 internal fun FittingResultsView(
@@ -43,6 +45,7 @@ internal fun FittingResultsView(
     onBack: () -> Unit,
     onComplete: () -> Unit,
     onSetExcluded: (List<Long>, Boolean) -> Unit,
+    onExportPdf: () -> Unit,
 ) {
     Column(
         modifier
@@ -105,6 +108,18 @@ internal fun FittingResultsView(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f, fill = false),
+            )
+            // SAVE PDF (2026-10-08): export the viewed session — live OR a
+            // read-only history session — via the share sheet. Same ghost-chip
+            // idiom; works for both because the shots list is already resolved.
+            Text(
+                "SAVE PDF",
+                style = ChipFont,
+                color = GolfColors.TextSecondary,
+                modifier = Modifier
+                    .clickable(onClick = onExportPdf)
+                    .border(1.dp, GolfColors.Line, RoundedCornerShape(50))
+                    .padding(horizontal = GolfSpacing.Md, vertical = GolfSpacing.Xs),
             )
             if (!readOnly) {
                 // END COMPARISON (notes §2.1.5): the only red control in FIT —
