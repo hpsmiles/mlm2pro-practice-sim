@@ -144,14 +144,14 @@ internal fun FittingCompareView(
                     Spacer(Modifier.size(GolfSpacing.Xs))
                     MetricChip(
                         "ball",
-                        String.format(Locale.US, "%.1f", shot.ballData.ballSpeed * FittingFormats.MPH_PER_MS),
+                        FittingFormats.mph(shot.ballData.ballSpeed),
                         "MPH",
                         accent = GolfColors.Amber,
                     )
                     Spacer(Modifier.size(GolfSpacing.Xs))
                     MetricChip(
                         "club",
-                        String.format(Locale.US, "%.1f", shot.ballData.clubHeadSpeed * FittingFormats.MPH_PER_MS),
+                        FittingFormats.mph(shot.ballData.clubHeadSpeed),
                         "MPH",
                     )
                     Spacer(Modifier.size(GolfSpacing.Xs))
@@ -188,12 +188,18 @@ internal fun FittingCompareView(
                         )
                     }
                 }
-                val order = FittingStats.clubOrder(sessionShots)
-                if (order.isEmpty()) {
+                // clubOrder + summarize are derived from the persisted shot
+                // set only — remember so they don't recompute every
+                // recomposition (toggle / armed / info changes).
+                val rows = remember(sessionShots) {
+                    FittingStats.clubOrder(sessionShots).mapIndexed { index, key ->
+                        Triple(index, key, FittingStats.summarize(key, sessionShots))
+                    }
+                }
+                if (rows.isEmpty()) {
                     Text("Hit shots to start comparing", style = GolfTypography.BodySmall, color = GolfColors.TextMuted)
                 }
-                order.forEachIndexed { index, key ->
-                    val s = FittingStats.summarize(key, sessionShots)
+                rows.forEach { (index, key, s) ->
                     val avg = when (distanceMode) {
                         FittingDistanceMode.CARRY -> s.carry
                         FittingDistanceMode.TOTAL -> s.total
@@ -229,10 +235,14 @@ internal fun FittingCompareView(
                             style = GolfTypography.MetricValue,
                             color = GolfColors.TextPrimary,
                         )
-                        Text(" M", style = GolfTypography.Unit, color = GolfColors.TextMuted)
+                        // Unit only when there is an average — an all-excluded
+                        // club shows bare "-", never "- M".
+                        if (avg != null) {
+                            Text(" M", style = GolfTypography.Unit, color = GolfColors.TextMuted)
+                        }
                     }
                 }
-                if (order.size > 4) {
+                if (rows.size > 4) {
                     Text(
                         "Many clubs — 4 or fewer compares best",
                         style = GolfTypography.BodySmall,
