@@ -206,17 +206,17 @@ Viewing a history item opens the read-only RESULTS described in §2.1 (viewed-se
 
 These decisions supersede/conflict-resolve the sections above where they differ. Both were user-requested after on-device verification; the designer (des-1, notes commit 0ea32c7) owns §0.1/§2.3 changes; the orchestrator owns this addendum.
 
-### §2.2 AREA column (user ruling 2026-10-08, 2nd revision — ellipse inscribed in the buffered bbox)
+### §2.2 AREA column (user ruling 2026-10-08, 3rd revision — rotated minimum enclosing ellipse)
 
 - Metric column **AREA** after OFFLINE (88 dp, unit-less header like all columns).
-- User rulings (same day, in sequence): "I want the ring to be a small 5% buffered ring, and the area of this to be the number on the table" (buffer: **5 % of span** per side), then on-device: "The bounding area should still be a elipse, and have a 5% buffer. The area of the ring is the number the user should see as an area metric."
-- Final definition: the **ellipse inscribed in the 5 %-buffered bbox** of the club's kept shots — centre = box centre, semi-axes = buffered half-extents; AREA = π/4 × buffered width × depth (m²), rendered unit-in-cell (e.g. `412 m²`). This is the Golf Digest equipment-testing dispersion convention (lib-1 survey). A kept shot at a bbox corner may lie slightly outside the inscribed ellipse — inherent to the convention (box defines extents).
+- User rulings (same day, in sequence): "I want the ring to be a small 5% buffered ring, and the area of this to be the number on the table" (buffer: **5 %** uniform scale), then on-device: "The bounding area should still be a elipse, and have a 5% buffer. The area of the ring is the number the user should see as an area metric", and after the axis-aligned ring spilled corner dots (screenshot evidence): "the rings aren't actually fitting all the dots … due to the elipse not being rotated at all".
+- Final definition: the **rotated minimum enclosing ellipse (MVEE/Löwner, Khachiyan)** of the club's kept shots, scaled **×1.05** (`BUFFER_FRACTION`) uniformly about its centre — every kept dot is inside with 5 % margin, hard-guaranteed by a containment guard (the solver returns null rather than ever drawing a lying ring). AREA = the drawn ring's area: π·a·b (m², unit-in-cell, e.g. `412 m²`).
 - `-` when the club has fewer than 3 kept shots (same guard as the ring); **no Δ row** (unchanged).
-- Implementation: `DispersionBox` in `FittingTopDownFit.kt` (`BBOX_BUFFER_FRACTION = 0.05`, `ellipseAreaM2()`); the 2σ `DispersionOval` was removed from the app (git-recoverable for M9).
+- Implementation: `DispersionEllipse` in `FittingTopDownFit.kt` (`BUFFER_FRACTION = 0.05`, `areaM2()`, deterministic Khachiyan ≤200 iterations + containment guard); `DispersionBox` and the 2σ `DispersionOval` were both removed from the app (git-recoverable for M9).
 
-### §2.3 top-down ring + auto-fit (user ruling 2026-10-08 — supersedes the 2σ ring)
+### §2.3 top-down ring + auto-fit (user ruling 2026-10-08, 3rd revision — rotated MVEE ring)
 
-- The ring per club is the **ellipse inscribed in the buffered bounding box** of the kept shots — the same `DispersionBox` geometry the AREA column reports, drawn as an oval: 2 dp stroke, club colour @ 0.55 α, no fill; ≥3 kept shots; a zero-span axis renders as a line (matches the data).
-- Auto-fit bounds use the buffered box extents (min/max side/total grown 5% per axis) across all clubs that have a box; the empty fallback is unchanged (exact previous full-range mapping, no visual jump).
+- The ring per club is the **rotated minimum enclosing ellipse** of the kept shots (×1.05 buffer, containment-guarded) — the same `DispersionEllipse` geometry the AREA column reports, drawn via `rotate(θ) { drawOval(...) }`: 2 dp stroke, club colour @ 0.55 α, no fill; ≥3 kept shots; degenerate/collinear sets draw no ring (dots still render).
+- Auto-fit bounds use each ring's projected extents (centre ± √(a²cos²θ+b²sin²θ) per axis) across all clubs that have an ellipse, plus the per-shot loop for 1–2-shot clubs; the empty fallback is unchanged (exact previous full-range mapping, no visual jump).
 - Isotropic scale: px/m = min(yFit, xFit); y-window bottom-anchored (shots near the bottom, same as the full-range view); x centred. Padding: max(10 m, 6 % of the content span); minimum content span 30 m; lateral pad 48 px.
 - Grid/boards/mat remain world-anchored and simply fall outside the window; the lateral gridlines still span the full canvas.
