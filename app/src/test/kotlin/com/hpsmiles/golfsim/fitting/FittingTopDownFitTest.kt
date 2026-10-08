@@ -1,6 +1,7 @@
 package com.hpsmiles.golfsim.fitting
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Test
 
 /**
@@ -73,5 +74,68 @@ class FittingTopDownFitTest {
         assertEquals(1000.0 + 185.0 * xFit, fit.originY, 1e-9)
         // The vertical window still spans its full 50 m, just scaled down.
         assertEquals(50.0 * xFit, screenY(fit, 185.0) - screenY(fit, 235.0), 1e-9)
+    }
+}
+
+/**
+ * Ground-truth tests for the 5 %-buffered kept-shot bounding box (device
+ * ruling 2026-10-08): each axis expanded by 5 % of its own span per side,
+ * zero-span axes stay unbuffered; the buffered rectangle's area is what the
+ * AREA column shows and its outline is what the top-down ring draws.
+ */
+class DispersionBoxTest {
+
+    @Test
+    fun `fromKept - null below the 3-shot minimum`() {
+        assertNull(DispersionBox.fromKept(emptyList()))
+        assertNull(DispersionBox.fromKept(listOf(1.0 to 1.0, 2.0 to 2.0)))
+    }
+
+    @Test
+    fun `fromKept - min and max of side and total`() {
+        val box = DispersionBox.fromKept(listOf(2.0 to 30.0, -4.0 to 40.0, 0.0 to 35.0))!!
+        assertEquals(-4.0, box.minSideM, 1e-9)
+        assertEquals(2.0, box.maxSideM, 1e-9)
+        assertEquals(30.0, box.minTotalM, 1e-9)
+        assertEquals(40.0, box.maxTotalM, 1e-9)
+    }
+
+    @Test
+    fun `buffered width and depth - 10 percent buffer each side`() {
+        // Side span 10 (−5..5) → 11; total span 20 (80..100) → 22.
+        val box = DispersionBox(-5.0, 5.0, 80.0, 100.0)
+        assertEquals(10.0, box.widthM, 1e-9)
+        assertEquals(20.0, box.depthM, 1e-9)
+        assertEquals(11.0, box.bufferedWidthM(), 1e-9)
+        assertEquals(22.0, box.bufferedDepthM(), 1e-9)
+    }
+
+    @Test
+    fun `buffered area - 21 percent above raw area`() {
+        val box = DispersionBox(-5.0, 5.0, 80.0, 100.0)
+        assertEquals(11.0 * 22.0, box.bufferedAreaM2(), 1e-9)
+        assertEquals(1.21 * 10.0 * 20.0, box.bufferedAreaM2(), 1e-9)
+    }
+
+    @Test
+    fun `zero-span axis - stays unbuffered`() {
+        // All shots on the centre line: width 0 → buffered width 0, extents
+        // stay at 0; the total span 20 still buffers to 22.
+        val box = DispersionBox(0.0, 0.0, 80.0, 100.0)
+        assertEquals(0.0, box.bufferedWidthM(), 1e-9)
+        assertEquals(22.0, box.bufferedDepthM(), 1e-9)
+        assertEquals(0.0, box.bufferedAreaM2(), 1e-9)
+        assertEquals(0.0, box.bufferedMinSideM(), 1e-9)
+        assertEquals(0.0, box.bufferedMaxSideM(), 1e-9)
+    }
+
+    @Test
+    fun `buffered extents - symmetric around the raw box`() {
+        // Side span 10 (−5..5) → −5.5..5.5; total span 20 (80..100) → 79..101.
+        val box = DispersionBox(-5.0, 5.0, 80.0, 100.0)
+        assertEquals(-5.5, box.bufferedMinSideM(), 1e-9)
+        assertEquals(5.5, box.bufferedMaxSideM(), 1e-9)
+        assertEquals(79.0, box.bufferedMinTotalM(), 1e-9)
+        assertEquals(101.0, box.bufferedMaxTotalM(), 1e-9)
     }
 }

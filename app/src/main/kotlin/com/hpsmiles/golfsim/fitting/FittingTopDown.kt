@@ -23,7 +23,6 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.nativeCanvas
@@ -40,16 +39,14 @@ import com.hpsmiles.golfsim.range.RangeMat
 import com.hpsmiles.golfsim.range.RangeScene
 import com.hpsmiles.golfsim.range.RangeSigns
 import kotlin.math.abs
-import kotlin.math.cos
-import kotlin.math.sin
-import kotlin.math.sqrt
 
 /**
  * M7 top-down (design notes §2.3): kept shots as per-club coloured dots over
  * the same world mapping and grid + distance boards as `TopDownCanvas`
- * (x = side, y = REST position = total), with ONE 2σ dispersion ring per
- * club (≥3 kept shots; 55 % alpha, 2 dp stroke, no fill — the nested
- * 1σ+2σ pass read on-device as "more rings than clubs").
+ * (x = side, y = REST position = total), with ONE 5 %-buffered
+ * bounding-box ring per club (≥3 kept shots; 55 % alpha, 2 dp stroke, no
+ * fill — the same buffered rectangle whose area the table's AREA column
+ * reports, so ring and table agree).
  * Excluded shots are never drawn — they stay visible in the table drill-down.
  * Legend chips (colour dot + name + count badge) wrap to a second row beyond
  * 4 clubs and are not tappable in v1.
@@ -65,7 +62,7 @@ internal fun FittingTopDownPane(
     val keptCount = shots.count { !it.excluded }
     // One kept-shot set per club, computed once — exclusion stays the single
     // source of truth by construction and feeds the legend badge counts, the
-    // oval inputs and the dots below (previously filtered 3× per pass).
+    // box inputs and the dots below (previously filtered 3× per pass).
     val keptByClub = order.associateWith { key -> shots.filter { it.clubId == key.id && !it.excluded } }
     Column(modifier.fillMaxSize()) {
         // Legend (notes §2.3): one chip per club — 10 dp colour dot + name
@@ -105,14 +102,14 @@ internal fun FittingTopDownPane(
                 val h = size.height
                 drawRect(GolfColors.Base)
                 // Content-fit mapping (device feedback 2026-10-08): fits the
-                // kept shots AND their 2σ ring extents plus a buffer — 0–150 m
-                // of empty range is useless on a driver fitting. Falls back to
-                // the full-range mapping when there are no kept shots. World
-                // mapping otherwise identical to TopDownCanvas: origin
-                // bottom-centre, x lateral (side), y rest-distance (total).
-                val ovals = order.map { key ->
+                // kept shots AND their buffered-box ring extents plus a buffer
+                // — 0–150 m of empty range is useless on a driver fitting.
+                // Falls back to the full-range mapping when there are no kept
+                // shots. World mapping otherwise identical to TopDownCanvas:
+                // origin bottom-centre, x lateral (side), y rest-distance (total).
+                val boxes = order.map { key ->
                     val kept = keptByClub[key].orEmpty()
-                    DispersionOval.compute(kept.map { it.sideM to it.totalM })
+                    DispersionBox.fromKept(kept.map { it.sideM to it.totalM })
                 }
                 var minY = Double.POSITIVE_INFINITY
                 var maxY = Double.NEGATIVE_INFINITY
@@ -121,21 +118,20 @@ internal fun FittingTopDownPane(
                 order.forEachIndexed { index, key ->
                     val kept = keptByClub[key].orEmpty()
                     if (kept.isNotEmpty()) hasData = true
+                    // The per-shot extremes below also cover clubs with 1–2
+                    // kept shots (no box); for 3+ shots the buffered box
+                    // subsumes them but keeping both is harmless and explicit.
                     kept.forEach { s ->
                         minY = minOf(minY, s.totalM)
                         maxY = maxOf(maxY, s.totalM)
                         maxAbsX = maxOf(maxAbsX, abs(s.sideM))
                     }
-                    // 2σ ring outer extents: mean ± 2·projected semi-axes.
-                    val oval = ovals[index]
-                    if (oval != null) {
-                        val cosA = cos(oval.angleRad)
-                        val sinA = sin(oval.angleRad)
-                        val xHalf = 2.0 * sqrt(oval.a * oval.a * cosA * cosA + oval.b * oval.b * sinA * sinA)
-                        val yHalf = 2.0 * sqrt(oval.a * oval.a * sinA * sinA + oval.b * oval.b * cosA * cosA)
-                        minY = minOf(minY, oval.cy - yHalf)
-                        maxY = maxOf(maxY, oval.cy + yHalf)
-                        maxAbsX = maxOf(maxAbsX, abs(oval.cx) + xHalf)
+                    // Buffered box outer extents (device ruling 2026-10-08).
+                    val box = boxes[index]
+                    if (box != null) {
+                        minY = minOf(minY, box.bufferedMinTotalM())
+                        maxY = maxOf(maxY, box.bufferedMaxTotalM())
+                        maxAbsX = maxOf(maxAbsX, abs(box.bufferedMaxSideM()))
                     }
                 }
                 val fit = computeTopDownFit(
@@ -235,23 +231,24 @@ internal fun FittingTopDownPane(
                 drawCircle(Color.White, radius = 2.sp.toPx(), center = Offset(originX, originY))
 
                 // Dispersion rings FIRST (rings under dots).
-                // Notes §2.3 (binding overrides): ONE 2σ ring @ 55 % alpha,
-                // 2 dp stroke, no fill — replaces the plan's nested 1σ+2σ pass.
+                // Notes §2.3 (device ruling 2026-10-08): ONE 5 %-buffered
+                // bounding-box ring @ 55 % alpha, 2 dp stroke, no fill — the
+                // buffered box IS the AREA column's rectangle, so ring and
+                // table agree. A degenerate cloud (zero-span axis) renders as
+                // a line — fine, matches the data.
                 order.forEachIndexed { index, _ ->
-                    // compute returns null for a degenerate cloud — zero
-                    // variance OR collinear (λ2 ≈ 0 with λ1 > 0, a half-line):
-                    // the ring is skipped, dots below are still drawn.
-                    val oval = ovals[index] ?: return@forEachIndexed
+                    val box = boxes[index] ?: return@forEachIndexed
                     val color = FittingColors.clubColor(index)
-                    val pts = DispersionOval.polygon(oval, sigmaScale = 2.0)
-                    val path = Path()
-                    pts.forEachIndexed { j, (x, y) ->
-                        val px = originX + (x * pxPerM).toFloat()
-                        val py = originY - (y * pxPerM).toFloat()
-                        if (j == 0) path.moveTo(px, py) else path.lineTo(px, py)
-                    }
-                    path.close()
-                    drawPath(path, color.copy(alpha = 0.55f), style = Stroke(width = 2.dp.toPx()))
+                    val left = originX + (box.bufferedMinSideM() * pxPerM).toFloat()
+                    val right = originX + (box.bufferedMaxSideM() * pxPerM).toFloat()
+                    val top = originY - (box.bufferedMaxTotalM() * pxPerM).toFloat()
+                    val bottom = originY - (box.bufferedMinTotalM() * pxPerM).toFloat()
+                    drawRect(
+                        color = color.copy(alpha = 0.55f),
+                        topLeft = Offset(left, top),
+                        size = Size(right - left, bottom - top),
+                        style = Stroke(width = 2.dp.toPx()),
+                    )
                 }
 
                 // Kept shot dots (6 dp), coloured per club (notes §2.3 —

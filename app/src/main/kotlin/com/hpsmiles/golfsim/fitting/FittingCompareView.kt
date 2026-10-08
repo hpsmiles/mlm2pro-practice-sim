@@ -80,7 +80,7 @@ internal fun FittingCompareView(
     var speedMult by remember { mutableStateOf(SpeedMult.X15) }
     Row(modifier.fillMaxSize().background(GolfColors.Base)) {
         // Canvas region (notes §1.1): live tracer exactly as RANGE/BAG — no
-        // club colours/ovals while hitting (those live in RESULTS). The FIT
+        // club colours/rings while hitting (those live in RESULTS). The FIT
         // sim runs on the user's surfaces (AppRoot syncs fitSession), with no
         // practice green. The StatusStrip is the global one already rendered
         // by AppRoot below the tab content — none is drawn here (armed/info

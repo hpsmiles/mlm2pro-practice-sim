@@ -32,7 +32,7 @@ import com.hpsmiles.golfsim.range.ChipFont
  * session: exclusion controls are disabled, END COMPARISON is hidden, and the
  * header context line reads the viewed session's date instead of live counts.
  * The TABLE mode renders inside a Card-framed region (notes §2.2); the
- * TOP-DOWN pane is the coloured canvas + dispersion ovals in FittingTopDown.kt.
+ * TOP-DOWN pane is the coloured canvas + buffered-box rings in FittingTopDown.kt.
  */
 @Composable
 internal fun FittingResultsView(

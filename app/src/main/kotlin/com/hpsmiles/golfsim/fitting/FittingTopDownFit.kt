@@ -4,6 +4,9 @@ import com.hpsmiles.golfsim.range.RangeScene
 import kotlin.math.max
 import kotlin.math.min
 
+/** Per-side axis buffer as a fraction of that axis's own span (device ruling 2026-10-08: "5 % of span"). */
+const val BBOX_BUFFER_FRACTION = 0.05
+
 /**
  * World→pixel mapping for the M7 top-down pane (design notes §2.3). World
  * frame: x lateral (side, metres), y down-range (rest position = total,
@@ -20,16 +23,55 @@ data class TopDownFit(
 )
 
 /**
+ * Buffered kept-shot bounding box (device ruling 2026-10-08): the KEPT
+ * shots' (side, total) extremes, each axis expanded by 5 % of its own span
+ * per side. The buffered rectangle IS the dispersion metric everywhere —
+ * its area is the AREA column's number and its outline is the top-down ring
+ * (the 2σ ellipse is superseded; raw bbox area has no industry namesake, so
+ * it is documented as our own metric). Metres in, metres out; no framework
+ * types.
+ */
+data class DispersionBox(
+    val minSideM: Double, val maxSideM: Double,
+    val minTotalM: Double, val maxTotalM: Double,
+) {
+    val widthM: Double get() = maxSideM - minSideM
+    val depthM: Double get() = maxTotalM - minTotalM
+
+    /** Axis span grown by 5 % per side; zero-span axes stay zero. */
+    fun bufferedWidthM(): Double = widthM * (1.0 + 2.0 * BBOX_BUFFER_FRACTION)
+    fun bufferedDepthM(): Double = depthM * (1.0 + 2.0 * BBOX_BUFFER_FRACTION)
+
+    /** The number shown in the AREA column: area of the buffered box. */
+    fun bufferedAreaM2(): Double = bufferedWidthM() * bufferedDepthM()
+
+    /** Ring extents for auto-fit: the buffered box itself. */
+    fun bufferedMinSideM(): Double = minSideM - widthM * BBOX_BUFFER_FRACTION
+    fun bufferedMaxSideM(): Double = maxSideM + widthM * BBOX_BUFFER_FRACTION
+    fun bufferedMinTotalM(): Double = minTotalM - depthM * BBOX_BUFFER_FRACTION
+    fun bufferedMaxTotalM(): Double = maxTotalM + depthM * BBOX_BUFFER_FRACTION
+
+    companion object {
+        /** From kept shots; null below the 3-shot minimum (existing convention). */
+        fun fromKept(points: List<Pair<Double, Double>>): DispersionBox? {
+            if (points.size < 3) return null
+            val sides = points.map { it.first }; val totals = points.map { it.second }
+            return DispersionBox(sides.min(), sides.max(), totals.min(), totals.max())
+        }
+    }
+}
+
+/**
  * Computes the world→pixel mapping that fits the kept shots AND their
- * 2σ ring extents plus a buffer into the canvas (user request 2026-10-08:
- * "scaled to fit the shots and rings plus a small buffer" — 0–150 m of
- * empty range is useless on a driver fitting). Isotropic (rings stay
- * circular); falls back to the full-range mapping when there is no data.
+ * 5 %-buffered-box ring extents plus a buffer into the canvas (device
+ * feedback 2026-10-08: "scaled to fit the shots and rings plus a small
+ * buffer" — 0–150 m of empty range is useless on a driver fitting).
+ * Isotropic; falls back to the full-range mapping when there is no data.
  *
  * [minY]/[maxY] are the min/max rest-distance (down-range, metres) and
  * [maxAbsX] the max |side| (lateral, metres) over the kept shots INCLUDING
- * each club's 2σ ring outer extents. [hasData] is false when there are no
- * kept shots — the mapping then matches the pre-fix full-range view
+ * each club's buffered-box outer extents. [hasData] is false when there are
+ * no kept shots — the mapping then matches the pre-fix full-range view
  * (`height / GROUND_END_Y`, origin [bottomMarginPx] above the canvas bottom).
  *
  * Behaviour:
