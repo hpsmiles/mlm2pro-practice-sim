@@ -25,6 +25,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.unit.dp
@@ -43,10 +44,10 @@ import kotlin.math.abs
 /**
  * M7 top-down (design notes §2.3): kept shots as per-club coloured dots over
  * the same world mapping and grid + distance boards as `TopDownCanvas`
- * (x = side, y = REST position = total), with ONE ellipse inscribed in the
- * 5 %-buffered bounding box per club (≥3 kept shots; 55 % alpha, 2 dp stroke,
- * no fill — the same ellipse whose area the table's AREA column
- * reports, so ring and table agree).
+ * (x = side, y = REST position = total), with ONE rotated minimum-enclosing
+ * ellipse (Löwner / MVEE) of the kept shots, scaled ×1.05, per club (≥3 kept
+ * shots; 55 % alpha, 2 dp stroke, no fill — the same ellipse whose area the
+ * table's AREA column reports, so ring and table agree).
  * Excluded shots are never drawn — they stay visible in the table drill-down.
  * Legend chips (colour dot + name + count badge) wrap to a second row beyond
  * 4 clubs and are not tappable in v1.
@@ -62,7 +63,7 @@ internal fun FittingTopDownPane(
     val keptCount = shots.count { !it.excluded }
     // One kept-shot set per club, computed once — exclusion stays the single
     // source of truth by construction and feeds the legend badge counts, the
-    // box inputs and the dots below (previously filtered 3× per pass).
+    // ellipse inputs and the dots below (previously filtered 3× per pass).
     val keptByClub = order.associateWith { key -> shots.filter { it.clubId == key.id && !it.excluded } }
     Column(modifier.fillMaxSize()) {
         // Legend (notes §2.3): one chip per club — 10 dp colour dot + name
@@ -102,14 +103,15 @@ internal fun FittingTopDownPane(
                 val h = size.height
                 drawRect(GolfColors.Base)
                 // Content-fit mapping (device feedback 2026-10-08): fits the
-                // kept shots AND their buffered-box ring extents plus a buffer
-                // — 0–150 m of empty range is useless on a driver fitting.
-                // Falls back to the full-range mapping when there are no kept
-                // shots. World mapping otherwise identical to TopDownCanvas:
-                // origin bottom-centre, x lateral (side), y rest-distance (total).
-                val boxes = order.map { key ->
+                // kept shots AND their enclosing-ellipse ring extents plus a
+                // buffer — 0–150 m of empty range is useless on a driver
+                // fitting. Falls back to the full-range mapping when there are
+                // no kept shots. World mapping otherwise identical to
+                // TopDownCanvas: origin bottom-centre, x lateral (side),
+                // y rest-distance (total).
+                val ellipses = order.map { key ->
                     val kept = keptByClub[key].orEmpty()
-                    DispersionBox.fromKept(kept.map { it.sideM to it.totalM })
+                    DispersionEllipse.fromKept(kept.map { it.sideM to it.totalM })
                 }
                 var minY = Double.POSITIVE_INFINITY
                 var maxY = Double.NEGATIVE_INFINITY
@@ -118,20 +120,24 @@ internal fun FittingTopDownPane(
                 order.forEachIndexed { index, key ->
                     val kept = keptByClub[key].orEmpty()
                     if (kept.isNotEmpty()) hasData = true
-                    // The per-shot extremes below also cover clubs with 1–2
-                    // kept shots (no box); for 3+ shots the buffered box
-                    // subsumes them but keeping both is harmless and explicit.
-                    kept.forEach { s ->
-                        minY = minOf(minY, s.totalM)
-                        maxY = maxOf(maxY, s.totalM)
-                        maxAbsX = maxOf(maxAbsX, abs(s.sideM))
-                    }
-                    // Buffered box outer extents (device ruling 2026-10-08).
-                    val box = boxes[index]
-                    if (box != null) {
-                        minY = minOf(minY, box.bufferedMinTotalM())
-                        maxY = maxOf(maxY, box.bufferedMaxTotalM())
-                        maxAbsX = maxOf(maxAbsX, abs(box.bufferedMaxSideM()))
+                    // Buffered enclosing ellipse (3+ kept): its projected
+                    // extents subsume every kept point (containment is the
+                    // whole point of the MVEE), so they drive the fit.
+                    val ell = ellipses[index]
+                    if (ell != null) {
+                        val halfSide = ell.projectedHalfSideM()
+                        val halfTotal = ell.projectedHalfTotalM()
+                        minY = minOf(minY, ell.centreTotalM - halfTotal)
+                        maxY = maxOf(maxY, ell.centreTotalM + halfTotal)
+                        maxAbsX = maxOf(maxAbsX, abs(ell.centreSideM) + halfSide)
+                    } else {
+                        // 1–2 kept shots (no ellipse): per-shot extremes still
+                        // shape the fit's bounds.
+                        kept.forEach { s ->
+                            minY = minOf(minY, s.totalM)
+                            maxY = maxOf(maxY, s.totalM)
+                            maxAbsX = maxOf(maxAbsX, abs(s.sideM))
+                        }
                     }
                 }
                 val fit = computeTopDownFit(
@@ -231,25 +237,30 @@ internal fun FittingTopDownPane(
                 drawCircle(Color.White, radius = 2.sp.toPx(), center = Offset(originX, originY))
 
                 // Dispersion rings FIRST (rings under dots).
-                // Notes §2.3 (device ruling 2026-10-08): ONE ellipse inscribed
-                // in the 5 %-buffered bounding box @ 55 % alpha, 2 dp stroke,
-                // no fill — the same ellipse whose area the AREA column shows
-                // (Golf Digest equipment-testing convention: π/4 × width ×
-                // depth), so ring and table agree. A degenerate cloud
-                // (zero-span axis) renders as a line — fine, matches the data.
+                // Notes §2.3 (device ruling 2026-10-08): ONE rotated
+                // minimum-enclosing ellipse of the kept shots, scaled ×1.05
+                // about its centre, @ 55 % alpha, 2 dp stroke, no fill — the
+                // same ellipse whose area the AREA column shows, so ring and
+                // table agree. A collinear cloud (no enclosing ellipse) skips
+                // the ring; the dots below are still drawn.
                 order.forEachIndexed { index, _ ->
-                    val box = boxes[index] ?: return@forEachIndexed
+                    val ell = ellipses[index] ?: return@forEachIndexed
                     val color = FittingColors.clubColor(index)
-                    val left = originX + (box.bufferedMinSideM() * pxPerM).toFloat()
-                    val right = originX + (box.bufferedMaxSideM() * pxPerM).toFloat()
-                    val top = originY - (box.bufferedMaxTotalM() * pxPerM).toFloat()
-                    val bottom = originY - (box.bufferedMinTotalM() * pxPerM).toFloat()
-                    drawOval(
-                        color = color.copy(alpha = 0.55f),
-                        topLeft = Offset(left, top),
-                        size = Size(right - left, bottom - top),
-                        style = Stroke(width = 2.dp.toPx()),
-                    )
+                    val centreX = originX + (ell.centreSideM * pxPerM).toFloat()
+                    val centreY = originY - (ell.centreTotalM * pxPerM).toFloat()
+                    val aPx = (ell.semiAxisM * pxPerM).toFloat()
+                    val bPx = (ell.semiCrossM * pxPerM).toFloat()
+                    rotate(
+                        degrees = Math.toDegrees(ell.angleRad).toFloat(),
+                        pivot = Offset(centreX, centreY),
+                    ) {
+                        drawOval(
+                            color = color.copy(alpha = 0.55f),
+                            topLeft = Offset(centreX - aPx, centreY - bPx),
+                            size = Size(2f * aPx, 2f * bPx),
+                            style = Stroke(width = 2.dp.toPx()),
+                        )
+                    }
                 }
 
                 // Kept shot dots (6 dp), coloured per club (notes §2.3 —

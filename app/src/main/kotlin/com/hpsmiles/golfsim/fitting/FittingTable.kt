@@ -71,14 +71,15 @@ internal fun FittingTable(
     val (order, summaries, areaByClub) = remember(shots) {
         val o = FittingStats.clubOrder(shots)
         val sums = o.map { FittingStats.summarize(it, shots) }
-        // AREA column (device ruling 2026-10-08): area of the ellipse
-        // inscribed in the 5 %-buffered kept-shot bounding box in m² per club,
-        // computed from the club's KEPT shots' (side, total) pairs — the same
-        // ellipse the top-down ring draws, so table and ring agree. null when
-        // < 3 kept shots (DispersionBox.fromKept's own null contract).
+        // AREA column (device ruling 2026-10-08): area of the (rotated)
+        // minimum enclosing ellipse of the KEPT shots + 5 % buffer in m² per
+        // club, computed from the club's KEPT shots' (side, total) pairs — the
+        // same ellipse the top-down ring draws, so table and ring agree. null
+        // when < 3 kept shots or the cloud is collinear (DispersionEllipse
+        // fromKept's own null contract).
         val areas = o.associate { key ->
             val kept = shots.filter { it.clubId == key.id && !it.excluded }
-            key.id to DispersionBox.fromKept(kept.map { it.sideM to it.totalM })?.ellipseAreaM2()
+            key.id to DispersionEllipse.fromKept(kept.map { it.sideM to it.totalM })?.areaM2()
         }
         Triple(o, sums, areas)
     }
@@ -542,10 +543,10 @@ private enum class Metric { N, CHS, BALL, SMASH, CARRY, TOTAL, LAUNCH, DIR, SPIN
  * Teal top border when the distance mode emphasises the column).
  *
  * AREA (device ruling 2026-10-08): the club's dispersion-ring area in m²
- * (DispersionBox.ellipseAreaM2 over the KEPT shots' side/total pairs — the
- * ellipse inscribed in the buffered shot bounding box, the same ellipse the
- * top-down ring draws) — a data-column with no Δ row (area deltas are
- * quadratic noise, deliberately excluded).
+ * (DispersionEllipse.areaM2 over the KEPT shots' side/total pairs — the
+ * rotated minimum enclosing ellipse of the kept shots + 5 % buffer, the same
+ * ellipse the top-down ring draws) — a data-column with no Δ row (area
+ * deltas are quadratic noise, deliberately excluded).
  * [Col.pick] → null renders "-" directly, the same no-delta convention N
  * already uses.
  *
@@ -577,9 +578,9 @@ private fun COLS(areaByClub: Map<Long, Double?>): List<Col> = listOf(
     Col(Metric.OFFLINE, "OFFLINE", 88.dp, { it.offlineAvg },
         { s -> if (s.offlineAvg != null && s.offlineWorst != null) String.format(Locale.US, "%.0f / %.0f", s.offlineAvg, s.offlineWorst) else "-" },
         { d -> String.format(Locale.US, "%+.1f m", d) }, FittingStats.NOISE_OFFLINE_M),
-    // AREA: inscribed-ellipse area in m² (device ruling 2026-10-08).
+    // AREA: enclosing-ellipse area in m² (device ruling 2026-10-08).
     // pick → null = no Δ row (quadratic noise — deliberately excluded); the
-    // "-" renders for < 3 kept shots.
+    // "-" renders for < 3 kept shots or a collinear cloud.
     Col(Metric.AREA, "AREA", 88.dp,
         { null },
         { s -> areaByClub[s.key.id]?.let { String.format(Locale.US, "%.0f m²", it) } ?: "-" },
