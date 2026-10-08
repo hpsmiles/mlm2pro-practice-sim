@@ -7,12 +7,16 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 import com.hpsmiles.golfsim.core.data.dao.BagMappingSessionDao
 import com.hpsmiles.golfsim.core.data.dao.BagMappingShotDao
 import com.hpsmiles.golfsim.core.data.dao.ClubDao
+import com.hpsmiles.golfsim.core.data.dao.FittingSessionDao
+import com.hpsmiles.golfsim.core.data.dao.FittingShotDao
 import com.hpsmiles.golfsim.core.data.dao.GameResultDao
 import com.hpsmiles.golfsim.core.data.dao.SessionDao
 import com.hpsmiles.golfsim.core.data.dao.ShotDao
 import com.hpsmiles.golfsim.core.data.entity.BagMappingSessionEntity
 import com.hpsmiles.golfsim.core.data.entity.BagMappingShotEntity
 import com.hpsmiles.golfsim.core.data.entity.ClubEntity
+import com.hpsmiles.golfsim.core.data.entity.FittingSessionEntity
+import com.hpsmiles.golfsim.core.data.entity.FittingShotEntity
 import com.hpsmiles.golfsim.core.data.entity.GameResultEntity
 import com.hpsmiles.golfsim.core.data.entity.SessionEntity
 import com.hpsmiles.golfsim.core.data.entity.ShotEntity
@@ -21,8 +25,9 @@ import com.hpsmiles.golfsim.core.data.entity.ShotEntity
     entities = [
         SessionEntity::class, ShotEntity::class, ClubEntity::class, GameResultEntity::class,
         BagMappingSessionEntity::class, BagMappingShotEntity::class,
+        FittingSessionEntity::class, FittingShotEntity::class,
     ],
-    version = 4,
+    version = 5,
     exportSchema = true,
 )
 abstract class Mlm2proDatabase : RoomDatabase() {
@@ -32,6 +37,8 @@ abstract class Mlm2proDatabase : RoomDatabase() {
     abstract fun gameResultDao(): GameResultDao
     abstract fun bagMappingSessionDao(): BagMappingSessionDao
     abstract fun bagMappingShotDao(): BagMappingShotDao
+    abstract fun fittingSessionDao(): FittingSessionDao
+    abstract fun fittingShotDao(): FittingShotDao
 
     companion object {
         /**
@@ -100,6 +107,41 @@ abstract class Mlm2proDatabase : RoomDatabase() {
                 db.execSQL(
                     "CREATE INDEX IF NOT EXISTS `index_bag_mapping_shots_sessionId` " +
                         "ON `bag_mapping_shots` (`sessionId`)",
+                )
+            }
+        }
+
+        /**
+         * M7 spec §2: fitting_sessions + fitting_shots (club-fitting mode).
+         * Existing tables untouched. Fresh tables — every column NOT NULL or
+         * genuinely nullable, except `excluded` which carries DEFAULT 0 (and
+         * the entity's @ColumnInfo(defaultValue = "0") must match it). Corrupt-
+         * file recovery reuses build(), so it inherits the migration.
+         */
+        val MIGRATION_4_5: Migration = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `fitting_sessions` (" +
+                        "`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                        "`startedAtMs` INTEGER NOT NULL, `completedAtMs` INTEGER, " +
+                        "`status` TEXT NOT NULL)",
+                )
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `fitting_shots` (" +
+                        "`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                        "`sessionId` INTEGER NOT NULL, `clubId` INTEGER NOT NULL, " +
+                        "`clubName` TEXT NOT NULL, `clubType` TEXT NOT NULL, " +
+                        "`clubWasTemp` INTEGER NOT NULL, `timestampMs` INTEGER NOT NULL, " +
+                        "`clubHeadSpeedMps` REAL NOT NULL, `ballSpeedMps` REAL NOT NULL, " +
+                        "`launchAngleDeg` REAL NOT NULL, `launchDirDeg` REAL NOT NULL, " +
+                        "`spinAxisDeg` REAL NOT NULL, `totalSpinRpm` INTEGER NOT NULL, " +
+                        "`carryM` REAL NOT NULL, `totalM` REAL NOT NULL, `sideM` REAL NOT NULL, " +
+                        "`apexM` REAL NOT NULL, `flightTimeSec` REAL NOT NULL, " +
+                        "`excluded` INTEGER NOT NULL DEFAULT 0)",
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_fitting_shots_sessionId` " +
+                        "ON `fitting_shots` (`sessionId`)",
                 )
             }
         }
