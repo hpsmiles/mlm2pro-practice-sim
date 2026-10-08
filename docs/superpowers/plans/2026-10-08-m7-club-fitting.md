@@ -36,8 +36,8 @@ $env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"
 | 7. COMPARE view | ✅ done — 900503b (hardening: sessionId from Room via LaunchedEffect, .also dropped, mutableStateOf, fitSession surface parity) + ad30e35 + be59e83 + 352d5b3 (review fixes: VIEW chip omitted, HISTORY · N TextMuted suffix) + 3ba9946 (polish: mph helper, remembered summaries, gated unit). spec ✅ 3 rounds, quality ✅ approve (follow-ups ride with Task 9: E/F + ActiveClubButton/speed-chip promotion, shared LastShotChips) |
 | 8. RESULTS table | ✅ done — 7f58008+1497fd3 (MPH ruling), spec ✅, quality ✅ approve (polish rides with Task 11: remember(shots) summaries, dead Col formatters comment, centered empty state, header single-Spacer) |
 | 9. RESULTS top-down | ✅ done — d041904 + 45fa44a (E/F promotion), spec ✅, quality ✅ approve (polish rides with Task 11: keptByClub single-sourcing, degenerate-cloud comment, trailing blank lines) |
-| 10. HISTORY | in progress |
-| 11. Build/tests/conventions/device | pending |
+| 10. HISTORY | ✅ done — acf8867 (details flow) + 3ac3058 (HISTORY view), spec ✅, quality ✅ approve (4 optional minors deferred) |
+| 11. Build/tests/conventions/device | in progress |
 
 Notes for implementers: repo convention is `src/main/kotlin` (plan paths say `java` — follow repo). `ShotResult` lives in `core.physics` with required `rolloutM`.
 
