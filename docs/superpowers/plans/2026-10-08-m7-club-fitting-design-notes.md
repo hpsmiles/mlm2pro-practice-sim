@@ -20,17 +20,32 @@ Clubs are assigned colours **by first appearance in the session's shots** (spec 
 Assignment is positional: the Nth distinct club snapshot gets row N of this table.
 The table is fixed forever — never hash names to hues.
 
-| # | Slot | Hex | Name for code | Rationale |
-|---|------|-----|---------------|-----------|
-| 1 | A | `0xFF3FA7A0` | `Comparison.A` (existing) | Teal — first club reads as "the reference" |
-| 2 | B | `0xFF5B9DF9` | `Comparison.B` (existing) | Blue |
-| 3 | C | `0xFFD66FD8` | `Comparison.C` (existing) | Magenta |
-| 4 | D | `0xFFF0D64A` | `Comparison.D` (existing) | Yellow (distinct from reserved Amber `0xFFF2A93B` — it is a category colour approved for M7, amber itself stays reserved) |
-| 5 | E | `0xFF6FD86F` | **NEW** `Comparison.E` | Green, hue ≈ 120° — fills the hue gap between D-yellow (≈54°) and A-teal (≈174°). Deliberately more saturated/greener than `BleArmedGreen 0xFF7BC96F` (hue ≈ 103°), which only ever appears as the 8 dp BLE status dot and is never a category fill — no on-screen confusion |
-| 6 | F | `0xFFE85C7A` | **NEW** `Comparison.F` | Rose, hue ≈ 347° — opposite A-teal on the wheel; clearly pinker/redder than C-magenta (≈299°) side by side. Distinct from `AlertRed 0xFFE86A5E`, which is only used for error text/dots and never as a shot-category colour |
+Revised 2026-10-08 after device testing (§4.5): reordered for consecutive hue
+separation; blue nudged to indigo. Letters A–F stay stable, values move with the
+order — `GolfColors.Comparison` itself is re-ordered/re-valued so letter = club
+position; `FittingColors.CLUB` keeps its plain `A..F` listing.
 
-Both new colours sit at the same mid luminance / saturation band as A–D, so 8–10 dp
-dots and oval strokes look uniform, and all six are legible on `Base 0xFF0E1114`.
+| # | Name | Hex | Rationale |
+|---|------|-----|-----------|
+| 1 | `Comparison.A` (teal, unchanged) | `0xFF3FA7A0` | First club = the reference; design-system teal. Hue ≈ 174° |
+| 2 | `Comparison.B` (rose) | `0xFFE85C7A` | Hue ≈ 347° — 173° from teal: max separation for the universal 2-club case (was teal+blue at 43°, the on-device complaint) |
+| 3 | `Comparison.C` (yellow) | `0xFFF0D64A` | Hue ≈ 54° — 179° from teal, 67° from rose. Lemon-yellow is a device-proven category colour, clearly lighter/greener than reserved Amber `0xFFF2A93B`; amber itself stays reserved |
+| 4 | `Comparison.D` (indigo — hex CHANGED from blue `0xFF5B9DF9`) | `0xFF6E7BF2` | Hue ≈ 235° — lifts teal-vs-blue co-display from 43° to 61°; 179° from yellow, 64° from magenta. Same mid luminance as the rest |
+| 5 | `Comparison.E` (magenta) | `0xFFD66FD8` | Hue ≈ 299° — 64° from indigo but clearly lighter/purpler vs its blue-dominant neighbour |
+| 6 | `Comparison.F` (green) | `0xFF6FD86F` | Hue ≈ 120° — 179° from magenta. Greener than `BleArmedGreen 0xFF7BC96F` (8 dp BLE status dot only, never a category fill) |
+
+Usage-order consecutive separations: 173° / 67° / 179° / 64° / 179°. Weakest
+co-displaying pair overall is magenta–rose (48°), which only co-occurs at 5+
+clubs. Orange was rejected outright: reserved Amber marks the live moment in the
+SAME panel as the comparison rows, so an orange category colour is the one hue
+guaranteed to collide on-screen. Rose vs `AlertRed` (BLE dot when disarmed, END
+COMPARISON button) never share a card — different contexts, distinct casts.
+
+All six sit in the same mid luminance / saturation band, so 6–10 dp dots and
+2 dp ring strokes look uniform and stay legible on `Base 0xFF0E1114` / `Panel 0xFF0B0E11`.
+Fixer notes: `GolfColorsTest` pins the A–D hexes — update the B/C/D expectations;
+refresh the KDoc in `GolfColors.Comparison` (drop the "≥ 90° separation" line, cite
+this table) and in `FittingColors` (rose is now club 2, indigo club 4).
 
 A 7th+ club: reuse slot colours cyclically (A again for club 7) — acceptable because
 6-club comparisons are the realistic ceiling; do not invent more hues.
@@ -158,7 +173,7 @@ Tap a club row → an expanding region below that club's rows (within the same c
 - **Canvas**: `FittingTopDown` filling the remaining space on `GolfColors.Base`:
   - Same grid + `RangeDecorations` boards as `TopDownCanvas`.
   - Kept shots: 6 dp dots in the club's colour (§0.1). Excluded shots not drawn.
-  - **Dispersion ovals**: per club, 1σ oval stroked in club colour at 55 % alpha (pattern of `Teal55`), 2σ oval stroked at 25 % alpha; 2 dp stroke, no fill (fill would occlude other clubs' dots). Oval requires ≥ 3 kept shots — otherwise no ring for that club (its dots still render).
+  - **Dispersion ring** (revised 2026-10-08 device feedback — nested 1σ+2σ read on-device as "more rings than clubs"; original ask was one ring per club): exactly **ONE ring per club at 2σ**, stroked in the club's colour at **55 % alpha** (`Teal55` pattern), 2 dp stroke, no fill (fill would occlude other clubs' dots). 2σ captures ≈ 86 % of a bivariate normal — the "where do my shots land" region, which is what a dispersion ring is for; the table already reports ±σ numerically, so the ring's job is full spread, not core consistency. Requires ≥ 3 kept shots — otherwise no ring for that club (its dots still render). Dots unchanged (6 dp, club colour).
   - y axis = rest position = **total**; no carry/total toggle appears anywhere in this mode.
   - Empty state: centered "No kept shots yet" `BodySmall` `TextMuted` over the bare grid.
 
@@ -185,3 +200,4 @@ Viewing a history item opens the read-only RESULTS described in §2.1 (viewed-se
 2. **VIEW chip on COMPARE canvas** has no second canvas to toggle to in v1 (colour top-down lives in RESULTS only). I specified it as disabled or omittable — pick omission if it feels dead on device.
 3. **Delta colouring.** Spec says dim-below-noise only; a natural temptation is green/red deltas. I explicitly fixed deltas to `TextMuted` (noise) vs `TextPrimary` (signal) to avoid implying good/bad, since favourable direction differs per metric.
 4. **Drill-down inside a horizontally-scrolling table** is the one layout that needs care: the drill-down must span the full card width, not live inside the scrollable row — implementers often nest it inside the scrolled Row by accident.
+5. **Palette + ring revision (2026-10-08 device feedback).** User findings: nested 1σ+2σ rings read as "more rings than clubs" (→ one 2σ ring per club, §2.3) and teal+blue as clubs 1–2 were too close (→ palette reordered + blue → indigo, §0.1). One palette (`FittingColors.clubColor`) drives all four views, so the fixer changes values/order once in `GolfColors.Comparison` and every view follows; `GolfColorsTest` B/C/D expectations must move with the hexes.
