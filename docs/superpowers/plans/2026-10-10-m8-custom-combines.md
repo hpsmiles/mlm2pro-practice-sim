@@ -1480,14 +1480,97 @@ git commit -m "feat(combine): lie classification + physics surface provider"
 
 ---
 
-### Task 9: `CombineGame` state holder
+### Task 9: `CombineFormats`, `CombineRecord`, `CombineGame` state holder
 
 **Files:**
+- Create: `app/src/main/kotlin/com/hpsmiles/golfsim/combine/CombineFormats.kt`
+- Create: `app/src/main/kotlin/com/hpsmiles/golfsim/combine/CombineRecord.kt`
 - Create: `app/src/main/kotlin/com/hpsmiles/golfsim/combine/CombineGame.kt`
+
+(Execution note 2026-10-10: `CombineFormats.kt` + `CombineRecord.kt` moved here from Task 10 — `CombineGame.kt` references `CombineRecordComparison` and `CombineRecord.detail` references `CombineFormats`, so all three must compile together at this task's build step. Task 10 keeps `CombineResults` + its test.)
 
 (Thin Compose state holder; all decision logic lives in the tested pure files — no unit test here, matching `TargetPracticeGame`.)
 
-- [ ] **Step 1: Write `CombineGame.kt`**
+- [ ] **Step 1: Write `CombineFormats.kt`**
+
+```kotlin
+package com.hpsmiles.golfsim.combine
+
+import com.hpsmiles.golfsim.core.scoring.HandicapEstimate
+import com.hpsmiles.golfsim.core.scoring.SkillBand
+import java.util.Locale
+import kotlin.math.roundToInt
+
+/** Display formatting for handicap estimates and per-shot chips. */
+object CombineFormats {
+
+    fun formatHc(est: Double): String = when {
+        est < SkillBand.TOUR.anchorHc -> "tour-or-better"
+        est < 0.0 -> "+" + oneDp(-est)
+        est <= 25.0 -> oneDp(est)
+        else -> "25+"
+    }
+
+    fun formatHcWithUncertainty(estimate: HandicapEstimate): String {
+        val low = estimate.low
+        val high = estimate.high
+        return if (low == null || high == null) {
+            "≈ ${formatHc(estimate.est)}"
+        } else {
+            "≈ ${formatHc(estimate.est)} ± ${zeroDp((high - low) / 2.0)}"
+        }
+    }
+
+    fun chip(est: Double): String = when {
+        est < SkillBand.TOUR.anchorHc -> "TOUR+"
+        est < 0.0 -> "SCR"
+        est <= 25.0 -> "≈" + est.roundToInt()
+        else -> "25+"
+    }
+
+    fun oneDp(value: Double): String = String.format(Locale.US, "%.1f", value)
+
+    fun zeroDp(value: Double): String = String.format(Locale.US, "%.0f", value)
+}
+```
+
+- [ ] **Step 2: Write `CombineRecord.kt`**
+
+```kotlin
+package com.hpsmiles.golfsim.combine
+
+enum class CombineRecordOutcome { FIRST_SCORE, NEW_RECORD, OFF_RECORD }
+
+data class CombineRecordComparison(
+    val outcome: CombineRecordOutcome,
+    val best: Double?,
+    val delta: Double,
+)
+
+/** Lower overall HC is better. */
+object CombineRecord {
+    fun compare(previousBest: Double?, est: Double): CombineRecordComparison = when {
+        previousBest == null -> CombineRecordComparison(CombineRecordOutcome.FIRST_SCORE, null, 0.0)
+        est < previousBest -> CombineRecordComparison(CombineRecordOutcome.NEW_RECORD, previousBest, previousBest - est)
+        else -> CombineRecordComparison(CombineRecordOutcome.OFF_RECORD, previousBest, est - previousBest)
+    }
+
+    fun headline(comparison: CombineRecordComparison): String = when (comparison.outcome) {
+        CombineRecordOutcome.FIRST_SCORE -> "FIRST SCORE"
+        CombineRecordOutcome.NEW_RECORD -> "NEW RECORD"
+        CombineRecordOutcome.OFF_RECORD -> "OFF YOUR BEST"
+    }
+
+    fun detail(comparison: CombineRecordComparison): String = when (comparison.outcome) {
+        CombineRecordOutcome.FIRST_SCORE -> "First completed combine"
+        CombineRecordOutcome.NEW_RECORD -> "Previous best ${CombineFormats.formatHc(comparison.best!!)}"
+        CombineRecordOutcome.OFF_RECORD ->
+            "Best ${CombineFormats.formatHc(comparison.best!!)} · ${CombineFormats.oneDp(comparison.delta)} off"
+    }
+}
+```
+
+- [ ] **Step 3: Write `CombineGame.kt`**
 
 ```kotlin
 package com.hpsmiles.golfsim.combine
@@ -1594,27 +1677,27 @@ class CombineGame {
 
 (Copy `LaunchConditions` argument names from `TargetPracticeGame.add` verbatim — same fields in the same order.)
 
-- [ ] **Step 2: Build to verify it compiles**
+- [ ] **Step 4: Build to verify it compiles**
 
 Run: `.\gradlew.bat :app:compileDebugKotlin`
 Expected: `BUILD SUCCESSFUL`.
 
-- [ ] **Step 3: Commit**
+- [ ] **Step 5: Commit**
 
 ```powershell
-git add app/src/main/kotlin/com/hpsmiles/golfsim/combine/CombineGame.kt
-git commit -m "feat(combine): session state holder"
+git add app/src/main/kotlin/com/hpsmiles/golfsim/combine/CombineFormats.kt app/src/main/kotlin/com/hpsmiles/golfsim/combine/CombineRecord.kt app/src/main/kotlin/com/hpsmiles/golfsim/combine/CombineGame.kt
+git commit -m "feat(combine): record/formats + session state holder"
 ```
 
 ---
 
-### Task 10: `CombineResults`, `CombineFormats`, `CombineRecord` + tests
+### Task 10: `CombineResults` + test
 
 **Files:**
-- Create: `app/src/main/kotlin/com/hpsmiles/golfsim/combine/CombineFormats.kt`
-- Create: `app/src/main/kotlin/com/hpsmiles/golfsim/combine/CombineRecord.kt`
 - Create: `app/src/main/kotlin/com/hpsmiles/golfsim/combine/CombineResults.kt`
 - Test: `app/src/test/kotlin/com/hpsmiles/golfsim/combine/CombineResultsTest.kt`
+
+(Execution note 2026-10-10: `CombineFormats.kt` + `CombineRecord.kt` were moved to Task 9 to satisfy the compile dependency — this task now only adds results aggregation + its test.)
 
 - [ ] **Step 1: Write the failing test**
 
@@ -1685,86 +1768,7 @@ class CombineResultsTest {
 Run: `.\gradlew.bat :app:testDebugUnitTest --tests "com.hpsmiles.golfsim.combine.CombineResultsTest"`
 Expected: FAIL — `unresolved reference: combineResults`.
 
-- [ ] **Step 3: Write `CombineFormats.kt`**
-
-```kotlin
-package com.hpsmiles.golfsim.combine
-
-import com.hpsmiles.golfsim.core.scoring.HandicapEstimate
-import com.hpsmiles.golfsim.core.scoring.SkillBand
-import java.util.Locale
-import kotlin.math.roundToInt
-
-/** Display formatting for handicap estimates and per-shot chips. */
-object CombineFormats {
-
-    fun formatHc(est: Double): String = when {
-        est < SkillBand.TOUR.anchorHc -> "tour-or-better"
-        est < 0.0 -> "+" + oneDp(-est)
-        est <= 25.0 -> oneDp(est)
-        else -> "25+"
-    }
-
-    fun formatHcWithUncertainty(estimate: HandicapEstimate): String {
-        val low = estimate.low
-        val high = estimate.high
-        return if (low == null || high == null) {
-            "≈ ${formatHc(estimate.est)}"
-        } else {
-            "≈ ${formatHc(estimate.est)} ± ${zeroDp((high - low) / 2.0)}"
-        }
-    }
-
-    fun chip(est: Double): String = when {
-        est < SkillBand.TOUR.anchorHc -> "TOUR+"
-        est < 0.0 -> "SCR"
-        est <= 25.0 -> "≈" + est.roundToInt()
-        else -> "25+"
-    }
-
-    fun oneDp(value: Double): String = String.format(Locale.US, "%.1f", value)
-
-    fun zeroDp(value: Double): String = String.format(Locale.US, "%.0f", value)
-}
-```
-
-- [ ] **Step 4: Write `CombineRecord.kt`**
-
-```kotlin
-package com.hpsmiles.golfsim.combine
-
-enum class CombineRecordOutcome { FIRST_SCORE, NEW_RECORD, OFF_RECORD }
-
-data class CombineRecordComparison(
-    val outcome: CombineRecordOutcome,
-    val best: Double?,
-    val delta: Double,
-)
-
-/** Lower overall HC is better. */
-object CombineRecord {
-    fun compare(previousBest: Double?, est: Double): CombineRecordComparison = when {
-        previousBest == null -> CombineRecordComparison(CombineRecordOutcome.FIRST_SCORE, null, 0.0)
-        est < previousBest -> CombineRecordComparison(CombineRecordOutcome.NEW_RECORD, previousBest, previousBest - est)
-        else -> CombineRecordComparison(CombineRecordOutcome.OFF_RECORD, previousBest, est - previousBest)
-    }
-
-    fun headline(comparison: CombineRecordComparison): String = when (comparison.outcome) {
-        CombineRecordOutcome.FIRST_SCORE -> "FIRST SCORE"
-        CombineRecordOutcome.NEW_RECORD -> "NEW RECORD"
-        CombineRecordOutcome.OFF_RECORD -> "OFF YOUR BEST"
-    }
-
-    fun detail(comparison: CombineRecordComparison): String = when (comparison.outcome) {
-        CombineRecordOutcome.FIRST_SCORE -> "First completed combine"
-        CombineRecordOutcome.NEW_RECORD -> "Previous best ${CombineFormats.formatHc(comparison.best!!)}"
-        CombineRecordOutcome.OFF_RECORD ->
-            "Best ${CombineFormats.formatHc(comparison.best!!)} · ${CombineFormats.oneDp(comparison.delta)} off"
-    }
-}
-```
-
-- [ ] **Step 5: Write `CombineResults.kt`**
+- [ ] **Step 3: Write `CombineResults.kt`**
 
 ```kotlin
 package com.hpsmiles.golfsim.combine
@@ -1833,16 +1837,16 @@ fun overallEstimate(entry: CombineCatalogEntry, facts: List<CombineShotFacts>): 
     ).est
 ```
 
-- [ ] **Step 6: Run tests to verify they pass**
+- [ ] **Step 4: Run tests to verify they pass**
 
 Run: `.\gradlew.bat :app:testDebugUnitTest --tests "com.hpsmiles.golfsim.combine.CombineResultsTest"`
 Expected: PASS.
 
-- [ ] **Step 7: Commit**
+- [ ] **Step 5: Commit**
 
 ```powershell
-git add app/src/main/kotlin/com/hpsmiles/golfsim/combine/CombineFormats.kt app/src/main/kotlin/com/hpsmiles/golfsim/combine/CombineRecord.kt app/src/main/kotlin/com/hpsmiles/golfsim/combine/CombineResults.kt app/src/test/kotlin/com/hpsmiles/golfsim/combine/CombineResultsTest.kt
-git commit -m "feat(combine): results aggregation, formats, record compare"
+git add app/src/main/kotlin/com/hpsmiles/golfsim/combine/CombineResults.kt app/src/test/kotlin/com/hpsmiles/golfsim/combine/CombineResultsTest.kt
+git commit -m "feat(combine): results aggregation"
 ```
 
 ---
