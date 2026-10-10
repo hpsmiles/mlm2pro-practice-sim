@@ -55,13 +55,15 @@ internal fun CombinePlay(
             playFraction = FollowCam.endFraction(result).toFloat()
             return@LaunchedEffect
         }
+        if (result.flightTimeSec <= 0.0) return@LaunchedEffect
         val durationMs = result.flightTimeSec * 1000.0 / speedMult.divisor
         val end = FollowCam.endFraction(result).toFloat()
+        var last = withFrameNanos { it }
         playFraction = 0f
         while (playFraction < end) {
-            withFrameNanos { delta ->
-                playFraction = (playFraction + (delta / 1e6 / durationMs).toFloat()).coerceAtMost(end)
-            }
+            val now = withFrameNanos { it }
+            playFraction = (playFraction + ((now - last) / 1_000_000.0 / durationMs).toFloat()).coerceAtMost(end)
+            last = now
         }
     }
 
@@ -96,7 +98,7 @@ internal fun CombinePlay(
         }
     }
 
-    BoxWithConstraints(modifier.background(GolfColors.Base)) {
+    BoxWithConstraints(modifier.fillMaxSize().background(GolfColors.Base)) {
         Row(Modifier.fillMaxSize()) {
             Box(Modifier.weight(1f).clipToBounds()) {
                 BoxWithConstraints(Modifier.fillMaxSize()) {
