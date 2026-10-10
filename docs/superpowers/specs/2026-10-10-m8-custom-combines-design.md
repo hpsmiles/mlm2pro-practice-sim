@@ -95,9 +95,11 @@ chips. Distances clamp to table grid ends.
   rows; skill_levels tour / scratch / hcp10 / hcp18 — only 4 real bands; lies putt /
   fairway / rough / sand / tee / recovery; metres; expected_strokes. User approved
   vendoring the CSV; it lives at `core/scoring/tools/sg_reference_full.csv`.
-- **Two series per (band, lie)**: series 1 is the true metre conversion of a yards
-  grid; series 2 is the yard *count* relabelled as metres, with identical values.
-  Series 2 MUST be ignored (it would read putt 5 m as 1.23 instead of 1.857).
+- **Two series per (band, lie)**: the vendored CSV labels rows by `distance_unit` —
+  series 1 is the true metre conversion (unit `m`); series 2 is the same grid in
+  imperial units (unit `ft` for putt, `yd` for the rest) with identical values.
+  Only unit `m` rows are canonical; the imperial duplicates MUST be ignored (they
+  would read putt 5 ft as "5 m" → 1.23 instead of 1.857 at 5 m).
   Detect series 1 as everything before the first distance decrease. All expected-strokes
   figures in this design were verified against series 1.
 - Committed tables: putt 60 points (0.30–18.29 m), fairway/rough 120 points each
