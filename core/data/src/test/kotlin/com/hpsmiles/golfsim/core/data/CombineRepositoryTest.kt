@@ -77,4 +77,22 @@ class CombineRepositoryTest {
         assertEquals(active.id, resumed)
         assertEquals(1, repository.observeCombineShots(active.id).first().size)
     }
+
+    @Test
+    fun completedReadsReturnSessionAndShots() = runTest {
+        val repository = repo()
+        val id = repository.startCombineSession("APPROACH", "APPROACH", 1, 1_000L, ShotSource.LIVE)!!
+        for (index in 0 until 18) {
+            repository.appendCombineShot(id, index, index / 6, "GREEN", 5.0 + index)
+        }
+        repository.completeCombineSession(id, 9_000L)
+
+        val completed = repository.combineCompletedSessions("APPROACH")
+        assertEquals(1, completed.size)
+        assertEquals(id, completed.single().id)
+
+        // shotsForSessions has no ORDER BY — assert the count, not order.
+        assertEquals(18, repository.combineShotsForSessions(listOf(id)).size)
+        assertTrue(repository.combineShotsForSessions(emptyList()).isEmpty())
+    }
 }

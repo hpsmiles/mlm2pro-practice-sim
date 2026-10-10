@@ -786,11 +786,32 @@ class SessionRepository private constructor(private val context: Context) {
         persistError.value = true
     }
 
-    suspend fun combineCompletedSessions(combineId: String): List<CombineSessionEntity> =
+    /** All completed sessions for one combine. Empty list on failure (never throws). */
+    suspend fun combineCompletedSessions(combineId: String): List<CombineSessionEntity> = try {
         combineSessionDao.completedForCombine(combineId)
+            .also { persistError.value = false }
+    } catch (t: Throwable) {
+        if (t is CancellationException) throw t
+        Log.e(TAG, "combineCompletedSessions failed", t)
+        persistError.value = true
+        emptyList()
+    }
 
+    /** Shots for a set of session ids. Empty list on an empty input or any failure (never throws). */
     suspend fun combineShotsForSessions(sessionIds: List<Long>): List<CombineShotEntity> =
-        if (sessionIds.isEmpty()) emptyList() else combineShotDao.shotsForSessions(sessionIds)
+        if (sessionIds.isEmpty()) {
+            emptyList()
+        } else {
+            try {
+                combineShotDao.shotsForSessions(sessionIds)
+                    .also { persistError.value = false }
+            } catch (t: Throwable) {
+                if (t is CancellationException) throw t
+                Log.e(TAG, "combineShotsForSessions failed", t)
+                persistError.value = true
+                emptyList()
+            }
+        }
 
     companion object {
         private const val TAG = "SessionRepository"
