@@ -65,7 +65,8 @@ fun handicapMatch(shots: List<ShotInput>): HandicapEstimate {
         val mean = scratchSgs.average()
         val sd = sqrt(scratchSgs.sumOf { (it - mean) * (it - mean) } / (shots.size - 1))
         val slope = (s[segment + 1] - s[segment]) / (h[segment + 1] - h[segment])
-        val uncertainty = sd / sqrt(shots.size.toDouble()) / abs(slope)
+        val denom = if (abs(slope) < 1e-12) 1e-12 else slope
+        val uncertainty = sd / sqrt(shots.size.toDouble()) / abs(denom)
         low = est - uncertainty
         high = est + uncertainty
     }

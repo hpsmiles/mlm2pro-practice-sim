@@ -57,4 +57,22 @@ class HandicapMatchTest {
         } catch (_: IllegalArgumentException) {
         }
     }
+
+    @Test
+    fun `crossing branch - mid curve root`() {
+        val estimate = handicapMatch(listOf(ShotInput(Lie.GREEN, 18.3, Lie.GREEN, 2.1)))
+        assertEquals(2.0104, estimate.est, 0.01)
+        assertFalse(estimate.clampedLow)
+        assertFalse(estimate.clampedHigh)
+        assertNull(estimate.low)
+        assertNull(estimate.high) // n = 1
+    }
+
+    @Test
+    fun `all-negative branch - beyond 18 clamp`() {
+        val estimate = handicapMatch(listOf(ShotInput(Lie.GREEN, 5.5, Lie.GREEN, 4.0)))
+        assertEquals(243.15, estimate.est, 0.1)
+        assertTrue(estimate.clampedHigh)
+        assertFalse(estimate.clampedLow)
+    }
 }
