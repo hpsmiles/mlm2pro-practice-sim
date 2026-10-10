@@ -398,6 +398,7 @@ class SessionRepository private constructor(private val context: Context) {
                 Mlm2proDatabase.MIGRATION_2_3,
                 Mlm2proDatabase.MIGRATION_3_4,
                 Mlm2proDatabase.MIGRATION_4_5,
+                Mlm2proDatabase.MIGRATION_5_6,
             )
             .build()
 

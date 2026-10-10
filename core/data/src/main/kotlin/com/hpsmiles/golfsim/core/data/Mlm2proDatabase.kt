@@ -26,8 +26,9 @@ import com.hpsmiles.golfsim.core.data.entity.ShotEntity
         SessionEntity::class, ShotEntity::class, ClubEntity::class, GameResultEntity::class,
         BagMappingSessionEntity::class, BagMappingShotEntity::class,
         FittingSessionEntity::class, FittingShotEntity::class,
+        CombineSessionEntity::class, CombineShotEntity::class,
     ],
-    version = 5,
+    version = 6,
     exportSchema = true,
 )
 abstract class Mlm2proDatabase : RoomDatabase() {
@@ -39,6 +40,8 @@ abstract class Mlm2proDatabase : RoomDatabase() {
     abstract fun bagMappingShotDao(): BagMappingShotDao
     abstract fun fittingSessionDao(): FittingSessionDao
     abstract fun fittingShotDao(): FittingShotDao
+    abstract fun combineSessionDao(): CombineSessionDao
+    abstract fun combineShotDao(): CombineShotDao
 
     companion object {
         /**
@@ -142,6 +145,40 @@ abstract class Mlm2proDatabase : RoomDatabase() {
                 db.execSQL(
                     "CREATE INDEX IF NOT EXISTS `index_fitting_shots_sessionId` " +
                         "ON `fitting_shots` (`sessionId`)",
+                )
+            }
+        }
+
+        /**
+         * M8 spec §3: combine_sessions + combine_shots (custom combines).
+         * Existing tables untouched. Fresh tables — every column NOT NULL or
+         * genuinely nullable, so the entities need no @ColumnInfo defaultValue
+         * (game_results pattern). Corrupt-file recovery reuses build(), so it
+         * inherits the migration.
+         */
+        val MIGRATION_5_6: Migration = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `combine_sessions` (" +
+                        "`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                        "`combineId` TEXT NOT NULL, " +
+                        "`combineName` TEXT NOT NULL, " +
+                        "`startedAtMs` INTEGER NOT NULL, " +
+                        "`completedAtMs` INTEGER, " +
+                        "`source` INTEGER NOT NULL, " +
+                        "`layoutVersion` INTEGER NOT NULL)",
+                )
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `combine_shots` (" +
+                        "`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                        "`sessionId` INTEGER NOT NULL, " +
+                        "`shotIndex` INTEGER NOT NULL, " +
+                        "`stationIndex` INTEGER NOT NULL, " +
+                        "`restLie` TEXT NOT NULL, " +
+                        "`restDistanceM` REAL NOT NULL)",
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_combine_shots_sessionId` ON `combine_shots` (`sessionId`)",
                 )
             }
         }
