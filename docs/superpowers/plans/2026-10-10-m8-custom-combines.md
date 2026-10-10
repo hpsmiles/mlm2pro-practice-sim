@@ -2014,7 +2014,7 @@ Expected: `BUILD SUCCESSFUL`.
 
 ```powershell
 git add app/src/main/kotlin/com/hpsmiles/golfsim/combine/CombineCanvas.kt app/src/main/kotlin/com/hpsmiles/golfsim/combine/CombineMetricsPanel.kt
-git commit -m "feat(combine): play canvas + targets panel"
+git commit -m "feat(combine): play canvas + metrics panel"
 ```
 
 ---
@@ -2023,6 +2023,8 @@ git commit -m "feat(combine): play canvas + targets panel"
 
 **Files:**
 - Create: `app/src/main/kotlin/com/hpsmiles/golfsim/combine/CombinePlay.kt`
+
+(Execution note 2026-10-10: `CombinePlay` references `CombineResultsView`, so **Task 13 is built before Task 12** — T12 cannot compile standalone. Nothing else about this task changes.)
 
 Clone `TargetPracticePlay.kt` structure (canvas Box + right panel; HUD TopStart; gear TopEnd; animation loop; result gate) with these combine-specific contents:
 
@@ -2208,6 +2210,8 @@ git commit -m "feat(combine): play screen with banner and result gate"
 
 **Files:**
 - Create: `app/src/main/kotlin/com/hpsmiles/golfsim/combine/CombineResultsView.kt`
+
+(Execution note 2026-10-10: built **before** Task 12 — `CombinePlay` consumes this view, so this task ships first to keep every task independently compilable.)
 
 - [ ] **Step 1: Write `CombineResultsView.kt`**
 
