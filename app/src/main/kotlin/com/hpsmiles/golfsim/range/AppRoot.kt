@@ -40,6 +40,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.hpsmiles.golfsim.audio.GameAudio
+import com.hpsmiles.golfsim.combine.CombineGame
 import com.hpsmiles.golfsim.bag.BagMappingCollector
 import com.hpsmiles.golfsim.bag.BagMappingScreen
 import com.hpsmiles.golfsim.bag.BagOrderMode
@@ -119,6 +120,8 @@ fun AppRoot() {
     var tab by remember { mutableStateOf(RangeTab.RANGE) }
     val targetPractice = remember { TargetPracticeGame() }
     val breakPane = remember { BreakThePaneGame() }
+    // TEMPORARY PLACEHOLDER (Task 15): replaced by Task 16's real combine wiring.
+    val combineGame = remember { CombineGame() }
     var activeGame by remember { mutableStateOf(GameMode.NONE) }
 
     // M6: bag mapping. collector is session-ephemeral guidance state; the
@@ -339,6 +342,8 @@ fun AppRoot() {
                     completeGame(it, breakPane::setRecord, { breakPane.clockMs() }, source)
                 }
             }
+            // TEMPORARY PLACEHOLDER (Task 15): real combine routeShot wiring is Task 16.
+            GameMode.COMBINE -> Unit
         }
     }
 
@@ -736,11 +741,15 @@ fun AppRoot() {
         val activeShots = when (active) {
             GameMode.TARGET_PRACTICE -> targetPractice.shots.isNotEmpty()
             GameMode.BREAK_PANE -> breakPane.shots.isNotEmpty()
+            // TEMPORARY PLACEHOLDER (Task 15): real combine state is Task 16.
+            GameMode.COMBINE -> false
             GameMode.NONE -> false
         }
         val activeComplete = when (active) {
             GameMode.TARGET_PRACTICE -> targetPractice.complete
             GameMode.BREAK_PANE -> breakPane.complete
+            // TEMPORARY PLACEHOLDER (Task 15): real combine state is Task 16.
+            GameMode.COMBINE -> true
             GameMode.NONE -> true
         }
         val midGame = GameLeavePolicy.confirmRequired(active, activeShots, activeComplete)
@@ -862,6 +871,14 @@ fun AppRoot() {
                             modifier = Modifier.weight(1f),
                             targetPractice = targetPractice,
                             breakPane = breakPane,
+                            // TEMPORARY PLACEHOLDERS (Task 15): replaced by Task 16's real wiring.
+                            combineGame = combineGame,
+                            combineActive = null,
+                            combineTakenCount = 0,
+                            onStartCombine = {},
+                            onResumeCombine = {},
+                            onDiscardAndStartCombine = {},
+                            onPlayAgainCombine = {},
                             activeGame = activeGame,
                             onActiveGameChange = { activeGame = it },
                             gameAudio = gameAudio,

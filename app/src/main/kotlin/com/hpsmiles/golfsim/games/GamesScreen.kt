@@ -28,6 +28,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.hpsmiles.golfsim.audio.GameAudio
+import com.hpsmiles.golfsim.combine.CombineCatalogEntry
+import com.hpsmiles.golfsim.combine.CombineGame
+import com.hpsmiles.golfsim.combine.CombinePlan
+import com.hpsmiles.golfsim.combine.CombinePlay
+import com.hpsmiles.golfsim.combine.CombineSetup
+import com.hpsmiles.golfsim.core.data.CombineSessionEntity
 import com.hpsmiles.golfsim.core.designsystem.GolfColors
 import com.hpsmiles.golfsim.core.designsystem.GolfSpacing
 import com.hpsmiles.golfsim.core.designsystem.GolfTypography
@@ -35,7 +41,7 @@ import java.util.Locale
 import kotlin.math.roundToInt
 
 /** Which game (if any) currently owns the shot stream. Hoisted to AppRoot for dispatch. */
-enum class GameMode { NONE, TARGET_PRACTICE, BREAK_PANE }
+enum class GameMode { NONE, TARGET_PRACTICE, BREAK_PANE, COMBINE }
 
 private const val DIST_MIN_M = 50.0
 private const val DIST_MAX_M = 350.0
@@ -50,6 +56,13 @@ private const val DEFAULT_TARGET_M = 140.0
 fun GamesScreen(
     targetPractice: TargetPracticeGame,
     breakPane: BreakThePaneGame,
+    combineGame: CombineGame,
+    combineActive: CombineSessionEntity?,
+    combineTakenCount: Int,
+    onStartCombine: (CombineCatalogEntry) -> Unit,
+    onResumeCombine: () -> Unit,
+    onDiscardAndStartCombine: (CombineCatalogEntry) -> Unit,
+    onPlayAgainCombine: () -> Unit,
     activeGame: GameMode,
     onActiveGameChange: (GameMode) -> Unit,
     gameAudio: GameAudio,
@@ -74,6 +87,15 @@ fun GamesScreen(
                     title = "BREAK THE PANE",
                     blurb = "Break all 9 glass cells floating 20% of the way to the target (customizable in setup). Fewer shots wins.",
                     onClick = { pickerState = "SETUP_BP" },
+                )
+                GameCard(
+                    title = "COMBINES",
+                    blurb = if (combineActive != null) {
+                        "RESUME · ${combineTakenCount}/${CombinePlan.SHOTS_TOTAL}"
+                    } else {
+                        "Stock combines scored against your handicap"
+                    },
+                    onClick = { pickerState = "SETUP_COMBINE" },
                 )
             }
         }
@@ -101,6 +123,17 @@ fun GamesScreen(
                 )
             }
         }
+        pickerState == "SETUP_COMBINE" -> {
+            CombineSetup(
+                combineActive = combineActive,
+                takenCount = combineTakenCount,
+                onStart = onStartCombine,
+                onResume = onResumeCombine,
+                onDiscardAndStart = onDiscardAndStartCombine,
+                onCancel = { pickerState = "PICKER" },
+                modifier = modifier.fillMaxSize().background(GolfColors.Base),
+            )
+        }
         activeGame == GameMode.TARGET_PRACTICE -> {
             TargetPracticePlay(
                 game = targetPractice,
@@ -125,6 +158,23 @@ fun GamesScreen(
                 onSoundsChange = onSoundsChange,
                 modifier = modifier,
             )
+        }
+        activeGame == GameMode.COMBINE -> {
+            val entry = combineGame.entry
+            if (entry != null) {
+                CombinePlay(
+                    entry = entry,
+                    game = combineGame,
+                    soundsEnabled = soundsEnabled,
+                    onSoundsChange = onSoundsChange,
+                    onPlayAgain = onPlayAgainCombine,
+                    onBack = {
+                        onActiveGameChange(GameMode.NONE)
+                        pickerState = "PICKER"
+                    },
+                    modifier = modifier,
+                )
+            }
         }
     }
 }
