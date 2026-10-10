@@ -5,7 +5,16 @@ import com.hpsmiles.golfsim.core.scoring.SkillBand
 import java.util.Locale
 import kotlin.math.roundToInt
 
-/** Display formatting for handicap estimates and per-shot chips. */
+/**
+ * Display formatting for handicap estimates and per-shot chips.
+ *
+ * Boundary note (spec-literal, intentional asymmetry): the numeric range is
+ * `[-5, 0)` but the chip band is `[-5, 0]`, so at exactly the TOUR anchor
+ * (-5.0) `formatHc` renders "+5.0" while `chip` renders "SCR". The upper clamp
+ * is "above 25": exactly 25.0 renders "25.0" and 25.1 renders "25+". These
+ * brackets deliberately differ in granularity per rendering and mirror
+ * HandicapMatch's clampedLow/clampedHigh flags.
+ */
 object CombineFormats {
 
     fun formatHc(est: Double): String = when {

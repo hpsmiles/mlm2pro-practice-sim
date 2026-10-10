@@ -26,7 +26,11 @@ data class CombineShot(
 class CombineGame {
     var entry: CombineCatalogEntry? = null
     var sessionId: Long = 0L
+
+    /** Shots already taken before this [start] (Room-derived on a resumed session). */
     var baselineTaken: Int = 0
+
+    /** Shots taken since [start] only; the resumed baseline lives in [baselineTaken]. */
     val shots: SnapshotStateList<CombineShot> = mutableStateListOf()
     var tick by mutableIntStateOf(0)
     var record: CombineRecordComparison? by mutableStateOf(null)

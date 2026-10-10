@@ -22,6 +22,7 @@ object CombineRecord {
         CombineRecordOutcome.OFF_RECORD -> "OFF YOUR BEST"
     }
 
+    /** `comparison.best` is guaranteed non-null for NEW_RECORD/OFF_RECORD by [compare]. */
     fun detail(comparison: CombineRecordComparison): String = when (comparison.outcome) {
         CombineRecordOutcome.FIRST_SCORE -> "First completed combine"
         CombineRecordOutcome.NEW_RECORD -> "Previous best ${CombineFormats.formatHc(comparison.best!!)}"
