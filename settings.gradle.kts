@@ -28,6 +28,8 @@ include(":core:ble")
 
 include(":core:physics")
 
+include(":core:scoring")
+
 include(":app")
 
 include(":core:designsystem")
