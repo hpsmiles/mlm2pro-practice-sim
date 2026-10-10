@@ -130,7 +130,7 @@ fun GamesScreen(
 }
 
 @Composable
-private fun GameCard(title: String, blurb: String, onClick: () -> Unit) {
+internal fun GameCard(title: String, blurb: String, onClick: () -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
