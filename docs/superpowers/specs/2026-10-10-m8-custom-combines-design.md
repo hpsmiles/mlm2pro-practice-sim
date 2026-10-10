@@ -91,9 +91,10 @@ chips. Distances clamp to table grid ends.
 
 ## 2. SG data & provenance
 
-- Source: user-supplied `sg_reference_full.csv` (5,280 rows; skill_levels tour /
-  scratch / hcp10 / hcp18 — only 4 real bands; lies putt / fairway / rough / sand /
-  tee / recovery; metres; expected_strokes).
+- Source: `sg_reference_full.csv`, from the user's own app (tapinstats.com) — 5,280
+  rows; skill_levels tour / scratch / hcp10 / hcp18 — only 4 real bands; lies putt /
+  fairway / rough / sand / tee / recovery; metres; expected_strokes. User approved
+  vendoring the CSV; it lives at `core/scoring/tools/sg_reference_full.csv`.
 - **Two series per (band, lie)**: series 1 is the true metre conversion of a yards
   grid; series 2 is the yard *count* relabelled as metres, with identical values.
   Series 2 MUST be ignored (it would read putt 5 m as 1.23 instead of 1.857).
@@ -108,11 +109,12 @@ chips. Distances clamp to table grid ends.
 - Data-vetting tests (section 8) pin: `E_tour(fairway, 91.4 m) = 2.80` (exact row),
   `E_scratch(putt, 5.0 m) = 1.857` (relabel-rejection), and band ordering
   tour ≤ scratch ≤ 10 ≤ 18 at every grid point.
-- **Provenance arrangement (user does not need to act):** the derived Kotlin tables +
-  generation script are committed (transparent derivation, documented header); the
-  source CSV itself is NOT committed unless the user later confirms its provenance.
-  No published-table cross-check is required for v1; the file passed self-consistency
-  checks (each band's implied average ≈ SG 0 at its own level).
+- **Provenance:** resolved — the table is from the user's own app (tapinstats.com) and
+  the user approved committing it. The source CSV is vendored (path above) alongside a
+  committed Node generation script `core/scoring/tools/generate-sg-tables.cjs` that
+  regenerates the Kotlin tables from it in one command (generated file carries a
+  documented header). No published-table cross-check is required for v1; the file
+  passed self-consistency checks (each band's implied average ≈ SG 0 at its level).
 
 ## 3. Module `:core:scoring`
 
