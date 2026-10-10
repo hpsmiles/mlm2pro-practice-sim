@@ -1180,7 +1180,7 @@ class CombinePlanTest {
         assertEquals(CombineCatalog.visitPins[0], CombinePlan.pinFor(approach, 0))
         assertEquals(CombineCatalog.visitPins[1], CombinePlan.pinFor(approach, 6))
         assertEquals(CombineCatalog.visitPins[2], CombinePlan.pinFor(approach, 12))
-        assertNull(CombinePlan.pinFor(approach, 2))
+        assertNull(CombinePlan.pinFor(approach, 4))
     }
 
     @Test
@@ -1192,7 +1192,7 @@ class CombinePlanTest {
 
     @Test
     fun `driver rest distance is measured to the invisible pin at the hole baseline`() {
-        val distance = CombinePlan.restDistanceM(approach, 2, 10.0, 300.0)
+        val distance = CombinePlan.restDistanceM(approach, 4, 10.0, 300.0)
         assertEquals(kotlin.math.sqrt(100.0 + 40.0 * 40.0), distance, 1e-9)
     }
 
@@ -1201,12 +1201,14 @@ class CombinePlanTest {
         val approachInput = CombinePlan.shotInput(wedges, 0, Lie.GREEN, 3.2)
         assertEquals(Lie.FAIRWAY, approachInput.startLie)
         assertEquals(50.0, approachInput.startM, 1e-9)
-        val driverInput = CombinePlan.shotInput(approach, 2, Lie.FAIRWAY, 41.2)
+        val driverInput = CombinePlan.shotInput(approach, 4, Lie.FAIRWAY, 41.2)
         assertEquals(Lie.TEE, driverInput.startLie)
         assertEquals(340.0, driverInput.startM, 1e-9)
     }
 }
 ```
+
+(Execution note 2026-10-10: driver test indices in this section were corrected 2 → 4 — the interleave `[0,0,1,1,2,2]×3` puts DRIVER at shot indices 4,5,10,11,16,17; correction landed with T7 implementer commit 23ee8d3.)
 
 - [ ] **Step 2: Run test to verify it fails**
 
@@ -1398,10 +1400,10 @@ class CombineLieTest {
 
     @Test
     fun `driver has no green - fairway or rough only`() {
-        // APPROACH shotIndex 2 = DRIVER
-        assertEquals(Lie.FAIRWAY, CombineLie.classify(approach, 2, 5.0, 280.0))
-        assertEquals(Lie.ROUGH, CombineLie.classify(approach, 2, 28.0, 280.0))
-        assertEquals(Lie.ROUGH, CombineLie.classify(approach, 2, 0.0, 350.0))
+        // APPROACH shotIndex 4 = DRIVER (driver shot indices are 4,5,10,11,16,17)
+        assertEquals(Lie.FAIRWAY, CombineLie.classify(approach, 4, 5.0, 280.0))
+        assertEquals(Lie.ROUGH, CombineLie.classify(approach, 4, 28.0, 280.0))
+        assertEquals(Lie.ROUGH, CombineLie.classify(approach, 4, 0.0, 350.0))
     }
 }
 ```
