@@ -82,10 +82,11 @@ docs/superpowers/plans/2026-10-10-m8-custom-combines.md          (this file)
 - Modify: `settings.gradle.kts`
 - Create: `core/scoring/build.gradle.kts`
 
-- [ ] **Step 0: Create the feature branch**
+- [ ] **Step 0: Ensure the feature branch** (branch `m8-custom-combines` was created
+  at master HEAD during the execution handoff — if it already exists this is a no-op)
 
 ```powershell
-git switch -c m8-custom-combines
+git switch m8-custom-combines
 ```
 
 - [ ] **Step 1: Register the module**
