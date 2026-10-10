@@ -150,7 +150,7 @@ abstract class Mlm2proDatabase : RoomDatabase() {
         }
 
         /**
-         * M8 spec §3: combine_sessions + combine_shots (custom combines).
+         * M8 spec §6: combine_sessions + combine_shots (custom combines).
          * Existing tables untouched. Fresh tables — every column NOT NULL or
          * genuinely nullable, so the entities need no @ColumnInfo defaultValue
          * (game_results pattern). Corrupt-file recovery reuses build(), so it
