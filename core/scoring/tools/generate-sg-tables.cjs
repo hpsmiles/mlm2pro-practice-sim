@@ -20,7 +20,7 @@ if (!header.startsWith("skill_level,lie_type")) throw new Error("unexpected head
 const data = {};
 for (const line of lines) {
   const [band, lie, unit, dStr, eStr] = line.split(",");
-  // Only the true-metre series is canonical; the ft/yd relabel duplicates are skipped.
+  // Only unit-m rows are canonical; the ft/yd imperial duplicates are skipped.
   if (unit !== "m") continue;
   if (!LIES.includes(lie) || !BANDS.includes(band)) continue;
   (data[lie] ??= {});

@@ -100,8 +100,9 @@ chips. Distances clamp to table grid ends.
   imperial units (unit `ft` for putt, `yd` for the rest) with identical values.
   Only unit `m` rows are canonical; the imperial duplicates MUST be ignored (they
   would read putt 5 ft as "5 m" → 1.23 instead of 1.857 at 5 m).
-  Detect series 1 as everything before the first distance decrease. All expected-strokes
-  figures in this design were verified against series 1.
+  Series 1 = the unit-`m` rows; the generator asserts they are strictly ascending
+  (no truncation heuristic). All expected-strokes figures in this design were
+  verified against series 1.
 - Committed tables: putt 60 points (0.30–18.29 m), fairway/rough 120 points each
   (4.6–548.6 m), tee 120 points (91–636 m). Distance grid stored once per lie + a
   value array per band. Sand/recovery are dropped (app has no such surfaces) but the
