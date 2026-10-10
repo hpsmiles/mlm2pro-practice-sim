@@ -65,7 +65,7 @@ Overall = root-solve on all 18 shots' mean. Per-shot matches render as coarse ch
 **Uncertainty.** `± = SD(per-shot SG at the scratch band, sample n−1) ÷ √n ÷ local
 slope` of the mean-SG curve at the root (segment slope; below 0 use the [−5,0] slope,
 above 18 use the [10,18] slope, extrapolated to 25). Scratch-projected SD is the
-stable spread reference at any level. Sensitivity context: slope ≈0.026 SG/hc in the
+stable spread reference at any level. Sensitivity context: slope ≈0.0254 SG/hc in the
 sub-zero and 0–10 zones, ≈0.057 in 10–18 — 1 SG ≈ 25–40 hc, hence coarse chips.
 
 **Display formats.** Estimate: `+N` in [−5,0) (golf plus convention, e.g. `+1.3`),
@@ -77,8 +77,8 @@ sub-zero and 0–10 zones, ≈0.057 in 10–18 — 1 SG ≈ 25–40 hc, hence co
 all on green, rests 1, 6, 7, 8, 10, 12 m → per-shot: 1 m `TOUR+` (SG tour +0.761 /
 scratch +0.951), 6/7/8 m SCR (SG_sc +0.101 / +0.048 / +0.005), 10 m → HC 3.1
 (SG −0.171/−0.070/+0.158/+0.559), 12 m → HC 7.2 (SG_sc −0.145). Station mean SG:
-tour +0.021 / scratch +0.148 / h10 +0.411 / h18 +0.865 → h* ≈ −5.7 →
-"tour-or-better". SD(scratch) 0.403 → SE 0.164 → ÷0.026 → ±6.3 in the 0–10 zone.
+tour +0.021 / scratch +0.148 / h10 +0.411 / h18 +0.865 → h* ≈ −5.84 →
+"tour-or-better". SD(scratch) 0.403 → SE 0.164 → ÷0.0254 ([−5,0] slope) → ±6.5.
 
 **Lie sensitivity (why the world is part of the score).** Same 100 m shot resting 12 m
 from the pin: GREEN → HC 7, FAIRWAY → HC 14, ROUGH → HC 19. The surface the ball
