@@ -48,6 +48,8 @@ class SessionRepository private constructor(private val context: Context) {
     private val bagMappingShotDao get() = db.bagMappingShotDao()
     private val fittingSessionDao get() = db.fittingSessionDao()
     private val fittingShotDao get() = db.fittingShotDao()
+    private val combineSessionDao get() = db.combineSessionDao()
+    private val combineShotDao get() = db.combineShotDao()
 
     /** True once a write/open failure has been seen; cleared on next success. */
     val persistError = MutableStateFlow(false)
@@ -693,6 +695,102 @@ class SessionRepository private constructor(private val context: Context) {
             persistError.value = true
         }
     }
+
+    // --- combine (M8, spec §6) --------------------------------------------
+
+    /** Open (in-progress) combine session, or null. Getter-flow — survives corrupt-file recovery. */
+    val combineActive: Flow<CombineSessionEntity?> get() = combineSessionDao.observeInProgress()
+
+    /** All completed combine sessions, newest first. Getter-flow. */
+    val combineHistory: Flow<List<CombineSessionEntity>> get() = combineSessionDao.observeHistory()
+
+    /** Every shot of every completed combine session. Getter-flow. */
+    val combineHistoryShots: Flow<List<CombineShotEntity>> get() = combineShotDao.observeHistoryShots()
+
+    /** Every stored shot of one combine session, in shot order. */
+    fun observeCombineShots(sessionId: Long): Flow<List<CombineShotEntity>> =
+        combineShotDao.observeShots(sessionId)
+
+    suspend fun startCombineSession(
+        combineId: String,
+        combineName: String,
+        layoutVersion: Int,
+        startedAtMs: Long,
+        source: ShotSource,
+    ): Long? = try {
+        db.withTransaction {
+            val existing = combineSessionDao.findInProgress()
+            when {
+                existing == null -> combineSessionDao.insert(
+                    CombineSessionEntity(
+                        combineId = combineId,
+                        combineName = combineName,
+                        startedAtMs = startedAtMs,
+                        completedAtMs = null,
+                        source = source.code,
+                        layoutVersion = layoutVersion,
+                    ),
+                )
+                existing.combineId == combineId -> existing.id
+                else -> null
+            }
+        }.also { persistError.value = false }
+    } catch (t: Throwable) {
+        if (t is CancellationException) throw t
+        Log.e(TAG, "startCombineSession failed", t)
+        persistError.value = true
+        null
+    }
+
+    suspend fun appendCombineShot(
+        sessionId: Long,
+        shotIndex: Int,
+        stationIndex: Int,
+        restLie: String,
+        restDistanceM: Double,
+    ): Long? = try {
+        combineShotDao.insert(
+            CombineShotEntity(
+                sessionId = sessionId,
+                shotIndex = shotIndex,
+                stationIndex = stationIndex,
+                restLie = restLie,
+                restDistanceM = restDistanceM,
+            ),
+        ).also { persistError.value = false }
+    } catch (t: Throwable) {
+        if (t is CancellationException) throw t
+        Log.e(TAG, "appendCombineShot failed", t)
+        persistError.value = true
+        null
+    }
+
+    suspend fun completeCombineSession(id: Long, completedAtMs: Long): Unit = try {
+        combineSessionDao.complete(id, completedAtMs)
+        persistError.value = false
+    } catch (t: Throwable) {
+        if (t is CancellationException) throw t
+        Log.e(TAG, "completeCombineSession failed", t)
+        persistError.value = true
+    }
+
+    suspend fun discardCombineSession(id: Long): Unit = try {
+        db.withTransaction {
+            combineShotDao.deleteShots(id)
+            combineSessionDao.delete(id)
+        }
+        persistError.value = false
+    } catch (t: Throwable) {
+        if (t is CancellationException) throw t
+        Log.e(TAG, "discardCombineSession failed", t)
+        persistError.value = true
+    }
+
+    suspend fun combineCompletedSessions(combineId: String): List<CombineSessionEntity> =
+        combineSessionDao.completedForCombine(combineId)
+
+    suspend fun combineShotsForSessions(sessionIds: List<Long>): List<CombineShotEntity> =
+        if (sessionIds.isEmpty()) emptyList() else combineShotDao.shotsForSessions(sessionIds)
 
     companion object {
         private const val TAG = "SessionRepository"
