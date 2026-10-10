@@ -48,6 +48,8 @@ dependencies {
     implementation(project(":core:connect"))
     // M5: session/shot persistence + bag records.
     implementation(project(":core:data"))
+    // M8: strokes-gained scoring (SkillBand/Lie/ExpectedStrokes/ShotInput).
+    implementation(project(":core:scoring"))
     implementation(platform(libs.compose.bom))
     implementation(libs.androidx.activity.compose)
     implementation(libs.compose.ui)
