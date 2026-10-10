@@ -1942,7 +1942,7 @@ import androidx.compose.ui.unit.dp
 import com.hpsmiles.golfsim.core.designsystem.GolfColors
 import com.hpsmiles.golfsim.core.designsystem.GolfSpacing
 import com.hpsmiles.golfsim.core.designsystem.GolfTypography
-import com.hpsmiles.golfsim.games.SectionCard
+import com.hpsmiles.golfsim.core.designsystem.SectionCard
 import com.hpsmiles.golfsim.range.DisplayShot
 import com.hpsmiles.golfsim.range.LastShotChips
 
@@ -2059,7 +2059,7 @@ import com.hpsmiles.golfsim.games.GameQuickSettingsDialog
 import com.hpsmiles.golfsim.games.GameScene
 import com.hpsmiles.golfsim.games.GameSpeedMult
 import com.hpsmiles.golfsim.games.SpeedChipRow
-import com.hpsmiles.golfsim.games.SectionCard
+import com.hpsmiles.golfsim.core.designsystem.SectionCard
 import com.hpsmiles.golfsim.games.rememberGameResultOverlayGate
 import com.hpsmiles.golfsim.range.FollowCam
 import com.hpsmiles.golfsim.range.RangeCamera
@@ -2244,7 +2244,7 @@ import com.hpsmiles.golfsim.core.designsystem.GolfSpacing
 import com.hpsmiles.golfsim.core.designsystem.GolfTypography
 import com.hpsmiles.golfsim.core.scoring.SkillBand
 import com.hpsmiles.golfsim.games.ConfettiBurst
-import com.hpsmiles.golfsim.games.SectionCard
+import com.hpsmiles.golfsim.core.designsystem.SectionCard
 import java.util.Locale
 
 private val NegativeBarColor = Color(0xFFE4565A) // tune to palette if a token exists
