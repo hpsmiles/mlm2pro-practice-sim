@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 // Generates SgTables.kt from sg_reference_full.csv (source: tapinstats.com, user-owned).
-// Series 1 = rows before the first distance decrease within each (band, lie);
-// the relabel series (yard counts relabelled as metres) is ignored.
-// Usage: node tools/generate-sg-tables.cjs   (run from core/scoring/)
+// The CSV labels every row with distance_unit (m, ft, yd). Rows with unit "m" are
+// canonical (true metres); the ft/yd rows are imperial duplicates of the same grids
+// and are skipped by the unit filter below.
+// Usage: node core/scoring/tools/generate-sg-tables.cjs   (runs from any directory)
 const fs = require("fs");
 const path = require("path");
 
@@ -29,14 +30,15 @@ for (const line of lines) {
 for (const lie of LIES) {
   for (const band of BANDS) {
     const rows = data[lie][band];
-    const series1 = [];
-    let prev = -Infinity;
-    for (const row of rows) {
-      if (row[0] < prev) break;
-      series1.push(row);
-      prev = row[0];
+    // Unit-m distances must be strictly ascending; a decrease signals bad CSV data.
+    for (let i = 1; i < rows.length; i++) {
+      if (!(rows[i][0] > rows[i - 1][0])) {
+        throw new Error(
+          `non-ascending unit-m distances for ${band}/${lie} at index ${i}: ` +
+            `${rows[i - 1][0]} -> ${rows[i][0]}`,
+        );
+      }
     }
-    data[lie][band] = series1;
   }
   const grid = data[lie][BANDS[0]].map((r) => r[0]);
   for (const band of BANDS) {
@@ -56,8 +58,8 @@ const fmtArr = (arr) => arr.map(fmt).join(", ");
 
 let out = "";
 out += "// GENERATED FILE - DO NOT EDIT BY HAND.\n";
-out += "// Source: tools/sg_reference_full.csv (tapinstats.com, user-owned), series 1 (true metres) only.\n";
-out += "// Regenerate with: node tools/generate-sg-tables.cjs\n";
+out += "// Source: core/scoring/tools/sg_reference_full.csv (tapinstats.com, user-owned), unit-m rows (true metres) only.\n";
+out += "// Regenerate with: node core/scoring/tools/generate-sg-tables.cjs\n";
 out += "package com.hpsmiles.golfsim.core.scoring\n\n";
 out += "/** Expected-strokes grids per lie (one shared distance axis) plus values per skill band. */\n";
 out += "object SgTables {\n";
@@ -70,5 +72,6 @@ for (const lie of LIES) {
 out += "}\n";
 
 const outPath = path.join(__dirname, "..", "src", "main", "kotlin", "com", "hpsmiles", "golfsim", "core", "scoring", "SgTables.kt");
+fs.mkdirSync(path.dirname(outPath), { recursive: true });
 fs.writeFileSync(outPath, out);
 console.log("wrote " + outPath);

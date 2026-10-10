@@ -1,6 +1,6 @@
 // GENERATED FILE - DO NOT EDIT BY HAND.
-// Source: tools/sg_reference_full.csv (tapinstats.com, user-owned), series 1 (true metres) only.
-// Regenerate with: node tools/generate-sg-tables.cjs
+// Source: core/scoring/tools/sg_reference_full.csv (tapinstats.com, user-owned), unit-m rows (true metres) only.
+// Regenerate with: node core/scoring/tools/generate-sg-tables.cjs
 package com.hpsmiles.golfsim.core.scoring
 
 /** Expected-strokes grids per lie (one shared distance axis) plus values per skill band. */
