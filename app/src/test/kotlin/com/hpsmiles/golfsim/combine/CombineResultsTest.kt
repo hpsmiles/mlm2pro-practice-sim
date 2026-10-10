@@ -1,5 +1,6 @@
 package com.hpsmiles.golfsim.combine
 
+import com.hpsmiles.golfsim.core.data.CombineShotEntity
 import com.hpsmiles.golfsim.core.scoring.HandicapEstimate
 import com.hpsmiles.golfsim.core.scoring.Lie
 import org.junit.Assert.assertEquals
@@ -21,11 +22,67 @@ class CombineResultsTest {
         }
         val results = combineResults(approach, facts)
         assertEquals(1, results.stations.size)
+        assertEquals(0, results.stations[0].stationIndex)
+        assertEquals("100 m", results.stations[0].label)
         assertEquals(-5.84, results.overall.est, 0.05)
         assertTrue(results.overall.clampedLow)
-        assertEquals("TOUR+", results.stations[0].chips.first())
+        assertEquals(listOf("TOUR+", "SCR", "SCR", "SCR", "≈3", "≈7"), results.stations[0].chips)
         assertEquals("AVG TO PIN", results.stations[0].avgLabel)
         assertEquals(rests.average(), results.stations[0].avgValue, 1e-9)
+    }
+
+    @Test
+    fun `facts partition across multiple stations`() {
+        val station0 = listOf(0, 1, 6, 7, 12, 13).map { CombineShotFacts(it, Lie.GREEN, 5.0) }
+        val station1 = listOf(2, 3, 8, 9, 14, 15).map { CombineShotFacts(it, Lie.FAIRWAY, 20.0) }
+        val results = combineResults(approach, station0 + station1)
+
+        assertEquals(2, results.stations.size)
+        assertEquals(0, results.stations[0].stationIndex)
+        assertEquals(1, results.stations[1].stationIndex)
+        assertEquals("100 m", results.stations[0].label)
+        assertEquals("150 m", results.stations[1].label)
+
+        // Partition consistency: each station's estimate derives only from its own shots.
+        assertEquals(
+            combineResults(approach, station0).stations.single().estimate.est,
+            results.stations[0].estimate.est,
+            1e-9,
+        )
+        assertEquals(
+            combineResults(approach, station1).stations.single().estimate.est,
+            results.stations[1].estimate.est,
+            1e-9,
+        )
+    }
+
+    @Test
+    fun `combineResults is order independent`() {
+        val rests = listOf(1.0, 6.0, 7.0, 8.0, 10.0, 12.0)
+        val indices = listOf(0, 1, 6, 7, 12, 13)
+        val facts = indices.zip(rests).map { (index, rest) -> CombineShotFacts(index, Lie.GREEN, rest) }
+
+        val forward = combineResults(approach, facts)
+        val reversed = combineResults(approach, facts.reversed())
+
+        assertEquals(forward.overall.est, reversed.overall.est, 0.0)
+        assertEquals(forward.stations[0].chips, reversed.stations[0].chips)
+        assertEquals(forward.stations[0].avgValue, reversed.stations[0].avgValue, 0.0)
+    }
+
+    @Test
+    fun `overallEstimate matches combineResults overall`() {
+        val facts = listOf(0, 1, 6, 7, 12, 13).map { CombineShotFacts(it, Lie.GREEN, 5.0) }
+        assertEquals(combineResults(approach, facts).overall.est, overallEstimate(approach, facts), 0.0)
+    }
+
+    @Test
+    fun `entity toFacts parses a garbage lie to fairway`() {
+        val entity = CombineShotEntity(
+            id = 0L, sessionId = 1L, shotIndex = 0, stationIndex = 0,
+            restLie = "ZGARBAGE", restDistanceM = 5.0,
+        )
+        assertEquals(Lie.FAIRWAY, entity.toFacts().restLie)
     }
 
     @Test

@@ -11,8 +11,21 @@ data class CombineShotFacts(val shotIndex: Int, val restLie: Lie, val restDistan
 fun CombineShot.toFacts(): CombineShotFacts = CombineShotFacts(index, restLie, restDistanceM)
 
 fun CombineShotEntity.toFacts(): CombineShotFacts =
-    CombineShotFacts(shotIndex, Lie.valueOf(restLie), restDistanceM)
+    CombineShotFacts(
+        shotIndex,
+        // Total parse: an unknown/corrupt stored value degrades to fairway rather than crashing the results render.
+        Lie.entries.firstOrNull { it.name == restLie } ?: Lie.FAIRWAY,
+        restDistanceM,
+    )
 
+/**
+ * Aggregated result for one combine station.
+ *
+ * @param stationIndex index into the owning [CombineCatalogEntry.stations]; consumers use it to look up station geometry.
+ * @param chips one formatted chip per station shot, in ascending `shotIndex` order.
+ * @param avgValue for [StationKind.APPROACH] the average rest distance to the pin; for [StationKind.DRIVER] the average
+ * distance hit toward the baseline (`DRIVER_HOLE_M - avgRest`).
+ */
 data class StationResult(
     val stationIndex: Int,
     val label: String,
@@ -22,6 +35,11 @@ data class StationResult(
     val chips: List<String>,
 )
 
+/**
+ * Aggregated results for a combine session.
+ *
+ * @param stations only stations with at least one shot, ascending by `stationIndex`.
+ */
 data class CombineResults(
     val overall: HandicapEstimate,
     val stations: List<StationResult>,
