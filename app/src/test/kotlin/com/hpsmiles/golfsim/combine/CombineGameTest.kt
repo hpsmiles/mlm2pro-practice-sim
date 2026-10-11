@@ -2,6 +2,7 @@ package com.hpsmiles.golfsim.combine
 
 import com.hpsmiles.golfsim.core.ble.BallData
 import com.hpsmiles.golfsim.core.physics.ShotResult
+import com.hpsmiles.golfsim.core.scoring.Lie
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -128,5 +129,56 @@ class CombineGameTest {
         assertTrue(game.complete)
         assertEquals(CombinePlan.SHOTS_TOTAL, game.takenCount)
         assertNull(game.add(ball()))
+    }
+
+    @Test
+    fun `allFacts unions baseline then this run's shots in order`() {
+        val game = gameWithRest(restX = 1.0, restY = 55.0)
+        val baseline = listOf(
+            CombineShotFacts(0, Lie.FAIRWAY, 3.0),
+            CombineShotFacts(1, Lie.FAIRWAY, 4.0),
+        )
+        game.start(wedges, sessionId = 1L, baselineTaken = 2, baselineFacts = baseline)
+
+        assertEquals(baseline, game.allFacts)
+
+        assertNotNull(game.add(ball()))
+        assertEquals(3, game.allFacts.size)
+        // Baseline entries stay first; the new shot is appended last.
+        assertEquals(baseline, game.allFacts.take(2))
+        assertEquals(2, game.allFacts.last().shotIndex)
+    }
+
+    @Test
+    fun `baseline-complete resume is safe and allFacts carries the baseline`() {
+        val game = gameWithRest()
+        val baseline = (0 until CombinePlan.SHOTS_TOTAL).map {
+            CombineShotFacts(it, Lie.FAIRWAY, 5.0)
+        }
+        game.start(
+            approach, sessionId = 7L,
+            baselineTaken = CombinePlan.SHOTS_TOTAL,
+            baselineFacts = baseline,
+        )
+
+        assertEquals(CombinePlan.SHOTS_TOTAL, game.takenCount)
+        assertTrue(game.complete)
+        assertTrue(game.shots.isEmpty())
+        // The crash-path protection: facts are non-empty even with an empty in-memory list.
+        assertEquals(CombinePlan.SHOTS_TOTAL, game.allFacts.size)
+        assertTrue(game.allFacts.isNotEmpty())
+    }
+
+    @Test
+    fun `reset clears baselineFacts`() {
+        val game = gameWithRest()
+        game.start(
+            wedges, sessionId = 1L, baselineTaken = 1,
+            baselineFacts = listOf(CombineShotFacts(0, Lie.FAIRWAY, 3.0)),
+        )
+        assertTrue(game.allFacts.isNotEmpty())
+
+        game.reset()
+        assertTrue(game.allFacts.isEmpty())
     }
 }

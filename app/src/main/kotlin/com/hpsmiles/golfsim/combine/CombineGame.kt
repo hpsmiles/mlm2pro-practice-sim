@@ -30,6 +30,13 @@ class CombineGame {
     /** Shots already taken before this [start] (Room-derived on a resumed session). */
     var baselineTaken: Int = 0
 
+    /**
+     * Scoring facts for shots already taken before this [start] (Room-derived on
+     * a resumed session). Kept separate from [shots] so results and records score
+     * the FULL run, not just the post-resume tail.
+     */
+    var baselineFacts: List<CombineShotFacts> = emptyList()
+
     /** Shots taken since [start] only; the resumed baseline lives in [baselineTaken]. */
     val shots: SnapshotStateList<CombineShot> = mutableStateListOf()
     var tick by mutableIntStateOf(0)
@@ -54,10 +61,19 @@ class CombineGame {
     val nextShotIndex: Int get() = takenCount
     val complete: Boolean get() = takenCount >= CombinePlan.SHOTS_TOTAL
 
-    fun start(entry: CombineCatalogEntry, sessionId: Long, baselineTaken: Int) {
+    /** Full-run scoring facts: the resumed baseline first, then this run's shots. */
+    val allFacts: List<CombineShotFacts> get() = baselineFacts + shots.map { it.toFacts() }
+
+    fun start(
+        entry: CombineCatalogEntry,
+        sessionId: Long,
+        baselineTaken: Int,
+        baselineFacts: List<CombineShotFacts> = emptyList(),
+    ) {
         this.entry = entry
         this.sessionId = sessionId
         this.baselineTaken = baselineTaken
+        this.baselineFacts = baselineFacts
         shots.clear()
         record = null
         tick = 0
@@ -67,6 +83,7 @@ class CombineGame {
         entry = null
         sessionId = 0L
         baselineTaken = 0
+        baselineFacts = emptyList()
         shots.clear()
         record = null
         tick = 0

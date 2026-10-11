@@ -72,7 +72,7 @@ internal fun CombinePlay(
     if (showResults) {
         CombineResultsView(
             entry = entry,
-            facts = game.shots.map { it.toFacts() },
+            facts = game.allFacts,
             record = game.record,
             readOnly = false,
             onPlayAgain = onPlayAgain,

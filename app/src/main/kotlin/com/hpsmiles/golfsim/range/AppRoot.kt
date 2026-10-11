@@ -661,16 +661,19 @@ fun AppRoot() {
     // M8: combine flows — Room truth, gated like the bag/fitting captures.
     // Kill/resume is FREE: they re-derive from the current db. combineActive
     // drives the picker RESUME card and the resume/completion bookkeeping.
-    val combineActive = gatedFlow(repoReady, { sessionRepository.combineActive }, flowOf(null))
-        .collectAsState(initial = null).value
-    val combineActiveShots = remember(repoReady, combineActive?.id) {
+    val combineActive = remember(sessionRepository, repoReady) {
+        gatedFlow(repoReady, { sessionRepository.combineActive }, flowOf(null))
+    }.collectAsState(initial = null).value
+    val combineActiveShots = remember(sessionRepository, repoReady, combineActive?.id) {
         if (combineActive == null) flowOf(emptyList())
         else sessionRepository.observeCombineShots(combineActive.id)
     }.collectAsState(initial = emptyList()).value
-    val combineHistory = gatedFlow(repoReady, { sessionRepository.combineHistory }, flowOf(emptyList()))
-        .collectAsState(initial = emptyList()).value
-    val combineHistoryShots = gatedFlow(repoReady, { sessionRepository.combineHistoryShots }, flowOf(emptyList()))
-        .collectAsState(initial = emptyList()).value
+    val combineHistory = remember(sessionRepository, repoReady) {
+        gatedFlow(repoReady, { sessionRepository.combineHistory }, flowOf(emptyList()))
+    }.collectAsState(initial = emptyList()).value
+    val combineHistoryShots = remember(sessionRepository, repoReady) {
+        gatedFlow(repoReady, { sessionRepository.combineHistoryShots }, flowOf(emptyList()))
+    }.collectAsState(initial = emptyList()).value
 
     // M7 (task 5 review): sessionId is derived from Room truth, never cached
     // across completion — prevents a late write-back from re-binding a
@@ -752,7 +755,11 @@ fun AppRoot() {
     fun resumeCombine() {
         val active = combineActive ?: return
         val entry = CombineCatalog.byId(active.combineId) ?: return
-        combineGame.start(entry, active.id, baselineTaken = combineActiveShots.size)
+        combineGame.start(
+            entry, active.id,
+            baselineTaken = combineActiveShots.size,
+            baselineFacts = combineActiveShots.map { it.toFacts() },
+        )
         activeGame = GameMode.COMBINE
     }
 
@@ -818,18 +825,23 @@ fun AppRoot() {
         val active = combineActive ?: return@LaunchedEffect
         if (!combineGame.complete || combineGame.sessionId != active.id) return@LaunchedEffect
         val entry = combineGame.entry ?: return@LaunchedEffect
-        if (active.source == ShotSource.LIVE.code) {
+        // Score the FULL run (resumed baseline + this run's shots). An empty fact
+        // list would throw inside handicapMatch, so a fact-less completion
+        // (defensive only — a resumed session always has baseline facts) simply
+        // skips the record rather than crashing; the session still completes.
+        val facts = combineGame.allFacts
+        if (active.source == ShotSource.LIVE.code && facts.isNotEmpty()) {
             val priorSessions = sessionRepository.combineCompletedSessions(entry.id)
                 .filter { it.source == ShotSource.LIVE.code }
             val priorShots = sessionRepository.combineShotsForSessions(priorSessions.map { it.id })
             val previousBest = priorShots.groupBy { it.sessionId }.values
                 .filter { it.size >= CombinePlan.SHOTS_TOTAL }
-                .mapNotNull { shots ->
-                    val facts = shots.map { it.toFacts() }
-                    runCatching { overallEstimate(entry, facts) }.getOrNull()
+                .mapNotNull { prior ->
+                    val priorFacts = prior.map { it.toFacts() }
+                    runCatching { overallEstimate(entry, priorFacts) }.getOrNull()
                 }
                 .minOrNull()
-            combineGame.record = CombineRecord.compare(previousBest, overallEstimate(entry, combineGame.shots.map { it.toFacts() }))
+            combineGame.record = CombineRecord.compare(previousBest, overallEstimate(entry, facts))
         } else {
             combineGame.record = null
         }
