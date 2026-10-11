@@ -10,9 +10,10 @@ import org.junit.Test
 class GamesScreenTest {
     @Test
     fun gameModeHasExpectedValues() {
-        assertEquals(3, GameMode.entries.size)
+        assertEquals(4, GameMode.entries.size)
         assertEquals(GameMode.NONE, GameMode.valueOf("NONE"))
         assertEquals(GameMode.TARGET_PRACTICE, GameMode.valueOf("TARGET_PRACTICE"))
         assertEquals(GameMode.BREAK_PANE, GameMode.valueOf("BREAK_PANE"))
+        assertEquals(GameMode.COMBINE, GameMode.valueOf("COMBINE"))
     }
 }
