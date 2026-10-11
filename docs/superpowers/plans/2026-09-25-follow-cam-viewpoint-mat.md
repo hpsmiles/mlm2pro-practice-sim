@@ -1462,12 +1462,7 @@ If the 45° overlook feels wrong, tune `FollowCam.LAND_PITCH_DEG` first (that co
 
 - [ ] **Step 4: Update the handover doc TODOs if the pass succeeds**
 
-Mark TODO#2 (ball follow-cam) done in `docs/HANDOVER-2026-09-24.md`, and commit:
-
-```powershell
-git add docs/HANDOVER-2026-09-24.md
-git commit -m "docs: mark follow-cam handover TODO complete"
-```
+(The historical handover docs this step referred to have since been removed as stale; no handover edit is needed.)
 
 
 

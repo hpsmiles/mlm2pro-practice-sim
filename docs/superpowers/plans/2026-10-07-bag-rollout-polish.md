@@ -20,7 +20,7 @@
 
 ## Lane A — Launch Direction (HLA) on all metric displays
 
-Sign convention is settled (do not re-litigate): **negative = left of target, positive = right** — verified on-device M4c (`docs/superpowers/HANDOVER-M4c-shed-capture-2026-09-20.md:160`).
+Sign convention is settled (do not re-litigate): **negative = left of target, positive = right** — verified on-device during the M4c shed capture (2026-09-20).
 
 ### Task A1: `HistoryFormats.dir` formatter + test
 

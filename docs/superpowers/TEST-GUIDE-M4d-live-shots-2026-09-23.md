@@ -1,8 +1,7 @@
 # Bench Test Guide — M4d live shots (golf sim)
 
 Written 2026-09-23. This is the manual on-device checklist for PR
-`m4d-live-shots` (plan: `docs/superpowers/plans/2026-09-23-m4d-live-shots.md`,
-handover: `docs/superpowers/HANDOVER-M4d-live-shots-2026-09-23.md`).
+`m4d-live-shots` (plan: `docs/superpowers/plans/2026-09-23-m4d-live-shots.md`).
 **All six checks must pass before the PR merge.** ~10 minutes with the
 monitor, net/bucket, and tablet.
 
