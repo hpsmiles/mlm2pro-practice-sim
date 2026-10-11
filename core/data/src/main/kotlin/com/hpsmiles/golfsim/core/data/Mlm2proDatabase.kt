@@ -28,7 +28,7 @@ import com.hpsmiles.golfsim.core.data.entity.ShotEntity
         FittingSessionEntity::class, FittingShotEntity::class,
         CombineSessionEntity::class, CombineShotEntity::class,
     ],
-    version = 6,
+    version = 7,
     exportSchema = true,
 )
 abstract class Mlm2proDatabase : RoomDatabase() {
@@ -180,6 +180,21 @@ abstract class Mlm2proDatabase : RoomDatabase() {
                 db.execSQL(
                     "CREATE INDEX IF NOT EXISTS `index_combine_shots_sessionId` ON `combine_shots` (`sessionId`)",
                 )
+            }
+        }
+
+        /**
+         * M8 post-ship spec §4: combine_shots gains the ball's rest position in
+         * hole metres so the top-down dispersion view can plot finishes. Both
+         * columns are nullable with no default — rows written before v7 have no
+         * coordinates and are not backfilled (the view shows "no dispersion data
+         * for this session"). Corrupt-file recovery reuses build(), so it
+         * inherits the migration.
+         */
+        val MIGRATION_6_7: Migration = object : Migration(6, 7) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE combine_shots ADD COLUMN restXM REAL")
+                db.execSQL("ALTER TABLE combine_shots ADD COLUMN restYM REAL")
             }
         }
     }

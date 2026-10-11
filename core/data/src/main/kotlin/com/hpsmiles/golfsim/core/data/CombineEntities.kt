@@ -23,4 +23,8 @@ data class CombineShotEntity(
     val stationIndex: Int,
     val restLie: String,
     val restDistanceM: Double,
+    /** Rest position in hole metres (ball-flight [ShotResult.restX]); null on rows written before Room v7. */
+    val restXM: Double? = null,
+    /** Rest position in hole metres (ball-flight [ShotResult.restY]); null on rows written before Room v7. */
+    val restYM: Double? = null,
 )

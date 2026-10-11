@@ -97,6 +97,20 @@ class CombineRepositoryTest {
     }
 
     @Test
+    fun appendStoresRestCoordinatesAndDefaultsToNull() = runTest {
+        val repository = repo()
+        val id = repository.startCombineSession("APPROACH", "APPROACH", 1, 1_000L, ShotSource.LIVE)!!
+        repository.appendCombineShot(id, 0, 0, "FAIRWAY", 12.0, restXM = 1.25, restYM = 101.5)
+        repository.appendCombineShot(id, 1, 0, "GREEN", 3.0)
+
+        val shots = repository.observeCombineShots(id).first()
+        assertEquals(1.25, shots[0].restXM!!, 1e-9)
+        assertEquals(101.5, shots[0].restYM!!, 1e-9)
+        assertNull(shots[1].restXM)
+        assertNull(shots[1].restYM)
+    }
+
+    @Test
     fun markCombineSessionDemoRestampsSourceOnActiveAndHistoryRows() = runTest {
         val repository = repo()
         val id = repository.startCombineSession("APPROACH", "APPROACH", 1, 1_000L, ShotSource.LIVE)!!

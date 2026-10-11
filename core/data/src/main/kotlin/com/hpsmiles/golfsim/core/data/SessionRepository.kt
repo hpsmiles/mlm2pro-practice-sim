@@ -401,6 +401,7 @@ class SessionRepository private constructor(private val context: Context) {
                 Mlm2proDatabase.MIGRATION_3_4,
                 Mlm2proDatabase.MIGRATION_4_5,
                 Mlm2proDatabase.MIGRATION_5_6,
+                Mlm2proDatabase.MIGRATION_6_7,
             )
             .build()
 
@@ -748,6 +749,8 @@ class SessionRepository private constructor(private val context: Context) {
         stationIndex: Int,
         restLie: String,
         restDistanceM: Double,
+        restXM: Double? = null,
+        restYM: Double? = null,
     ): Long? = try {
         combineShotDao.insert(
             CombineShotEntity(
@@ -756,6 +759,8 @@ class SessionRepository private constructor(private val context: Context) {
                 stationIndex = stationIndex,
                 restLie = restLie,
                 restDistanceM = restDistanceM,
+                restXM = restXM,
+                restYM = restYM,
             ),
         ).also { persistError.value = false }
     } catch (t: Throwable) {
