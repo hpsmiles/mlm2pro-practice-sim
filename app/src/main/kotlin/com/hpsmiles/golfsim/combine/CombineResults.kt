@@ -3,7 +3,10 @@ package com.hpsmiles.golfsim.combine
 import com.hpsmiles.golfsim.core.data.CombineShotEntity
 import com.hpsmiles.golfsim.core.scoring.HandicapEstimate
 import com.hpsmiles.golfsim.core.scoring.Lie
-import com.hpsmiles.golfsim.core.scoring.handicapMatch
+import com.hpsmiles.golfsim.core.scoring.SkillBand
+import com.hpsmiles.golfsim.core.scoring.drivingStrokesGained
+import com.hpsmiles.golfsim.core.scoring.handicapMatchSg
+import com.hpsmiles.golfsim.core.scoring.strokesGained
 
 /** Raw scoring facts for one shot — the only fields the SG engine needs. */
 data class CombineShotFacts(val shotIndex: Int, val restLie: Lie, val restDistanceM: Double)
@@ -48,15 +51,14 @@ data class CombineResults(
 fun combineResults(entry: CombineCatalogEntry, facts: List<CombineShotFacts>): CombineResults {
     require(facts.isNotEmpty()) { "combineResults requires at least one shot" }
     val sorted = facts.sortedBy { it.shotIndex }
-    val overall = handicapMatch(
-        sorted.map { CombinePlan.shotInput(entry, it.shotIndex, it.restLie, it.restDistanceM) }
-    )
+    // Overall averages per-band SGs across all shots: DRIVER shots contribute their
+    // baseline-relative (position-to-position) SG, APPROACH shots their TEE-table SG.
+    val overall = handicapMatchSg(sorted.map { perShotSg(entry, it) })
     val stations = entry.stations.indices.mapNotNull { stationIndex ->
         val stationFacts = sorted.filter { CombinePlan.stationIndexFor(it.shotIndex) == stationIndex }
         if (stationFacts.isEmpty()) return@mapNotNull null
         val station = entry.stations[stationIndex]
-        val inputs = stationFacts.map { CombinePlan.shotInput(entry, it.shotIndex, it.restLie, it.restDistanceM) }
-        val estimate = handicapMatch(inputs)
+        val estimate = handicapMatchSg(stationFacts.map { perShotSg(entry, it) })
         val avgRest = stationFacts.map { it.restDistanceM }.average()
         val isDriver = station.kind == StationKind.DRIVER
         StationResult(
@@ -66,9 +68,7 @@ fun combineResults(entry: CombineCatalogEntry, facts: List<CombineShotFacts>): C
             avgLabel = if (isDriver) "AVG TOTAL" else "AVG TO PIN",
             avgValue = if (isDriver) DRIVER_HOLE_M - avgRest else avgRest,
             chips = stationFacts.map { fact ->
-                CombineFormats.chip(
-                    handicapMatch(listOf(CombinePlan.shotInput(entry, fact.shotIndex, fact.restLie, fact.restDistanceM))).est
-                )
+                CombineFormats.chip(handicapMatchSg(listOf(perShotSg(entry, fact))).est)
             },
         )
     }
@@ -76,7 +76,23 @@ fun combineResults(entry: CombineCatalogEntry, facts: List<CombineShotFacts>): C
 }
 
 fun overallEstimate(entry: CombineCatalogEntry, facts: List<CombineShotFacts>): Double =
-    handicapMatch(
-        facts.sortedBy { it.shotIndex }
-            .map { CombinePlan.shotInput(entry, it.shotIndex, it.restLie, it.restDistanceM) }
+    handicapMatchSg(
+        facts.sortedBy { it.shotIndex }.map { perShotSg(entry, it) }
     ).est
+
+/**
+ * Per-shot, per-band SG for one combine shot. DRIVER-station shots are rated against each band's
+ * typical drive ([drivingStrokesGained]); every other station uses the TEE-table [strokesGained]
+ * from its [CombinePlan.shotInput].
+ */
+private fun perShotSg(entry: CombineCatalogEntry, fact: CombineShotFacts): Map<SkillBand, Double> {
+    val station = entry.stations[CombinePlan.stationIndexFor(fact.shotIndex)]
+    return if (station.kind == StationKind.DRIVER) {
+        SkillBand.entries.associateWith { drivingStrokesGained(it, fact.restLie, fact.restDistanceM) }
+    } else {
+        val input = CombinePlan.shotInput(entry, fact.shotIndex, fact.restLie, fact.restDistanceM)
+        SkillBand.entries.associateWith {
+            strokesGained(it, input.startLie, input.startM, input.endLie, input.endM)
+        }
+    }
+}

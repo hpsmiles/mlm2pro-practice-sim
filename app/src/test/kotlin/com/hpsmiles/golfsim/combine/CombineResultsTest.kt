@@ -97,6 +97,20 @@ class CombineResultsTest {
     }
 
     @Test
+    fun `driver station rates drives against per-band typical drives`() {
+        val indices = listOf(4, 5, 10, 11, 16, 17) // DRIVER station indices
+        val rests = listOf(74.48, 138.55, 184.30, 205.57, 102.32, 169.54)
+        val facts = indices.zip(rests).map { (index, rest) -> CombineShotFacts(index, Lie.FAIRWAY, rest) }
+        val results = combineResults(approach, facts)
+        assertEquals(1, results.stations.size)
+        assertEquals("DRIVER", results.stations[0].label)
+        assertEquals(21.83, results.stations[0].estimate.est, 0.1)
+        assertEquals("AVG TOTAL", results.stations[0].avgLabel)
+        assertEquals(340.0 - rests.average(), results.stations[0].avgValue, 1e-6)
+        assertEquals(listOf("SCR", "≈13", "25+", "25+", "≈0", "25+"), results.stations[0].chips)
+    }
+
+    @Test
     fun `formats follow the display rules`() {
         assertEquals("tour-or-better", CombineFormats.formatHc(-5.5))
         assertEquals("+1.3", CombineFormats.formatHc(-1.3))

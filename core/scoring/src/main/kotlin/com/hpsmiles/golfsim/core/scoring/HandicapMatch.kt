@@ -23,10 +23,27 @@ data class HandicapEstimate(
  */
 fun handicapMatch(shots: List<ShotInput>): HandicapEstimate {
     require(shots.isNotEmpty()) { "handicapMatch requires at least one shot" }
+    return handicapMatchSg(
+        shots.map { shot ->
+            SkillBand.entries.associateWith { band ->
+                strokesGained(band, shot.startLie, shot.startM, shot.endLie, shot.endM)
+            }
+        }
+    )
+}
+
+/**
+ * Handicap match from per-shot, per-band SG values (already position-to-position). Averages the
+ * per-shot SGs per band, then solves exactly as [handicapMatch]. Uncertainty comes from the
+ * SCRATCH band's per-shot SG spread. This entry point lets callers score shots whose SG is not
+ * derived from the TEE table (e.g. the driver station's baseline-relative drives).
+ */
+fun handicapMatchSg(perShotSg: List<Map<SkillBand, Double>>): HandicapEstimate {
+    require(perShotSg.isNotEmpty()) { "handicapMatchSg requires at least one shot" }
 
     val perBand = LinkedHashMap<SkillBand, Double>()
     for (band in SkillBand.entries) {
-        val sgs = shots.map { strokesGained(band, it.startLie, it.startM, it.endLie, it.endM) }
+        val sgs = perShotSg.map { it.getValue(band) }
         perBand[band] = sgs.average()
     }
 
@@ -73,16 +90,16 @@ fun handicapMatch(shots: List<ShotInput>): HandicapEstimate {
 
     val low: Double?
     val high: Double?
-    if (shots.size < 2 || degenerateAllNegative) {
+    if (perShotSg.size < 2 || degenerateAllNegative) {
         low = null
         high = null
     } else {
-        val scratchSgs = shots.map { strokesGained(SkillBand.SCRATCH, it.startLie, it.startM, it.endLie, it.endM) }
+        val scratchSgs = perShotSg.map { it.getValue(SkillBand.SCRATCH) }
         val mean = scratchSgs.average()
-        val sd = sqrt(scratchSgs.sumOf { (it - mean) * (it - mean) } / (shots.size - 1))
+        val sd = sqrt(scratchSgs.sumOf { (it - mean) * (it - mean) } / (perShotSg.size - 1))
         val slope = (s[segment + 1] - s[segment]) / (h[segment + 1] - h[segment])
         val denom = if (abs(slope) < 1e-12) 1e-12 else slope
-        val uncertainty = sd / sqrt(shots.size.toDouble()) / abs(denom)
+        val uncertainty = sd / sqrt(perShotSg.size.toDouble()) / abs(denom)
         low = est - uncertainty
         high = est + uncertainty
     }

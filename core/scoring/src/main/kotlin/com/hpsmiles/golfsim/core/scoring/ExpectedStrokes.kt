@@ -14,6 +14,20 @@ fun strokesGained(
 ): Double =
     expectedStrokes(band, startLie, startM) - expectedStrokes(band, endLie, endM) - 1.0
 
+/** Driver-station hole baseline in metres (scoring-only; the hole is invisible in the scene). */
+const val DRIVER_HOLE_M = 340.0
+
+/**
+ * Strokes gained by a drive at [band], rated against the position a golfer of that level
+ * would typically leave themselves: the band's [SkillBand.typicalDriveM] leaves a reference
+ * rest of `DRIVER_HOLE_M - typicalDriveM` on the fairway. The comparison is position-to-position
+ * (no `- 1`): the reference already represents a drive, so a drive that leaves the golfer where
+ * a player of that level would typically be scores 0.0.
+ */
+fun drivingStrokesGained(band: SkillBand, restLie: Lie, restDistanceM: Double): Double =
+    expectedStrokes(band, Lie.FAIRWAY, DRIVER_HOLE_M - band.typicalDriveM) -
+        expectedStrokes(band, restLie, restDistanceM)
+
 internal fun interpolate(xs: DoubleArray, ys: DoubleArray, x: Double): Double {
     if (x <= xs.first()) return ys.first()
     if (x >= xs.last()) return ys.last()
