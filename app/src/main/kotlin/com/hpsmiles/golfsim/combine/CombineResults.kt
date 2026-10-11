@@ -8,10 +8,27 @@ import com.hpsmiles.golfsim.core.scoring.drivingStrokesGained
 import com.hpsmiles.golfsim.core.scoring.handicapMatchSg
 import com.hpsmiles.golfsim.core.scoring.strokesGained
 
-/** Raw scoring facts for one shot — the only fields the SG engine needs. */
-data class CombineShotFacts(val shotIndex: Int, val restLie: Lie, val restDistanceM: Double)
+/**
+ * Raw scoring facts for one shot — the fields the SG engine needs, plus the finish
+ * coordinates the top-down dispersion view plots ([restXM]/[restYM], null for shots
+ * recorded before Room v7 or when the simulator produced no rest point).
+ */
+data class CombineShotFacts(
+    val shotIndex: Int,
+    val restLie: Lie,
+    val restDistanceM: Double,
+    val restXM: Double? = null,
+    val restYM: Double? = null,
+)
 
-fun CombineShot.toFacts(): CombineShotFacts = CombineShotFacts(index, restLie, restDistanceM)
+fun CombineShot.toFacts(): CombineShotFacts =
+    CombineShotFacts(
+        index,
+        restLie,
+        restDistanceM,
+        display.shotResult.restX,
+        display.shotResult.restY,
+    )
 
 fun CombineShotEntity.toFacts(): CombineShotFacts =
     CombineShotFacts(
@@ -19,6 +36,8 @@ fun CombineShotEntity.toFacts(): CombineShotFacts =
         // Total parse: an unknown/corrupt stored value degrades to fairway rather than crashing the results render.
         Lie.entries.firstOrNull { it.name == restLie } ?: Lie.FAIRWAY,
         restDistanceM,
+        restXM,
+        restYM,
     )
 
 /**

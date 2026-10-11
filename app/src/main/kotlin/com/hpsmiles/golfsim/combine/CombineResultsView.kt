@@ -61,6 +61,7 @@ internal fun CombineResultsView(
     val results = remember(entry, facts) { combineResults(entry, facts) }
     val sortedFacts = remember(facts) { facts.sortedBy { it.shotIndex } }
     var shotsExpanded by remember { mutableStateOf(false) }
+    var viewMode by remember { mutableStateOf(CombineViewMode.SUMMARY) }
 
     Box(modifier.background(GolfColors.Base)) {
         Column(
@@ -70,114 +71,124 @@ internal fun CombineResultsView(
         ) {
             Text(entry.name, style = GolfTypography.ScreenTitle, color = GolfColors.Teal)
 
-            // Hero: large overall handicap, ± uncertainty smaller beneath.
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(GolfSpacing.Xs),
-            ) {
-                Text(
-                    "≈ ${CombineFormats.formatHc(results.overall.est)}",
-                    style = HeroNumber,
-                    color = GolfColors.TextPrimary,
+            ViewToggle(selected = viewMode, onSelect = { viewMode = it })
+
+            if (viewMode == CombineViewMode.TOP_DOWN) {
+                CombineTopDownView(
+                    entry = entry,
+                    facts = facts,
+                    modifier = Modifier.fillMaxWidth().height(360.dp),
                 )
-                val low = results.overall.low
-                val high = results.overall.high
-                if (low != null && high != null) {
-                    Text(
-                        "± ${CombineFormats.zeroDp((high - low) / 2.0)}",
-                        style = GolfTypography.MetricValue,
-                        color = GolfColors.TextSecondary,
-                    )
-                }
-                Text("OVERALL HANDICAP", style = GolfTypography.MetricLabel, color = GolfColors.TextMuted)
-            }
-
-            // Per-target row: one compact item per catalog station.
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(GolfSpacing.Sm)) {
-                for ((stationIndex, station) in entry.stations.withIndex()) {
-                    val stationResult = results.stations.firstOrNull { it.stationIndex == stationIndex }
-                    Column(
-                        modifier = Modifier.weight(1f)
-                            .background(GolfColors.Card, RoundedCornerShape(GolfSpacing.Sm))
-                            .padding(GolfSpacing.Md),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                    ) {
-                        Text(
-                            station.label.uppercase(),
-                            style = GolfTypography.MetricLabel,
-                            color = GolfColors.TextSecondary,
-                        )
-                        Text(
-                            stationResult?.let { "≈ ${CombineFormats.formatHc(it.estimate.est)}" } ?: "—",
-                            style = TargetNumber,
-                            color = GolfColors.Teal,
-                        )
-                        if (stationResult != null) {
-                            Text(
-                                "${stationResult.avgLabel} ${CombineFormats.oneDp(stationResult.avgValue)} m",
-                                style = GolfTypography.Status,
-                                color = GolfColors.TextMuted,
-                            )
-                        }
-                    }
-                }
-            }
-
-            // VS BANDS strip: the four diverging bars, overall per-band SG.
-            SectionCard("VS BANDS") {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(GolfSpacing.Sm)) {
-                    for (band in SkillBand.entries) {
-                        val sg = results.overall.perBandSg.getValue(band)
-                        Column(
-                            modifier = Modifier.weight(1f),
-                            verticalArrangement = Arrangement.spacedBy(GolfSpacing.Xs),
-                        ) {
-                            Text(bandLabel(band), style = GolfTypography.MetricLabel, color = GolfColors.TextSecondary)
-                            Text(
-                                String.format(Locale.US, "%+.2f", sg),
-                                style = GolfTypography.BodySmall,
-                                color = if (sg < 0) NegativeColor else GolfColors.Teal,
-                            )
-                            SgBar(sg)
-                        }
-                    }
-                }
-            }
-
-            if (!readOnly && record != null) {
-                SectionCard("RECORD") {
-                    Column {
-                        Text(CombineRecord.headline(record), style = GolfTypography.MetricValue, color = GolfColors.Teal)
-                        Text(CombineRecord.detail(record), style = GolfTypography.BodySmall, color = GolfColors.TextSecondary)
-                    }
-                }
-            }
-
-            // SHOTS: collapsible ledger, collapsed by default.
-            Column(
-                modifier = Modifier.fillMaxWidth()
-                    .background(GolfColors.Card, RoundedCornerShape(GolfSpacing.CornerCard)),
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth().clickable { shotsExpanded = !shotsExpanded }
-                        .padding(GolfSpacing.Lg),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
+            } else {
+                // Hero: large overall handicap, ± uncertainty smaller beneath.
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(GolfSpacing.Xs),
                 ) {
                     Text(
-                        "SHOTS · ${facts.size} shots · scored vs ${bandLabel(results.lockedBand)}",
-                        style = GolfTypography.ScreenTitle,
+                        "≈ ${CombineFormats.formatHc(results.overall.est)}",
+                        style = HeroNumber,
                         color = GolfColors.TextPrimary,
                     )
-                    Text(
-                        if (shotsExpanded) "▾" else "▸",
-                        style = GolfTypography.ScreenTitle,
-                        color = GolfColors.Teal,
-                    )
+                    val low = results.overall.low
+                    val high = results.overall.high
+                    if (low != null && high != null) {
+                        Text(
+                            "± ${CombineFormats.zeroDp((high - low) / 2.0)}",
+                            style = GolfTypography.MetricValue,
+                            color = GolfColors.TextSecondary,
+                        )
+                    }
+                    Text("OVERALL HANDICAP", style = GolfTypography.MetricLabel, color = GolfColors.TextMuted)
                 }
-                if (shotsExpanded) {
-                    CombineLedger(entry = entry, facts = sortedFacts, lockedBand = results.lockedBand)
+
+                // Per-target row: one compact item per catalog station.
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(GolfSpacing.Sm)) {
+                    for ((stationIndex, station) in entry.stations.withIndex()) {
+                        val stationResult = results.stations.firstOrNull { it.stationIndex == stationIndex }
+                        Column(
+                            modifier = Modifier.weight(1f)
+                                .background(GolfColors.Card, RoundedCornerShape(GolfSpacing.Sm))
+                                .padding(GolfSpacing.Md),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                        ) {
+                            Text(
+                                station.label.uppercase(),
+                                style = GolfTypography.MetricLabel,
+                                color = GolfColors.TextSecondary,
+                            )
+                            Text(
+                                stationResult?.let { "≈ ${CombineFormats.formatHc(it.estimate.est)}" } ?: "—",
+                                style = TargetNumber,
+                                color = GolfColors.Teal,
+                            )
+                            if (stationResult != null) {
+                                Text(
+                                    "${stationResult.avgLabel} ${CombineFormats.oneDp(stationResult.avgValue)} m",
+                                    style = GolfTypography.Status,
+                                    color = GolfColors.TextMuted,
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // VS BANDS strip: the four diverging bars, overall per-band SG.
+                SectionCard("VS BANDS") {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(GolfSpacing.Sm)) {
+                        for (band in SkillBand.entries) {
+                            val sg = results.overall.perBandSg.getValue(band)
+                            Column(
+                                modifier = Modifier.weight(1f),
+                                verticalArrangement = Arrangement.spacedBy(GolfSpacing.Xs),
+                            ) {
+                                Text(bandLabel(band), style = GolfTypography.MetricLabel, color = GolfColors.TextSecondary)
+                                Text(
+                                    String.format(Locale.US, "%+.2f", sg),
+                                    style = GolfTypography.BodySmall,
+                                    color = if (sg < 0) NegativeColor else GolfColors.Teal,
+                                )
+                                SgBar(sg)
+                            }
+                        }
+                    }
+                }
+
+                if (!readOnly && record != null) {
+                    SectionCard("RECORD") {
+                        Column {
+                            Text(CombineRecord.headline(record), style = GolfTypography.MetricValue, color = GolfColors.Teal)
+                            Text(CombineRecord.detail(record), style = GolfTypography.BodySmall, color = GolfColors.TextSecondary)
+                        }
+                    }
+                }
+
+                // SHOTS: collapsible ledger, collapsed by default.
+                Column(
+                    modifier = Modifier.fillMaxWidth()
+                        .background(GolfColors.Card, RoundedCornerShape(GolfSpacing.CornerCard)),
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().clickable { shotsExpanded = !shotsExpanded }
+                            .padding(GolfSpacing.Lg),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            "SHOTS · ${facts.size} shots · scored vs ${bandLabel(results.lockedBand)}",
+                            style = GolfTypography.ScreenTitle,
+                            color = GolfColors.TextPrimary,
+                        )
+                        Text(
+                            if (shotsExpanded) "▾" else "▸",
+                            style = GolfTypography.ScreenTitle,
+                            color = GolfColors.Teal,
+                        )
+                    }
+                    if (shotsExpanded) {
+                        CombineLedger(entry = entry, facts = sortedFacts, lockedBand = results.lockedBand)
+                    }
                 }
             }
 
@@ -285,4 +296,35 @@ private fun bandLabel(band: SkillBand): String = when (band) {
     SkillBand.SCRATCH -> "SCRATCH"
     SkillBand.HCP10 -> "10 HC"
     SkillBand.HCP18 -> "18 HC"
+}
+
+/** Which body the results screen shows; state is hoisted in [CombineResultsView]. */
+private enum class CombineViewMode { SUMMARY, TOP_DOWN }
+
+/** SUMMARY / TOP-DOWN segmented toggle (M8 post-ship spec §3). */
+@Composable
+private fun ViewToggle(selected: CombineViewMode, onSelect: (CombineViewMode) -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth()
+            .background(GolfColors.Card, RoundedCornerShape(GolfSpacing.Sm))
+            .padding(GolfSpacing.Xs),
+        horizontalArrangement = Arrangement.spacedBy(GolfSpacing.Xs),
+    ) {
+        for (mode in CombineViewMode.entries) {
+            val active = mode == selected
+            Box(
+                modifier = Modifier.weight(1f)
+                    .background(if (active) GolfColors.Teal else Color.Transparent, RoundedCornerShape(GolfSpacing.Xs))
+                    .clickable { onSelect(mode) }
+                    .padding(vertical = GolfSpacing.Sm),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    if (mode == CombineViewMode.SUMMARY) "SUMMARY" else "TOP-DOWN",
+                    style = GolfTypography.ScreenTitle,
+                    color = if (active) GolfColors.Base else GolfColors.TextSecondary,
+                )
+            }
+        }
+    }
 }
