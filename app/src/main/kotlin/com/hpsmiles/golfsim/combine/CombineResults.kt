@@ -72,13 +72,15 @@ fun combineResults(entry: CombineCatalogEntry, facts: List<CombineShotFacts>): C
             estimate = estimate,
             avgLabel = if (isDriver) "AVG TOTAL" else "AVG TO PIN",
             avgValue = if (isDriver) DRIVER_HOLE_M - avgRest else avgRest,
-            chips = stationFacts.map { fact ->
-                CombineFormats.chip(handicapMatchSg(listOf(perShotSg(entry, fact))).est)
-            },
+            chips = stationFacts.map { shotChip(entry, it) },
         )
     }
     return CombineResults(overall, SkillBand.nearestTo(overall.est), stations)
 }
+
+/** Per-shot chip (the shot's own nearest benchmark band) shown in the results ledger. */
+fun shotChip(entry: CombineCatalogEntry, fact: CombineShotFacts): String =
+    CombineFormats.chip(handicapMatchSg(listOf(perShotSg(entry, fact))).est)
 
 fun overallEstimate(entry: CombineCatalogEntry, facts: List<CombineShotFacts>): Double =
     handicapMatchSg(
