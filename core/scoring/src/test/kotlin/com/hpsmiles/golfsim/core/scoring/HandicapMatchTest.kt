@@ -75,4 +75,34 @@ class HandicapMatchTest {
         assertTrue(estimate.clampedHigh)
         assertFalse(estimate.clampedLow)
     }
+
+    @Test
+    fun `worse than all bands - negative slope clamps high not low`() {
+        // Real first-run defect (session 1, 100 m approach resting 148.73 m
+        // from the pin): band means are all negative AND the [10,18] segment
+        // is non-increasing, so the old extrapolation ran to ~-56 and was
+        // wrongly shown as "TOUR+". It must clamp HIGH instead.
+        val estimate = handicapMatch(listOf(ShotInput(Lie.FAIRWAY, 100.0, Lie.FAIRWAY, 148.73)))
+        assertTrue(estimate.clampedHigh)
+        assertFalse(estimate.clampedLow)
+        assertTrue(estimate.est > 25.0)
+        assertNull(estimate.low)
+        assertNull(estimate.high)
+    }
+
+    @Test
+    fun `worse than all bands - positive slope keeps extrapolation`() {
+        // Regression pin for today's behaviour: a rising [10,18] segment still
+        // extrapolates beyond 18 (band means -0.902 / -0.854 → est ≈ 161.0).
+        val estimate = handicapMatch(listOf(ShotInput(Lie.FAIRWAY, 100.0, Lie.FAIRWAY, 85.45)))
+        assertTrue(estimate.clampedHigh)
+        assertEquals(161.0, estimate.est, 1.0)
+    }
+
+    @Test
+    fun `worse than all bands - second negative slope pin`() {
+        val estimate = handicapMatch(listOf(ShotInput(Lie.FAIRWAY, 100.0, Lie.FAIRWAY, 171.17)))
+        assertTrue(estimate.clampedHigh)
+        assertTrue(estimate.est > 25.0)
+    }
 }

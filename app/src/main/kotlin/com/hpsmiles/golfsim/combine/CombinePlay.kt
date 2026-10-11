@@ -84,8 +84,20 @@ internal fun CombinePlay(
 
     val takenCount = game.takenCount
     val currentIndex = takenCount.coerceAtMost(CombinePlan.SHOTS_TOTAL - 1)
-    val currentStation = entry.stations[CombinePlan.stationIndexFor(currentIndex)]
-    val currentVisit = CombinePlan.visitFor(currentIndex) + 1
+    // The target must not move mid-flight: takenCount increments the instant a
+    // shot is ingested, so currentIndex already points at the NEXT station while
+    // the tracer is still flying. Keep showing the just-fired shot's station
+    // (pin + green + HUD line) until its flight animation has finished, then
+    // switch to the upcoming target.
+    val displayIndex = if (lastShot != null &&
+        playFraction < FollowCam.endFraction(lastShot.display.shotResult).toFloat()
+    ) {
+        lastShot.index
+    } else {
+        currentIndex
+    }
+    val currentStation = entry.stations[CombinePlan.stationIndexFor(displayIndex)]
+    val currentVisit = CombinePlan.visitFor(displayIndex) + 1
 
     var bannerVisible by remember { mutableStateOf(false) }
     var bannerText by remember { mutableStateOf("") }
@@ -113,7 +125,7 @@ internal fun CombinePlay(
                     CombineCanvas(
                         camera = camera,
                         entry = entry,
-                        shotIndex = currentIndex,
+                        shotIndex = displayIndex,
                         tracer = lastShot?.display,
                         playFraction = playFraction,
                         modifier = Modifier.fillMaxSize(),

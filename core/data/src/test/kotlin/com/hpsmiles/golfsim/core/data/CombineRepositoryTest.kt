@@ -95,4 +95,23 @@ class CombineRepositoryTest {
         assertEquals(18, repository.combineShotsForSessions(listOf(id)).size)
         assertTrue(repository.combineShotsForSessions(emptyList()).isEmpty())
     }
+
+    @Test
+    fun markCombineSessionDemoRestampsSourceOnActiveAndHistoryRows() = runTest {
+        val repository = repo()
+        val id = repository.startCombineSession("APPROACH", "APPROACH", 1, 1_000L, ShotSource.LIVE)!!
+        assertEquals(ShotSource.LIVE.code, repository.combineActive.first()?.source)
+
+        repository.appendCombineShot(id, 0, 0, "GREEN", 5.0)
+        repository.markCombineSessionDemo(id)
+
+        // The active row now reports DEMO, so the completion effect's LIVE gate
+        // (active.source == ShotSource.LIVE.code) would not set a record.
+        assertEquals(ShotSource.DEMO.code, repository.combineActive.first()?.source)
+
+        repository.completeCombineSession(id, 9_000L)
+        val history = repository.combineHistory.first()
+        assertEquals(1, history.size)
+        assertEquals(ShotSource.DEMO.code, history.first().source)
+    }
 }

@@ -765,6 +765,24 @@ class SessionRepository private constructor(private val context: Context) {
         null
     }
 
+    /**
+     * Stamps an in-progress combine session as DEMO. A combine started while the
+     * MODE toggle is off is created LIVE, but if every shot is then fired in demo
+     * mode the run is really a demo — without this the HISTORY row shows no DEMO
+     * marker and the completion effect's LIVE gate could set a record from it.
+     * Never throws — same contract as [appendCombineShot].
+     */
+    suspend fun markCombineSessionDemo(sessionId: Long) {
+        try {
+            combineSessionDao.markSource(sessionId, ShotSource.DEMO.code)
+            persistError.value = false
+        } catch (t: Throwable) {
+            if (t is CancellationException) throw t
+            Log.e(TAG, "markCombineSessionDemo failed", t)
+            persistError.value = true
+        }
+    }
+
     suspend fun completeCombineSession(id: Long, completedAtMs: Long): Unit = try {
         combineSessionDao.complete(id, completedAtMs)
         persistError.value = false

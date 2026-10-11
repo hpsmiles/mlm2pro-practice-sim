@@ -37,6 +37,10 @@ fun handicapMatch(shots: List<ShotInput>): HandicapEstimate {
 
     val est: Double
     val segment: Int // index of the segment used for the root (0 = [-5,0], 1 = [0,10], 2 = [10,18])
+    // Set when every band mean is negative AND the last ([10,18]) segment is
+    // non-increasing: the shot is worse than every band, so we clamp HIGH
+    // rather than extrapolate (see the all-negative branch below).
+    var degenerateAllNegative = false
     when {
         s[0] >= 0.0 -> {
             est = h[0] + (h[1] - h[0]) * (-s[0]) / s1Diff(s, 0)
@@ -49,15 +53,27 @@ fun handicapMatch(shots: List<ShotInput>): HandicapEstimate {
                 est = h[crossing] + (h[crossing + 1] - h[crossing]) * (-s[crossing]) / s1Diff(s, crossing)
                 segment = crossing
             } else {
-                est = h[segs - 1] + (h[segs] - h[segs - 1]) * (-s[segs - 1]) / s1Diff(s, segs - 1)
+                // All band means are negative (worse than every band). The
+                // [10,18] segment is the only one left to extend. Extending it
+                // toward BETTER golfers is only meaningful when SG actually
+                // rises across it; a non-increasing segment (a genuine
+                // non-monotonic dip in the data) would run off to a nonsense
+                // low estimate (e.g. ~-56 → wrongly shown as "TOUR+"), so we
+                // clamp HIGH instead. Positive slope keeps today's behaviour.
                 segment = segs - 1
+                if (s[segs] - s[segs - 1] <= 0.0) {
+                    est = Double.POSITIVE_INFINITY
+                    degenerateAllNegative = true
+                } else {
+                    est = h[segs - 1] + (h[segs] - h[segs - 1]) * (-s[segs - 1]) / s1Diff(s, segs - 1)
+                }
             }
         }
     }
 
     val low: Double?
     val high: Double?
-    if (shots.size < 2) {
+    if (shots.size < 2 || degenerateAllNegative) {
         low = null
         high = null
     } else {
@@ -77,7 +93,7 @@ fun handicapMatch(shots: List<ShotInput>): HandicapEstimate {
         high = high,
         perBandSg = perBand,
         clampedLow = est < -5.0,
-        clampedHigh = est > 25.0,
+        clampedHigh = degenerateAllNegative || est > 25.0,
     )
 }
 

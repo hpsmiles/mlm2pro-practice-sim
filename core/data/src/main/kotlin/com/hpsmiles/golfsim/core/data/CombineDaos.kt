@@ -25,6 +25,10 @@ interface CombineSessionDao {
     @Query("UPDATE combine_sessions SET completedAtMs = :completedAtMs WHERE id = :id")
     suspend fun complete(id: Long, completedAtMs: Long)
 
+    /** Re-stamps the session's source (e.g. LIVE→DEMO when a run turns out to be all-demo). */
+    @Query("UPDATE combine_sessions SET source = :source WHERE id = :id")
+    suspend fun markSource(id: Long, source: Int)
+
     @Query("DELETE FROM combine_sessions WHERE id = :id")
     suspend fun delete(id: Long)
 }

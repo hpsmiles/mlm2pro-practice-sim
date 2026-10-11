@@ -350,6 +350,11 @@ fun AppRoot() {
                     )?.also { combineGame.sessionId = it }
                     ?: return@launch
                 sessionRepository.appendCombineShot(id, shot.index, shot.stationIndex, shot.restLie.name, shot.restDistanceM)
+                // A shot fired in demo mode makes the run a demo run even though
+                // the session was created LIVE (MODE toggle was off at start):
+                // re-stamp it so HISTORY marks it DEMO and the completion
+                // effect's LIVE gate does not set a record from it.
+                if (source == ShotSource.DEMO) sessionRepository.markCombineSessionDemo(id)
             }
             return
         }
