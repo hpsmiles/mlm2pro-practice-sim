@@ -20,9 +20,9 @@ class RangeSceneTest {
         assertFalse(RangeScene.isOnFairway(30.0, 100.0))
         assertFalse(RangeScene.isOnFairway(0.0, 340.0))
         assertFalse(RangeScene.isOnFairway(0.0, 5.0))
-        // Width ~28 m at tee, widening slightly toward the fairway end.
-        assertTrue(abs(RangeScene.fairwayHalfWidth(10.0) - 14.0) < 0.5)
-        assertTrue(RangeScene.fairwayHalfWidth(330.0) > 14.0)
+        // Constant 28 m wide corridor — no taper.
+        assertTrue(abs(RangeScene.fairwayHalfWidth(10.0) - 14.0) < 0.001)
+        assertTrue(abs(RangeScene.fairwayHalfWidth(330.0) - 14.0) < 0.001)
     }
 
     @Test

@@ -18,7 +18,7 @@ class CombineLieTest {
 
     @Test
     fun `fairway rough boundary short of the green follows the corridor width`() {
-        // fairwayHalfWidth(30) ≈ 14.1, fairwayHalfWidth(40) ≈ 14.2 (28 m corridor)
+        // Constant 28 m corridor → half-width 14.0 everywhere.
         assertEquals(Lie.FAIRWAY, CombineLie.classify(wedges, 0, 0.0, 30.0))
         assertEquals(Lie.FAIRWAY, CombineLie.classify(wedges, 0, 14.0, 40.0))
         assertEquals(Lie.ROUGH, CombineLie.classify(wedges, 0, 15.0, 40.0))

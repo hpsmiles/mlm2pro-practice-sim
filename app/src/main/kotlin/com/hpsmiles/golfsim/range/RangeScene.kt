@@ -18,8 +18,7 @@ object RangeScene {
     const val GROUND_END_Y = 350.0
     const val STRIPE_WIDTH_M = 10.0
 
-    private const val HALF_WIDTH_TEE = 14.0
-    private const val HALF_WIDTH_END = 16.0
+    private const val HALF_WIDTH_M = 14.0
 
     // Practice grid identity (tunable on tablet review).
     const val CENTER_LINE_HALF_WIDTH_M = 0.2
@@ -56,11 +55,11 @@ object RangeScene {
     /** Topography seam — flat this phase (spec non-goal: no topography yet). */
     fun groundHeight(x: Double, y: Double): Double = 0.0
 
-    /** ~28 m wide at the tee, widening to ~32 m at the fairway end. */
-    fun fairwayHalfWidth(y: Double): Double {
-        val t = ((y - FAIRWAY_TEE_Y) / (FAIRWAY_END_Y - FAIRWAY_TEE_Y)).coerceIn(0.0, 1.0)
-        return HALF_WIDTH_TEE + (HALF_WIDTH_END - HALF_WIDTH_TEE) * t
-    }
+    /**
+     * Constant corridor half-width (14.0 m → 28 m wide) everywhere, per user spec —
+     * no taper. Everything beyond [FAIRWAY_END_Y] is rough.
+     */
+    fun fairwayHalfWidth(y: Double): Double = HALF_WIDTH_M
 
     fun isOnFairway(x: Double, y: Double): Boolean =
         y in FAIRWAY_TEE_Y..FAIRWAY_END_Y && abs(x) <= fairwayHalfWidth(y)
