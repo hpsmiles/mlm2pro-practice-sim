@@ -100,6 +100,20 @@ class HandicapMatchTest {
     }
 
     @Test
+    fun `worse than all bands - exact zero slope clamps high`() {
+        // A zero-distance shot (start == rest) yields SG = -1.0 for every band,
+        // so the HCP10/HCP18 means are equal and the raw [10,18] diff is exactly
+        // 0.0. The `<= 0.0` sign test routes this boundary to the high clamp
+        // (not the extrapolation), unlike the positive-slope pin above.
+        val estimate = handicapMatch(listOf(ShotInput(Lie.FAIRWAY, 100.0, Lie.FAIRWAY, 100.0)))
+        assertTrue(estimate.clampedHigh)
+        assertFalse(estimate.clampedLow)
+        assertTrue(estimate.est == Double.POSITIVE_INFINITY)
+        assertNull(estimate.low)
+        assertNull(estimate.high)
+    }
+
+    @Test
     fun `worse than all bands - second negative slope pin`() {
         val estimate = handicapMatch(listOf(ShotInput(Lie.FAIRWAY, 100.0, Lie.FAIRWAY, 171.17)))
         assertTrue(estimate.clampedHigh)

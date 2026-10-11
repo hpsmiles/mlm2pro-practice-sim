@@ -27,6 +27,7 @@ object CombineRecord {
         CombineRecordOutcome.FIRST_SCORE -> "First completed combine"
         CombineRecordOutcome.NEW_RECORD -> "Previous best ${CombineFormats.formatHc(comparison.best!!)}"
         CombineRecordOutcome.OFF_RECORD ->
-            "Best ${CombineFormats.formatHc(comparison.best!!)} · ${CombineFormats.oneDp(comparison.delta)} off"
+            "Best ${CombineFormats.formatHc(comparison.best!!)}" +
+                if (comparison.delta.isFinite()) " · ${CombineFormats.oneDp(comparison.delta)} off" else ""
     }
 }

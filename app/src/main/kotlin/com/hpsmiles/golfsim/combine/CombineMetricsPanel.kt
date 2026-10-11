@@ -27,10 +27,13 @@ internal fun CombineMetricsPanel(
     lastShot: DisplayShot?,
     entry: CombineCatalogEntry,
     takenCount: Int,
+    highlightIndex: Int = takenCount.coerceAtMost(CombinePlan.SHOTS_TOTAL - 1),
     modifier: Modifier = Modifier,
 ) {
     val counts = CombinePlan.countsFor(entry, takenCount)
-    val currentStation = CombinePlan.stationIndexFor(takenCount.coerceAtMost(CombinePlan.SHOTS_TOTAL - 1))
+    // The highlight follows the display index (held during flight) so the row
+    // does not advance mid-shot; counts and TOTAL stay takenCount-derived.
+    val highlightStation = CombinePlan.stationIndexFor(highlightIndex)
     Column(
         modifier = modifier
             .width(210.dp)
@@ -50,7 +53,7 @@ internal fun CombineMetricsPanel(
         SectionCard("TARGETS") {
             Column(verticalArrangement = Arrangement.spacedBy(GolfSpacing.Xs)) {
                 entry.stations.forEachIndexed { index, station ->
-                    val highlight = index == currentStation
+                    val highlight = index == highlightStation
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                         Text(
                             station.label,

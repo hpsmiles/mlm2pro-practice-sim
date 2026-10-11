@@ -170,6 +170,34 @@ class CombineGameTest {
     }
 
     @Test
+    fun `sawDemoShot defaults false and survives an accepted shot`() {
+        val game = gameWithRest()
+        assertFalse(game.sawDemoShot)
+        game.start(wedges, sessionId = 1L, baselineTaken = 0)
+        assertFalse(game.sawDemoShot)
+        assertNotNull(game.add(ball()))
+        assertFalse(game.sawDemoShot)
+    }
+
+    @Test
+    fun `start clears sawDemoShot`() {
+        val game = gameWithRest()
+        game.start(wedges, sessionId = 1L, baselineTaken = 0)
+        game.sawDemoShot = true
+        game.start(wedges, sessionId = 2L, baselineTaken = 0)
+        assertFalse(game.sawDemoShot)
+    }
+
+    @Test
+    fun `reset clears sawDemoShot`() {
+        val game = gameWithRest()
+        game.start(wedges, sessionId = 1L, baselineTaken = 0)
+        game.sawDemoShot = true
+        game.reset()
+        assertFalse(game.sawDemoShot)
+    }
+
+    @Test
     fun `reset clears baselineFacts`() {
         val game = gameWithRest()
         game.start(

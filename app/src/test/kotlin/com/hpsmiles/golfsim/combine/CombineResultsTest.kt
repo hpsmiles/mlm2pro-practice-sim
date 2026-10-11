@@ -4,6 +4,7 @@ import com.hpsmiles.golfsim.core.data.CombineShotEntity
 import com.hpsmiles.golfsim.core.scoring.HandicapEstimate
 import com.hpsmiles.golfsim.core.scoring.Lie
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -166,6 +167,23 @@ class CombineResultsTest {
     @Test
     fun `chip rounds half up`() {
         assertEquals("≈8", CombineFormats.chip(7.5))
+    }
+
+    @Test
+    fun `record detail never prints Infinity or NaN`() {
+        // A degenerate (all-negative, non-increasing [10,18]) LIVE run clamps to
+        // +Infinity, so the delta against any prior best is +Infinity (or NaN
+        // for two degenerate runs). The detail copy must stay user-readable.
+        val degenerate = CombineRecord.compare(12.3, Double.POSITIVE_INFINITY)
+        assertEquals(CombineRecordOutcome.OFF_RECORD, degenerate.outcome)
+        val detail = CombineRecord.detail(degenerate)
+        assertFalse(detail.contains("Infinity"))
+        assertFalse(detail.contains("NaN"))
+
+        val both = CombineRecord.compare(Double.POSITIVE_INFINITY, Double.POSITIVE_INFINITY)
+        val bothDetail = CombineRecord.detail(both)
+        assertFalse(bothDetail.contains("Infinity"))
+        assertFalse(bothDetail.contains("NaN"))
     }
 
     @Test

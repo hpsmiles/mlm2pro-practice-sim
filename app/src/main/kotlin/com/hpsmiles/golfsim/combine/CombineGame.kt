@@ -42,6 +42,14 @@ class CombineGame {
     var tick by mutableIntStateOf(0)
     var record: CombineRecordComparison? by mutableStateOf(null)
 
+    /**
+     * Set when a DEMO-source shot is routed into this combine. A synchronous
+     * in-memory signal for the completion gate: the persisted `source` column is
+     * updated asynchronously by a Room write, so the gate cannot rely on it for
+     * the very shot that ends the run (the write may not have landed yet).
+     */
+    var sawDemoShot by mutableStateOf(false)
+
     var clockMs: () -> Long = { System.currentTimeMillis() }
     var greenSurface: Surface = Surface.GREEN_NORMAL
     var fairwaySurface: Surface = Surface.FAIRWAY_NORMAL
@@ -76,6 +84,7 @@ class CombineGame {
         this.baselineFacts = baselineFacts
         shots.clear()
         record = null
+        sawDemoShot = false
         tick = 0
     }
 
@@ -86,6 +95,7 @@ class CombineGame {
         baselineFacts = emptyList()
         shots.clear()
         record = null
+        sawDemoShot = false
         tick = 0
     }
 

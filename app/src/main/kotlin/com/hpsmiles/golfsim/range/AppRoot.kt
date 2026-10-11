@@ -354,7 +354,10 @@ fun AppRoot() {
                 // the session was created LIVE (MODE toggle was off at start):
                 // re-stamp it so HISTORY marks it DEMO and the completion
                 // effect's LIVE gate does not set a record from it.
-                if (source == ShotSource.DEMO) sessionRepository.markCombineSessionDemo(id)
+                if (source == ShotSource.DEMO && !combineGame.sawDemoShot) {
+                    combineGame.sawDemoShot = true
+                    sessionRepository.markCombineSessionDemo(id)
+                }
             }
             return
         }
@@ -835,7 +838,7 @@ fun AppRoot() {
         // (defensive only — a resumed session always has baseline facts) simply
         // skips the record rather than crashing; the session still completes.
         val facts = combineGame.allFacts
-        if (active.source == ShotSource.LIVE.code && facts.isNotEmpty()) {
+        if (active.source == ShotSource.LIVE.code && !combineGame.sawDemoShot && facts.isNotEmpty()) {
             val priorSessions = sessionRepository.combineCompletedSessions(entry.id)
                 .filter { it.source == ShotSource.LIVE.code }
             val priorShots = sessionRepository.combineShotsForSessions(priorSessions.map { it.id })

@@ -157,6 +157,7 @@ internal fun CombinePlay(
                 lastShot = lastShot?.display,
                 entry = entry,
                 takenCount = takenCount,
+                highlightIndex = displayIndex,
             )
         }
     }
