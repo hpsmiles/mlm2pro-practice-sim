@@ -47,7 +47,7 @@ $env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"
 - Modify: `app/src/main/kotlin/com/hpsmiles/golfsim/combine/CombineResults.kt`
 - Modify: `app/src/test/kotlin/com/hpsmiles/golfsim/combine/CombineResultsTest.kt`
 
-- [ ] **Step 1: failing test for the lock rule**
+- [x] **Step 1: failing test for the lock rule**
 
 In `SkillBandTest.kt` pin `SkillBand.nearestTo(hc)`:
 
@@ -62,12 +62,12 @@ assertEquals(SkillBand.HCP18, SkillBand.nearestTo(Double.POSITIVE_INFINITY))
 assertEquals(SkillBand.HCP18, SkillBand.nearestTo(Double.NaN))
 ```
 
-- [ ] **Step 2: run it and watch it fail**
+- [x] **Step 2: run it and watch it fail**
 
 Run: `.\gradlew.bat --console=plain :core:scoring:test`
 Expected: FAIL — unresolved reference `nearestTo`.
 
-- [ ] **Step 3: implement the lock rule**
+- [x] **Step 3: implement the lock rule**
 
 ```kotlin
 /**
@@ -85,7 +85,7 @@ fun nearestTo(hc: Double): SkillBand {
 }
 ```
 
-- [ ] **Step 4: app side — locked band + per-band shot SG**
+- [x] **Step 4: app side — locked band + per-band shot SG**
 
 In `CombineResults.kt`:
 - add `val lockedBand: SkillBand` to the `CombineResults` data class, computed in `combineResults(...)` as
@@ -97,13 +97,13 @@ In `CombineResults.kt`:
   per-shot chip behaviour working (chips may keep using the per-shot nearest band, or use `lockedBand` —
   choose `lockedBand` for consistency and note it).
 
-- [ ] **Step 5: app tests**
+- [x] **Step 5: app tests**
 
 In `CombineResultsTest.kt` add: the golden 100 m fixture (overall ≈ −5.84) → `lockedBand == SkillBand.TOUR`;
 the driver demo facts (overall ≈ 21.83) → `lockedBand == SkillBand.HCP18`; and `shotSgForBand` for one
 approach fact and one driver fact against a fixed band (values recomputed from the tables, tolerance 0.01).
 
-- [ ] **Step 6: verify + commit**
+- [x] **Step 6: verify + commit**
 
 Run: `.\gradlew.bat --console=plain :core:scoring:test` then `.\gradlew.bat --console=plain :app:testDebugUnitTest --rerun-tasks`
 Expected: all green (25 scoring + 308 app + the new tests).
@@ -128,28 +128,28 @@ git commit -m "feat(combine): lock each completed session to its nearest benchma
 - Create: `core/data/schemas/com.hpsmiles.golfsim.core.data.Mlm2proDatabase/7.json`
 - Modify: `app/src/main/kotlin/com/hpsmiles/golfsim/range/AppRoot.kt`
 
-- [ ] **Step 1: entity + migration**
+- [x] **Step 1: entity + migration**
 
 `CombineShotEntity` gains `val restXM: Double?` and `val restYM: Double?` (nullable — old rows have none).
 `Mlm2proDatabase`: version 6 → 7; `MIGRATION_6_7` = two `ALTER TABLE combine_shots ADD COLUMN ... REAL`
 statements (nullable, no default). Register it in `SessionRepository.build()`.
 
-- [ ] **Step 2: repository**
+- [x] **Step 2: repository**
 
 `appendCombineShot(...)` gains `restXM: Double? = null, restYM: Double? = null` (defaults keep existing call
 sites compiling) and writes them.
 
-- [ ] **Step 3: AppRoot passes the real coordinates**
+- [x] **Step 3: AppRoot passes the real coordinates**
 
 At the COMBINE append call site pass `restXM = shot.display.shotResult.restX`, `restYM = shot.display.shotResult.restY`.
 
-- [ ] **Step 4: migration test + schema**
+- [x] **Step 4: migration test + schema**
 
 Clone the `MigrationFrom5Test` pattern for v6 → v7 (hand-built v6 file + the v6 identity hash from `6.json`,
 `raw.version = 6`), assert prior data survives and that a combine session can be started, appended to (with
 coordinates) and completed. Generate `7.json` via a build, then commit it.
 
-- [ ] **Step 5: verify + commit**
+- [x] **Step 5: verify + commit**
 
 Run: `.\gradlew.bat --console=plain :core:data:testDebugUnitTest --rerun-tasks`
 Expected: all green (including the new migration test and the existing `CombineRepositoryTest`, which should
@@ -167,7 +167,7 @@ git commit -m "feat(data): store combine shot rest coordinates (Room v7)"
 - Rewrite: `app/src/main/kotlin/com/hpsmiles/golfsim/combine/CombineResultsView.kt`
 - Modify: `app/src/main/kotlin/com/hpsmiles/golfsim/combine/CombineFormats.kt` (if a band-label helper is needed)
 
-- [ ] **Step 1: rebuild the layout** (per spec §2)
+- [x] **Step 1: rebuild the layout** (per spec §2)
 
 Single vertical column: centred hero overall handicap (large, e.g. 44–52 sp) with the ± uncertainty smaller
 beneath; a row of three per-target items (station label, `formatHc(estimate)`, then "avg to pin"/"avg total"
@@ -176,10 +176,10 @@ section **collapsed by default** whose header shows `"SHOTS · ${facts.size} sho
 expanded → the ledger table (#, target, result, lie, SG vs `lockedBand`, colour-coded); BACK / PLAY AGAIN
 buttons.
 
-- [ ] **Step 2: read-only behaviour unchanged** — no PLAY AGAIN, no record card, no confetti; the drill's
+- [x] **Step 2: read-only behaviour unchanged** — no PLAY AGAIN, no record card, no confetti; the drill's
   session-context header (date + DEMO) stays where it is (HistoryScreen owns it).
 
-- [ ] **Step 3: verify + commit**
+- [x] **Step 3: verify + commit**
 
 Run: `.\gradlew.bat --console=plain :app:testDebugUnitTest --rerun-tasks`
 Expected: all green (no new tests — screens are untested by convention; keep logic in `CombineResults`).
@@ -197,13 +197,13 @@ git commit -m "feat(combine): results redesign (hero, per-target row, collapsibl
 - Modify: `app/src/main/kotlin/com/hpsmiles/golfsim/combine/CombineResultsView.kt` (a SUMMARY / TOP-DOWN toggle)
 - Create: `app/src/test/kotlin/com/hpsmiles/golfsim/combine/CombineDispersionTest.kt` (pure geometry/stats)
 
-- [ ] **Step 1: pure dispersion maths (tested)**
+- [x] **Step 1: pure dispersion maths (tested)**
 
 A small pure object (e.g. `CombineDispersion`) with, per group: centroid, `sigmaX`, `sigmaY` (population or
 n−1 — pick one and document), long–short spread, left–right spread, and a `hasRing` flag for groups with
 fewer than 2 shots. Pin it in `CombineDispersionTest` with hand-computed values.
 
-- [ ] **Step 2: the view**
+- [x] **Step 2: the view**
 
 `CombineTopDownView(entry, facts, modifier)`: horizontal plan view, tee left, 0–330 m right; the constant
 28 m corridor (reuse `RangeScene.HALF_WIDTH_M`/`fairwayHalfWidth`), gridlines + labels every 50 m, the 100 m
@@ -212,12 +212,12 @@ hole coordinates from `restXM`/`restYM` — finish dots, centroid, one dashed 1�
 group (reuse `FittingColors.clubColor(index)`); a side panel with the per-group stats. If no fact has
 coordinates, render "no dispersion data for this session".
 
-- [ ] **Step 3: toggle from the results screen**
+- [x] **Step 3: toggle from the results screen**
 
 A SUMMARY / TOP-DOWN toggle in the results screen switches between the redesigned results view and the
 top-down view (state hoisted in the results screen so it also works in the read-only history drill).
 
-- [ ] **Step 4: verify + commit**
+- [x] **Step 4: verify + commit**
 
 Run: `.\gradlew.bat --console=plain :app:testDebugUnitTest --rerun-tasks`
 Expected: all green.

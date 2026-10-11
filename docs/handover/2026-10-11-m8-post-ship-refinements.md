@@ -1,8 +1,8 @@
 # Handover — M8 post-ship refinements
 
 **Date:** 2026-10-11 (evening) · **Repo:** `C:\aaa\code\golf sim`
-**Branch:** `m8-custom-combines` (NOT merged to master) · **HEAD:** `f69c346` · **Working tree:** clean
-**Why this doc:** the session ended (laptop shutdown) with a refinement increment half-started. This is the pickup point.
+**Branch:** `m8-custom-combines` (NOT merged to master) · **HEAD:** `a239383` · **Working tree:** clean
+**Why this doc:** the refinement increment is complete through T4; only the T5 on-device gate remains (blocked on the tablet being connected).
 
 ---
 
@@ -20,25 +20,24 @@
 
 **Test state:** 340 green — `:core:scoring:test` 25, `:app:testDebugUnitTest` 308, `:core:data` `CombineRepositoryTest` 7.
 
-**Increment in progress:** a 5-task refinement increment (benchmark lock, rest coordinates, results redesign, top-down dispersion view, final gate). Design + plan are written and committed (`f69c346`). **T1 was dispatched and had not committed when the machine shut down** — the tree was clean, so nothing is corrupted.
+**Increment status:** the 5-task refinement increment is **shipped through T4** (`ceead19`, `8047f81`, `74d2152`, `a239383`). **Only T5's on-device gate remains** — it needs the Lenovo tablet connected (`:app:installDebug` + the checklist in §5/§8). Design + plan are committed (`f69c346`).
 
 ---
 
-## 2. FIRST ACTIONS on resume (in order)
+## 2. Remaining work (T5 only)
 
 ```powershell
 cd 'C:\aaa\code\golf sim'
-git status --short          # expect clean; if dirty see §2.1
-git log --oneline -8        # expect HEAD f69c346 unless T1 committed
+git status --short          # expect clean
+git log --oneline -6        # expect HEAD a239383
+$env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"
+.\gradlew.bat --console=plain :app:installDebug     # needs the tablet connected (adb serial HA2C96BN)
 ```
 
-1. **Check whether T1 completed:** does commit `feat(combine): lock each completed session to its nearest benchmark band` exist, and is there a `.superpowers/m8-exec/m8-refinements-t1-report.md`?
-   - **Yes** → run T1's spec + quality reviews, then start T2.
-   - **No, tree clean** → T1 died mid-flight; re-dispatch it (§4) with a fresh child.
-   - **No, tree dirty** → inspect `git diff`; if it is clearly T1's work, finish it (run `:core:scoring:test` + `:app:testDebugUnitTest`, commit), otherwise `git checkout -- .` and re-dispatch T1.
+Then walk the user through the on-device checklist (§5 T5 row + §8) and commit any corrections. `gradlew build` already passed for `a239383`.
 
-### 2.1 If the tree is dirty
-A shutdown mid-task can leave uncommitted edits. Inspect before discarding. Nothing else in the repo is at risk — every completed step is committed.
+**If the tablet is not connected**, stop and ask the user to connect it — nothing else is outstanding.
+
 
 ---
 
@@ -80,13 +79,13 @@ Rules learned the hard way:
 
 ## 5. Task queue
 
-| # | Task | Status | Commit target |
+| # | Task | Status | Commit |
 |---|---|---|---|
-| T1 | Benchmark lock (`SkillBand.nearestTo`, `CombineResults.lockedBand` + `shotSgForBand`) | **dispatched, uncommitted at shutdown** | `feat(combine): lock each completed session to its nearest benchmark band` |
-| T2 | Room v7: `combine_shots.restXM/restYM` (+ `MIGRATION_6_7`, `7.json`, migration test, repository + AppRoot append) | not started | `feat(data): store combine shot rest coordinates (Room v7)` |
-| T3 | Results redesign (`CombineResultsView` rewrite) | not started | `feat(combine): results redesign (hero, per-target row, collapsible benchmark-locked ledger)` |
-| T4 | Top-down dispersion view (`CombineTopDownView.kt` + pure `CombineDispersion` + tests + toggle) | not started | `feat(combine): top-down dispersion view` |
-| T5 | Final gate (`gradlew build`, `:app:installDebug`, on-device checklist) | not started | — |
+| T1 | Benchmark lock (`SkillBand.nearestTo`, `CombineResults.lockedBand` + `shotSgForBand`) | **DONE** | `ceead19` |
+| T2 | Room v7: `combine_shots.restXM/restYM` (+ `MIGRATION_6_7`, `7.json`, migration test, repository + AppRoot append) | **DONE** | `8047f81` |
+| T3 | Results redesign (`CombineResultsView` rewrite) | **DONE** | `74d2152` |
+| T4 | Top-down dispersion view (`CombineTopDownView.kt` + pure `CombineDispersion` + tests + toggle) | **DONE** | `a239383` |
+| T5 | Final gate (`gradlew build` ✅, `:app:installDebug`, on-device checklist) | **build green; device gate pending** | — |
 
 ---
 
@@ -94,7 +93,7 @@ Rules learned the hard way:
 
 - **Benchmark lock:** a completed combine locks to the benchmark band **nearest its overall handicap estimate**; ties resolve to the better (lower) anchor; non-finite/out-of-range → `HCP18` (below −5 → `TOUR`). Every per-shot SG in the results ledger is computed against that locked band (approaches: `strokesGained(band, startLie, startM, endLie, endM)`; driver: `drivingStrokesGained(band, restLie, restDistanceM)`). Station estimates and the VS BANDS strip keep the 4-band solve.
 - **Ledger:** collapsible and **collapsed by default**; the header states the benchmark (e.g. "Scored vs 18 HC").
-- **Top-down view:** reached by a SUMMARY / TOP-DOWN toggle on the results screen; horizontal plan view, **tee on the left**, 0–330 m to the right; constant 28 m corridor; gridlines every 50 m; 100 m and 150 m greens as circles with pins; three colour-coded groups (100 m, 150 m, driver) drawn as **finish dots + centroid + one dashed 1σ ellipse**; approach groups relative to their own pin, driver in absolute hole coordinates; side panel with per-group avg / long–short / left–right; empty state "no dispersion data for this session" when coordinates are absent.
+- **Top-down view:** reached by a SUMMARY / TOP-DOWN toggle on the results screen; horizontal plan view, **tee on the left**, 0–330 m to the right; constant 28 m corridor; gridlines every 50 m; 100 m and 150 m greens as circles with pins; three colour-coded groups (100 m, 150 m, driver) drawn as **finish dots + centroid + one dashed 1σ ellipse**; side panel with per-group avg / long–short / left–right; empty state "no dispersion data for this session" when coordinates are absent. **As shipped (T4):** all groups are plotted in **absolute hole coordinates** (`restXM`/`restYM`) — equivalent to the spec's "relative to their own pin" because each approach pin sits at its station's `startDistanceM`, so absolute == pin + offset. The pure stats live in `CombineDispersion` (population σ, axis-aligned 1σ ring); the view is `CombineTopDownView`.
 - **Driver model:** per-band typical drives TOUR 272.5 / SCRATCH 239.6 / HCP10 208.9 / HCP18 193.9 m (Arccos 2026, young-scratch cohort for scratch; PGA Tour average for tour). `SG_h = E_h(FAIRWAY, 340 − typicalDriveM_h) − E_h(restLie, restDistanceM)` — position-to-position, **no −1**.
 - **Fairway:** constant 28 m (`RangeScene.HALF_WIDTH_M = 14.0`), user-specified, no taper.
 - **Scoring clamp:** degenerate all-negative estimates (raw [10,18] diff ≤ 0) → `+Infinity` + `clampedHigh` → renders `25+`.
