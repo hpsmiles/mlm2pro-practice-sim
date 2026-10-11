@@ -40,7 +40,13 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.hpsmiles.golfsim.audio.GameAudio
+import com.hpsmiles.golfsim.combine.CombineCatalog
+import com.hpsmiles.golfsim.combine.CombineCatalogEntry
 import com.hpsmiles.golfsim.combine.CombineGame
+import com.hpsmiles.golfsim.combine.CombinePlan
+import com.hpsmiles.golfsim.combine.CombineRecord
+import com.hpsmiles.golfsim.combine.overallEstimate
+import com.hpsmiles.golfsim.combine.toFacts
 import com.hpsmiles.golfsim.bag.BagMappingCollector
 import com.hpsmiles.golfsim.bag.BagMappingScreen
 import com.hpsmiles.golfsim.bag.BagOrderMode
@@ -120,7 +126,6 @@ fun AppRoot() {
     var tab by remember { mutableStateOf(RangeTab.RANGE) }
     val targetPractice = remember { TargetPracticeGame() }
     val breakPane = remember { BreakThePaneGame() }
-    // TEMPORARY PLACEHOLDER (Task 15): replaced by Task 16's real combine wiring.
     val combineGame = remember { CombineGame() }
     var activeGame by remember { mutableStateOf(GameMode.NONE) }
 
@@ -193,6 +198,7 @@ fun AppRoot() {
         session.greenSurface = surface
         targetPractice.greenSurface = surface
         breakPane.greenSurface = surface
+        combineGame.greenSurface = surface
         fitSession.greenSurface = surface
     }
     LaunchedEffect(turfCondition) {
@@ -200,6 +206,7 @@ fun AppRoot() {
         session.turfSurface = surface
         targetPractice.fairwaySurface = surface
         breakPane.fairwaySurface = surface
+        combineGame.fairwaySurface = surface
         fitSession.turfSurface = surface
     }
 
@@ -328,6 +335,24 @@ fun AppRoot() {
             }
             return
         }
+        // M8: a combine owns the shot stream whenever activeGame == COMBINE.
+        // Handled before the mode when-block with an explicit return (the
+        // COMBINE arm inside it is therefore unreachable — kept only to keep
+        // the when exhaustive). Shots never enter range sessions.
+        if (activeGame == GameMode.COMBINE) {
+            val entry = combineGame.entry ?: return
+            val shot = combineGame.add(ballData) ?: return
+            scope.launch {
+                val id = combineGame.sessionId.takeIf { it > 0L }
+                    ?: sessionRepository.startCombineSession(
+                        entry.id, entry.name, entry.layoutVersion,
+                        System.currentTimeMillis(), source,
+                    )?.also { combineGame.sessionId = it }
+                    ?: return@launch
+                sessionRepository.appendCombineShot(id, shot.index, shot.stationIndex, shot.restLie.name, shot.restDistanceM)
+            }
+            return
+        }
         when (activeGame) {
             GameMode.NONE -> persist(session.add(ballData), source)
             GameMode.TARGET_PRACTICE -> {
@@ -342,7 +367,8 @@ fun AppRoot() {
                     completeGame(it, breakPane::setRecord, { breakPane.clockMs() }, source)
                 }
             }
-            // TEMPORARY PLACEHOLDER (Task 15): real combine routeShot wiring is Task 16.
+            // Unreachable: the COMBINE early-return above always handles this
+            // mode before the when. Kept so the when stays exhaustive.
             GameMode.COMBINE -> Unit
         }
     }
@@ -632,6 +658,20 @@ fun AppRoot() {
         )
     }.collectAsState(initial = emptyList())
 
+    // M8: combine flows — Room truth, gated like the bag/fitting captures.
+    // Kill/resume is FREE: they re-derive from the current db. combineActive
+    // drives the picker RESUME card and the resume/completion bookkeeping.
+    val combineActive = gatedFlow(repoReady, { sessionRepository.combineActive }, flowOf(null))
+        .collectAsState(initial = null).value
+    val combineActiveShots = remember(repoReady, combineActive?.id) {
+        if (combineActive == null) flowOf(emptyList())
+        else sessionRepository.observeCombineShots(combineActive.id)
+    }.collectAsState(initial = emptyList()).value
+    val combineHistory = gatedFlow(repoReady, { sessionRepository.combineHistory }, flowOf(emptyList()))
+        .collectAsState(initial = emptyList()).value
+    val combineHistoryShots = gatedFlow(repoReady, { sessionRepository.combineHistoryShots }, flowOf(emptyList()))
+        .collectAsState(initial = emptyList()).value
+
     // M7 (task 5 review): sessionId is derived from Room truth, never cached
     // across completion — prevents a late write-back from re-binding a
     // COMPLETED session after END COMPARISON.
@@ -693,6 +733,52 @@ fun AppRoot() {
         }
     }
 
+    // --- M8 combine session controls --------------------------------------
+    // activeGame is set to COMBINE only AFTER combineGame.start(...) succeeds,
+    // so "activeGame == COMBINE ⇒ combineGame.entry != null" is an invariant.
+
+    fun startCombine(entry: CombineCatalogEntry) {
+        scope.launch {
+            val id = sessionRepository.startCombineSession(
+                entry.id, entry.name, entry.layoutVersion,
+                System.currentTimeMillis(),
+                if (demo) ShotSource.DEMO else ShotSource.LIVE,
+            ) ?: return@launch
+            combineGame.start(entry, id, baselineTaken = 0)
+            activeGame = GameMode.COMBINE
+        }
+    }
+
+    fun resumeCombine() {
+        val active = combineActive ?: return
+        val entry = CombineCatalog.byId(active.combineId) ?: return
+        combineGame.start(entry, active.id, baselineTaken = combineActiveShots.size)
+        activeGame = GameMode.COMBINE
+    }
+
+    fun discardCombineThenStart(entry: CombineCatalogEntry) {
+        val active = combineActive
+        scope.launch {
+            if (active != null) sessionRepository.discardCombineSession(active.id)
+            val id = sessionRepository.startCombineSession(
+                entry.id, entry.name, entry.layoutVersion,
+                System.currentTimeMillis(),
+                if (demo) ShotSource.DEMO else ShotSource.LIVE,
+            ) ?: return@launch
+            combineGame.start(entry, id, baselineTaken = 0)
+            activeGame = GameMode.COMBINE
+        }
+    }
+
+    // T15 quality Important #2: deliberately NO combineGame.reset() here. reset()
+    // nulls entry while activeGame may already be COMBINE, so a failed async start
+    // would render nothing with no back affordance. start() re-initializes
+    // entry/shots/record/tick itself, preserving the entry-non-null invariant.
+    fun playAgainCombine() {
+        val entry = combineGame.entry ?: return
+        startCombine(entry)
+    }
+
     /**
      * M7 PDF export (2026-10-08): builds + renders the currently viewed
      * session (live or read-only history) off the main thread, then fires the
@@ -725,6 +811,31 @@ fun AppRoot() {
         if (bagCollector.done && bagActive != null) completeBagTest()
     }
 
+    // M8: a completed combine publishes the record and completes the Room
+    // session. The record is only computed for LIVE runs (demo is unscored);
+    // the prior-best query must precede completeCombineSession.
+    LaunchedEffect(combineGame.complete, combineActive?.id) {
+        val active = combineActive ?: return@LaunchedEffect
+        if (!combineGame.complete || combineGame.sessionId != active.id) return@LaunchedEffect
+        val entry = combineGame.entry ?: return@LaunchedEffect
+        if (active.source == ShotSource.LIVE.code) {
+            val priorSessions = sessionRepository.combineCompletedSessions(entry.id)
+                .filter { it.source == ShotSource.LIVE.code }
+            val priorShots = sessionRepository.combineShotsForSessions(priorSessions.map { it.id })
+            val previousBest = priorShots.groupBy { it.sessionId }.values
+                .filter { it.size >= CombinePlan.SHOTS_TOTAL }
+                .mapNotNull { shots ->
+                    val facts = shots.map { it.toFacts() }
+                    runCatching { overallEstimate(entry, facts) }.getOrNull()
+                }
+                .minOrNull()
+            combineGame.record = CombineRecord.compare(previousBest, overallEstimate(entry, combineGame.shots.map { it.toFacts() }))
+        } else {
+            combineGame.record = null
+        }
+        sessionRepository.completeCombineSession(active.id, System.currentTimeMillis())
+    }
+
     // Newest session is selected by default; an absent selection falls back
     // to newest so the detail pane never points at a ghost row.
     LaunchedEffect(summaries) {
@@ -741,14 +852,15 @@ fun AppRoot() {
         val activeShots = when (active) {
             GameMode.TARGET_PRACTICE -> targetPractice.shots.isNotEmpty()
             GameMode.BREAK_PANE -> breakPane.shots.isNotEmpty()
-            // TEMPORARY PLACEHOLDER (Task 15): real combine state is Task 16.
+            // COMBINE: leaving is safe by design — shots are write-through
+            // persisted and resumable, so no destructive-leave confirm.
             GameMode.COMBINE -> false
             GameMode.NONE -> false
         }
         val activeComplete = when (active) {
             GameMode.TARGET_PRACTICE -> targetPractice.complete
             GameMode.BREAK_PANE -> breakPane.complete
-            // TEMPORARY PLACEHOLDER (Task 15): real combine state is Task 16.
+            // COMBINE: finished/leaving is always safe (never blocks a tab switch).
             GameMode.COMBINE -> true
             GameMode.NONE -> true
         }
@@ -871,14 +983,13 @@ fun AppRoot() {
                             modifier = Modifier.weight(1f),
                             targetPractice = targetPractice,
                             breakPane = breakPane,
-                            // TEMPORARY PLACEHOLDERS (Task 15): replaced by Task 16's real wiring.
                             combineGame = combineGame,
-                            combineActive = null,
-                            combineTakenCount = 0,
-                            onStartCombine = {},
-                            onResumeCombine = {},
-                            onDiscardAndStartCombine = {},
-                            onPlayAgainCombine = {},
+                            combineActive = combineActive,
+                            combineTakenCount = combineActiveShots.size,
+                            onStartCombine = ::startCombine,
+                            onResumeCombine = ::resumeCombine,
+                            onDiscardAndStartCombine = ::discardCombineThenStart,
+                            onPlayAgainCombine = ::playAgainCombine,
                             activeGame = activeGame,
                             onActiveGameChange = { activeGame = it },
                             gameAudio = gameAudio,
@@ -999,6 +1110,8 @@ fun AppRoot() {
                                 scope.launch { sessionRepository.setShotsExcluded(listOf(id), excluded) }
                             },
                             gameResults = gameResults,
+                            combineHistory = combineHistory,
+                            combineHistoryShots = combineHistoryShots,
                         )
                     }
                 }

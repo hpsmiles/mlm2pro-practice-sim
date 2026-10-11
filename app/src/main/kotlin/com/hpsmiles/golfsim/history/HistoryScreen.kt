@@ -39,6 +39,8 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.hpsmiles.golfsim.core.data.CombineSessionEntity
+import com.hpsmiles.golfsim.core.data.CombineShotEntity
 import com.hpsmiles.golfsim.core.data.entity.GameResultEntity
 import com.hpsmiles.golfsim.core.data.record.ClubRecord
 import com.hpsmiles.golfsim.core.data.record.SessionSummary
@@ -75,6 +77,8 @@ fun HistoryScreen(
     clubs: List<ClubRecord> = emptyList(),
     onToggleExcluded: (Long, Boolean) -> Unit = { _, _ -> },
     gameResults: List<GameResultEntity> = emptyList(),
+    combineHistory: List<CombineSessionEntity> = emptyList(),
+    combineHistoryShots: List<CombineShotEntity> = emptyList(),
 ) {
     var tab by remember { mutableStateOf(HistoryTab.SESSIONS) }
 

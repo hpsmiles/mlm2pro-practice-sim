@@ -123,7 +123,7 @@ fun GamesScreen(
                 )
             }
         }
-        pickerState == "SETUP_COMBINE" -> {
+        pickerState == "SETUP_COMBINE" && activeGame != GameMode.COMBINE -> {
             CombineSetup(
                 combineActive = combineActive,
                 takenCount = combineTakenCount,
