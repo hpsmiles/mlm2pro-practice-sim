@@ -3,6 +3,7 @@ package com.hpsmiles.golfsim.combine
 import com.hpsmiles.golfsim.core.data.CombineShotEntity
 import com.hpsmiles.golfsim.core.scoring.HandicapEstimate
 import com.hpsmiles.golfsim.core.scoring.Lie
+import com.hpsmiles.golfsim.core.scoring.SkillBand
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -108,6 +109,53 @@ class CombineResultsTest {
         assertEquals("AVG TOTAL", results.stations[0].avgLabel)
         assertEquals(340.0 - rests.average(), results.stations[0].avgValue, 1e-6)
         assertEquals(listOf("SCR", "≈13", "25+", "25+", "≈0", "25+"), results.stations[0].chips)
+    }
+
+    // ---- Benchmark lock (Task 1) ----
+
+    @Test
+    fun `golden fixture locks to the tour band`() {
+        // Overall ≈ -5.84 (clamped low) -> nearest anchor is TOUR (-5).
+        val rests = listOf(1.0, 6.0, 7.0, 8.0, 10.0, 12.0)
+        val indices = listOf(0, 1, 6, 7, 12, 13)
+        val facts = indices.zip(rests).map { (index, rest) -> CombineShotFacts(index, Lie.GREEN, rest) }
+        assertEquals(SkillBand.TOUR, combineResults(approach, facts).lockedBand)
+    }
+
+    @Test
+    fun `driver demo run locks to the 18 handicap band`() {
+        // Overall ≈ 21.83 -> nearest anchor is HCP18 (18).
+        val indices = listOf(4, 5, 10, 11, 16, 17) // DRIVER station indices
+        val rests = listOf(74.48, 138.55, 184.30, 205.57, 102.32, 169.54)
+        val facts = indices.zip(rests).map { (index, rest) -> CombineShotFacts(index, Lie.FAIRWAY, rest) }
+        assertEquals(SkillBand.HCP18, combineResults(approach, facts).lockedBand)
+    }
+
+    @Test
+    fun `scratch-level driver run locks to the scratch band`() {
+        // Six drives that each leave the SCRATCH typical-drive reference rest (100.4 m),
+        // so the four-band solve lands exactly on the 0 anchor -> SCRATCH.
+        val indices = listOf(4, 5, 10, 11, 16, 17) // DRIVER station indices
+        val facts = indices.map { CombineShotFacts(it, Lie.FAIRWAY, DRIVER_HOLE_M - 239.6) }
+        val results = combineResults(approach, facts)
+        assertEquals(0.0, results.overall.est, 0.01)
+        assertEquals(SkillBand.SCRATCH, results.lockedBand)
+    }
+
+    @Test
+    fun `shotSgForBand routes approach shots through the tee table`() {
+        // 100 m approach, rest 1.0 m on the green: strokesGained(SCRATCH, FAIRWAY, 100, GREEN, 1)
+        // = ES(SCRATCH, FAIRWAY, 100.0) - ES(SCRATCH, GREEN, 1.0) - 1 = 3.026739 - 1.076 - 1.
+        val fact = CombineShotFacts(0, Lie.GREEN, 1.0)
+        assertEquals(0.951, shotSgForBand(approach, fact, SkillBand.SCRATCH), 0.01)
+    }
+
+    @Test
+    fun `shotSgForBand routes driver shots through the typical-drive table`() {
+        // Driver rest 41.23 m: drivingStrokesGained(HCP18, FAIRWAY, 41.23)
+        // = ES(HCP18, FAIRWAY, 146.1) - ES(HCP18, FAIRWAY, 41.23) = 4.437826 - 3.401696.
+        val fact = CombineShotFacts(4, Lie.FAIRWAY, 41.23)
+        assertEquals(1.036, shotSgForBand(approach, fact, SkillBand.HCP18), 0.01)
     }
 
     @Test

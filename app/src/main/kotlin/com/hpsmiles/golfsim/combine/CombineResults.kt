@@ -41,10 +41,15 @@ data class StationResult(
 /**
  * Aggregated results for a combine session.
  *
+ * @param overall the four-band solve across all shots.
+ * @param lockedBand the benchmark band the completed session locks to — the anchor nearest
+ *   [overall]'s estimate (see [SkillBand.nearestTo]). Every per-shot ledger SG is scored
+ *   against this band.
  * @param stations only stations with at least one shot, ascending by `stationIndex`.
  */
 data class CombineResults(
     val overall: HandicapEstimate,
+    val lockedBand: SkillBand,
     val stations: List<StationResult>,
 )
 
@@ -72,7 +77,7 @@ fun combineResults(entry: CombineCatalogEntry, facts: List<CombineShotFacts>): C
             },
         )
     }
-    return CombineResults(overall, stations)
+    return CombineResults(overall, SkillBand.nearestTo(overall.est), stations)
 }
 
 fun overallEstimate(entry: CombineCatalogEntry, facts: List<CombineShotFacts>): Double =
@@ -81,18 +86,23 @@ fun overallEstimate(entry: CombineCatalogEntry, facts: List<CombineShotFacts>): 
     ).est
 
 /**
- * Per-shot, per-band SG for one combine shot. DRIVER-station shots are rated against each band's
- * typical drive ([drivingStrokesGained]); every other station uses the TEE-table [strokesGained]
- * from its [CombinePlan.shotInput].
+ * Per-shot, per-band SG for one combine shot: [shotSgForBand] across every band.
  */
-private fun perShotSg(entry: CombineCatalogEntry, fact: CombineShotFacts): Map<SkillBand, Double> {
+private fun perShotSg(entry: CombineCatalogEntry, fact: CombineShotFacts): Map<SkillBand, Double> =
+    SkillBand.entries.associateWith { shotSgForBand(entry, fact, it) }
+
+/**
+ * SG for one combine shot against a single [band]. DRIVER-station shots are rated against the
+ * band's typical drive ([drivingStrokesGained] on the rest lie/distance); every other station uses
+ * the TEE-table [strokesGained] from its [CombinePlan.shotInput]. This is the routing shared by the
+ * four-band solve and the benchmark-locked ledger column.
+ */
+fun shotSgForBand(entry: CombineCatalogEntry, fact: CombineShotFacts, band: SkillBand): Double {
     val station = entry.stations[CombinePlan.stationIndexFor(fact.shotIndex)]
     return if (station.kind == StationKind.DRIVER) {
-        SkillBand.entries.associateWith { drivingStrokesGained(it, fact.restLie, fact.restDistanceM) }
+        drivingStrokesGained(band, fact.restLie, fact.restDistanceM)
     } else {
         val input = CombinePlan.shotInput(entry, fact.shotIndex, fact.restLie, fact.restDistanceM)
-        SkillBand.entries.associateWith {
-            strokesGained(it, input.startLie, input.startM, input.endLie, input.endM)
-        }
+        strokesGained(band, input.startLie, input.startM, input.endLie, input.endM)
     }
 }
