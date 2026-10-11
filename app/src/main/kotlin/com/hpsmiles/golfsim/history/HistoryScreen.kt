@@ -27,6 +27,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -39,6 +40,12 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.hpsmiles.golfsim.combine.CombineCatalog
+import com.hpsmiles.golfsim.combine.CombineFormats
+import com.hpsmiles.golfsim.combine.CombinePlan
+import com.hpsmiles.golfsim.combine.CombineResultsView
+import com.hpsmiles.golfsim.combine.overallEstimate
+import com.hpsmiles.golfsim.combine.toFacts
 import com.hpsmiles.golfsim.core.data.CombineSessionEntity
 import com.hpsmiles.golfsim.core.data.CombineShotEntity
 import com.hpsmiles.golfsim.core.data.entity.GameResultEntity
@@ -81,25 +88,63 @@ fun HistoryScreen(
     combineHistoryShots: List<CombineShotEntity> = emptyList(),
 ) {
     var tab by remember { mutableStateOf(HistoryTab.SESSIONS) }
+    var viewedCombineId by remember { mutableStateOf<Long?>(null) }
 
     Box(modifier = modifier.fillMaxSize().background(GolfColors.Base)) {
         Row(modifier = Modifier.fillMaxSize()) {
             HistorySidebar(tab = tab, onTabChange = { tab = it })
-            when (tab) {
-                HistoryTab.SESSIONS -> SessionsHistory(
-                    summaries = summaries,
-                    liveOnly = liveOnly,
-                    onToggleLiveOnly = onToggleLiveOnly,
-                    selectedSessionId = selectedSessionId,
-                    onSelectSession = onSelectSession,
-                    shots = shots,
-                    clubs = clubs,
-                    clubNames = clubNames,
-                    onRetag = onRetag,
-                    onRenameSession = onRenameSession,
-                    onToggleExcluded = onToggleExcluded,
-                )
-                HistoryTab.GAMES -> GamesHistory(gameResults, sortModel = GameHistorySorting)
+            if (viewedCombineId != null) {
+                val session = combineHistory.firstOrNull { it.id == viewedCombineId }
+                val entry = session?.let { CombineCatalog.byId(it.combineId) }
+                if (session != null && entry != null) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        // Session-context header (Task 13 quality review): the same
+                        // CombineResultsView is otherwise indistinguishable across
+                        // sessions — mirror FittingResultsView's read-only date line
+                        // plus a DEMO marker for demo-sourced sessions.
+                        Text(
+                            text = GameHistoryFormats.dateTime(session.startedAtMs) +
+                                if (session.source == 1) " · DEMO" else "",
+                            style = GolfTypography.BodySmall,
+                            color = GolfColors.TextMuted,
+                            modifier = Modifier.padding(horizontal = GolfSpacing.Xl, vertical = GolfSpacing.Md),
+                        )
+                        CombineResultsView(
+                            entry = entry,
+                            facts = combineHistoryShots.filter { it.sessionId == session.id }.map { it.toFacts() },
+                            record = null,
+                            readOnly = true,
+                            onBack = { viewedCombineId = null },
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+                } else {
+                    // session vanished (discarded): reset after composition, the list renders next
+                    LaunchedEffect(Unit) { viewedCombineId = null }
+                }
+            } else {
+                when (tab) {
+                    HistoryTab.SESSIONS -> SessionsHistory(
+                        summaries = summaries,
+                        liveOnly = liveOnly,
+                        onToggleLiveOnly = onToggleLiveOnly,
+                        selectedSessionId = selectedSessionId,
+                        onSelectSession = onSelectSession,
+                        shots = shots,
+                        clubs = clubs,
+                        clubNames = clubNames,
+                        onRetag = onRetag,
+                        onRenameSession = onRenameSession,
+                        onToggleExcluded = onToggleExcluded,
+                    )
+                    HistoryTab.GAMES -> GamesHistory(
+                        gameResults = gameResults,
+                        sortModel = GameHistorySorting,
+                        combineHistory = combineHistory,
+                        combineHistoryShots = combineHistoryShots,
+                        onOpenCombine = { viewedCombineId = it },
+                    )
+                }
             }
         }
     }
@@ -234,9 +279,27 @@ private fun SessionsHistory(
 private fun GamesHistory(
     gameResults: List<GameResultEntity>,
     sortModel: GameHistorySorting,
+    combineHistory: List<CombineSessionEntity>,
+    combineHistoryShots: List<CombineShotEntity>,
+    onOpenCombine: (Long) -> Unit,
 ) {
     var order by remember { mutableStateOf(GameHistorySorting.Order.RECENCY) }
     val grouped = remember(gameResults, order) { sortModel.sorted(gameResults, order) }
+    val combineRows = remember(combineHistory, combineHistoryShots, order) {
+        combineHistory
+            .mapNotNull { session ->
+                val entry = CombineCatalog.byId(session.combineId) ?: return@mapNotNull null
+                val facts = combineHistoryShots.filter { it.sessionId == session.id }.map { it.toFacts() }
+                if (facts.size < CombinePlan.SHOTS_TOTAL) return@mapNotNull null
+                session to overallEstimate(entry, facts)
+            }
+            .let { rows ->
+                when (order) {
+                    GameHistorySorting.Order.RECENCY -> rows.sortedByDescending { it.first.startedAtMs }
+                    GameHistorySorting.Order.SCORE -> rows.sortedBy { it.second } // BEST = lowest overall HC
+                }
+            }
+    }
 
     Column(
         modifier = Modifier
@@ -285,6 +348,46 @@ private fun GamesHistory(
                     results.forEach { result ->
                         GameResultRow(result)
                     }
+                }
+            }
+        }
+
+        if (combineRows.isNotEmpty()) {
+            Text(
+                text = "COMBINES",
+                style = GolfTypography.MetricLabel,
+                color = GolfColors.TextSecondary,
+                modifier = Modifier.padding(top = GolfSpacing.Sm),
+            )
+            for ((session, est) in combineRows) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(GolfColors.Card, RoundedCornerShape(GolfSpacing.Sm))
+                        .border(1.dp, GolfColors.Line, RoundedCornerShape(GolfSpacing.Sm))
+                        .clickable { onOpenCombine(session.id) }
+                        .padding(GolfSpacing.Md),
+                ) {
+                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text(
+                            text = session.combineName,
+                            style = GolfTypography.Body,
+                            color = GolfColors.TextPrimary,
+                        )
+                        Text(
+                            text = GameHistoryFormats.dateTime(session.startedAtMs) +
+                                if (session.source == 1) " · DEMO" else "",
+                            style = GolfTypography.BodySmall,
+                            color = GolfColors.TextMuted,
+                        )
+                    }
+                    Text(
+                        text = CombineFormats.formatHc(est),
+                        style = GolfTypography.MetricValue,
+                        color = GolfColors.Teal,
+                    )
                 }
             }
         }
