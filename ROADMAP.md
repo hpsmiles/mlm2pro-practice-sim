@@ -104,15 +104,23 @@ Head-to-head A/B sessions (shaft vs shaft, head vs head), side-by-side metric ov
 
 **Shipped 2026-10-08.** FIT tab: live COMPARE comparison card (ADD COMPARISON, per-club colours), RESULTS table (per-club metrics, noise-dimmed deltas, per-shot exclusion, AREA), TOP-DOWN with rotated minimum-enclosing-ellipse dispersion rings + auto-fit, read-only HISTORY, persisted Room v5 with kill/resume, PDF export via share sheet. Spec: `docs/superpowers/specs/2026-10-08-m7-club-fitting-design.md`.
 
-**Follow-up (roadmap 2026-10-08):** top-down view should show the same fairway width as the range view.
+**Follow-up (roadmap 2026-10-08):** top-down view should show the same fairway width as the range view. *(delivered 2026-10-12 — the fitting top-down now uses the range's fairway/rough shading with distance/lateral scale references)*
 
 **Exit:** Shaft A vs Shaft B comparison report.
 
-## M8 — Custom Combines
+## M8 — Custom Combines (shipped 2026-10-10; refinements 2026-10-11; sim-condition scoring 2026-10-13)
 
-User-defined target distances (e.g., 50m / 70m / 90m wedges) — not the fixed 24-shot template. Scoring, results vs targets. UI design pass on design system.
+Catalog 18-shot combines — WEDGES (50/70/90 m) and APPROACH (100/150 m + driver) — interleaved station flow, per-station strokes-gained handicap estimates plus an overall HC, Room v6 persistence, HISTORY drill-in (design: `docs/superpowers/specs/2026-10-10-m8-custom-combines-design.md`). First-run fixes from the first demo combine (scoring clamp, target/pin timing, demo tagging); driver station re-rated against per-band typical drives; fairway narrowed to a constant 28 m corridor. Post-ship refinements: results redesign, TOP-DOWN dispersion view, Room v7 rest coordinates (design: `docs/superpowers/specs/2026-10-11-m8-post-ship-refinements-design.md`).
 
-**Exit:** custom combine configurable and scoreable.
+**Sim-condition scoring (2026-10-13):** the real-course SG tables flattered shed results (a real ~2.5 HC session solved to TOUR+). Replaced with sim-conditioned pricing — `SimExpectedStrokes` (flat-green putt model, shed-discounted real-course fairway/rough, analytic outcome grid) + fitted per-station `CombineConversions` (anchors: 100 m +3, 150 m −1, driver +8, overall 2.5) — behind the single `CombineResults.shotSgForBand` seam, pinned by `CombineScoringGateTest` (design: `docs/superpowers/specs/2026-10-12-sim-condition-combine-scoring-design.md`). The 2026-10-12 session now scores ≈2.8 HC (100 m +3.0 / 150 m −1.0 / driver +8.0).
+
+**True-scale top-down (2026-10-13):** the results TOP-DOWN view renders one px/m on both axes (true circles/ellipses), crops the distance window to the session's content (25 m snapping, scales for 300 m drives), shows ±10/±20 m lateral guides, and wears the fitting top-down's palette (framed pane, rough ground, mown stripes).
+
+**Exit:** custom combine configurable and scoreable. **Shipped.**
+
+## History nav + fitting results redesign (shipped 2026-10-13)
+
+Four-tab history sidebar (SESSIONS | GAMES | COMBINES | FITTINGS) with per-game switcher and push-down drill-ins; fitting results rebuilt as a horizontal top-down pane (tee left, fairway/rough shading, distance/lateral scale references) stacked under the metrics table, per-shot columns in the PDF export (design: `docs/superpowers/specs/2026-10-12-history-nav-and-fitting-results-design.md`). Merged from `history-nav-fit-results`.
 
 ## M9 — Hardening
 
