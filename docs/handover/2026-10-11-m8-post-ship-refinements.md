@@ -1,14 +1,14 @@
 # Handover — M8 post-ship refinements
 
 **Date:** 2026-10-11 (evening) · **Repo:** `C:\aaa\code\golf sim`
-**Branch:** `m8-custom-combines` (NOT merged to master) · **HEAD:** `a6f3336` · **Working tree:** clean
-**Why this doc:** the refinement increment is **complete (T1–T5 shipped and verified on the tablet)**. The next piece of work is a fitting-results follow-up (see §2).
+**Branch:** merged to `master` (fast-forward, feature branch deleted) · **HEAD:** `c5b5140` · **Working tree:** clean
+**Why this doc:** the refinement increment is **complete (T1–T5 shipped, verified on the tablet, merged and pushed)**. The next piece of work is a fitting-results follow-up (see §2).
 
 ---
 
 ## 1. Where things stand
 
-**M8 (custom combines) is feature-complete, verified and on the tablet.** Shipped in this branch:
+**M8 (custom combines) is feature-complete, verified and on the tablet.** Shipped in this increment (merged to `master` as `c5b5140`):
 
 - Full combine feature: catalog (WEDGES 50/70/90 m, APPROACH 100/150 m + driver), interleaved 18-shot flow, play screen, full-screen results, Room v6 persistence, HISTORY > GAMES COMBINES group + read-only drill.
 - First-run fixes (from the user's first demo combine):
@@ -21,6 +21,8 @@
 **Test state:** 340 green — `:core:scoring:test` 25, `:app:testDebugUnitTest` 308, `:core:data` `CombineRepositoryTest` 7.
 
 **Increment status: COMPLETE.** All five tasks shipped and verified on the tablet: `ceead19` (T1), `8047f81` (T2), `74d2152` (T3), `a239383` (T4), `a6f3336` (T5 device-checklist corrections). Design + plan are committed (`f69c346`).
+
+**Merged:** 2026-10-12 — `m8-custom-combines` fast-forwarded onto `master` (`48bfa86..c5b5140`), pushed to `origin/master`, feature branch deleted. A full `gradlew build` was re-run green on the merged tree before the push.
 
 **T5 device checklist result:** passed, with two corrections folded into `a6f3336`:
 - **VS BANDS clarified** — the card now carries the caption "AVG STROKES GAINED PER SHOT VS EACH BENCHMARK · TEAL = THIS SESSION'S" and highlights the locked band in teal. (The strip is the 4-band solve's mean per-shot SG, NOT a handicap-vs-band figure; a 25+ overall with only −0.6 vs TOUR is expected — the estimate is the zero crossing of the SG-vs-band curve, extrapolated along a shallow slope.)
@@ -39,6 +41,8 @@ So, for **M7 fitting results** (`FittingResultsView.kt` / `FittingTopDown.kt`):
 2. **Placement**: the top-down pane renders **automatically under the TABLE**, removing its own tab.
 
 Reuse from the M8 work: `CombineTopDownView.kt` (horizontal mapping, corridor, 50 m gridlines, dashed enclosing ring drawn as a transformed path) and `DispersionEllipse` (already shared). Watch out: M7 has extra behaviours to preserve — the auto-fit `computeTopDownFit` bounds, buffered-box rings, club colours by first appearance, the PDF export (`FittingPdfData` / `FittingPdfWriter`) which mirrors the top-down pane, and the `TopDownModel` derivation. Not yet brainstormed/spec'd — start with the brainstorming skill.
+
+**Brainstorm state (2026-10-12):** started but paused before any questions — the fitting results context was explored (`FittingResultsView.kt`, `FittingTopDown.kt`, `FittingTopDownFit.kt`, `FittingPdfWriter.kt`, the M7 design notes) and the **visual companion was offered and accepted** by the user. No clarifying questions asked, no design presented, so **nothing about this change is settled yet**. Tracker: `C:\Users\smiles\AppData\Local\Temp\opencode\fitting-topdown-brainstorm-checklist.md` (temp dir — recreate from this section if it is gone). Resume at step 3 of the brainstorming checklist.
 
 
 ---
