@@ -66,6 +66,14 @@ object FittingPdfWriter {
     private val PANE_BORDER = Color.rgb(0x9A, 0xA5, 0xAE)  // top-down frame
     private val ROUGH = Color.rgb(0xF5, 0xF8, 0xF5)        // near-white ground tint
     private val FAIRWAY = Color.rgb(0xDD, 0xEC, 0xD8)      // light-green corridor
+
+    /**
+     * Keyline ink for rings/dots on the light stock (device feedback
+     * 2026-10-12 — same legibility fix as the pane, inverted: pale hues,
+     * yellow worst, wash out on near-white/light-green). A subtle dark rim
+     * separates every club hue from both print surfaces.
+     */
+    private val RIM = Color.rgb(0x1A, 0x24, 0x1E)          // near-black, green-cast
     private val CENTER_LINE = Color.rgb(0xA9, 0xB6, 0xC0)  // mid centre line
 
     private val FILENAME_STAMP = SimpleDateFormat("yyyy-MM-dd-HHmm", Locale.US)
@@ -399,16 +407,21 @@ object FittingPdfWriter {
                 if (i == 0) path.moveTo(px, py) else path.lineTo(px, py)
             }
             path.close()
+            // Dark keyline beneath the colour (mirrors the pane's light rim,
+            // inverted for the light stock) + ink bumped to match the pane.
+            canvas.drawPath(path, paints.ringRim)
             paints.ring.color = FittingColors.clubColor(club.colorIndex).toArgb()
-            paints.ring.alpha = 140 // ~55 %
+            paints.ring.alpha = 179 // ~70 % (was ~55 % — device feedback 2026-10-12)
             canvas.drawPath(path, paints.ring)
         }
 
-        // Kept shot dots (≈6 dp) in club colours — lateral (side) maps to y.
+        // Kept shot dots (≈6 dp) in club colours — lateral (side) maps to y;
+        // same dark keyline as the rings (rim disc beneath the colour).
         data.clubs.forEach { club ->
             paints.dot.color = FittingColors.clubColor(club.colorIndex).toArgb()
-            paints.dot.alpha = 204 // ~0.8
+            paints.dot.alpha = 230 // ~0.9 (was ~0.8 — device feedback 2026-10-12)
             club.keptPoints.forEach { (side, total) ->
+                canvas.drawCircle(sx(total), sy(side), 3.8f, paints.dotRim)
                 canvas.drawCircle(sx(total), sy(side), 3f, paints.dot)
             }
         }
@@ -452,6 +465,12 @@ object FittingPdfWriter {
         val gridLabel = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = INK_MUTED; textSize = 6.5f }
         val ring = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeWidth = 1.4f }
         val dot = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
+        // Keyline underlays (see RIM): ring rim = ring width + 1.2f (0.6f per
+        // side); dot rim = +0.8f radius. Fixed colour/alpha — set once here.
+        val ringRim = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.STROKE; strokeWidth = 2.6f; color = RIM; alpha = 115 // ~45 %
+        }
+        val dotRim = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL; color = RIM; alpha = 115 }
 
         // Row-top → text baseline (rows are centered vertically in their band).
         fun headerBaseline(p: Paint): Float = (HEADER_H - (p.fontMetrics.descent - p.fontMetrics.ascent)) / 2f - p.fontMetrics.ascent

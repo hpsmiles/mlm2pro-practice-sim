@@ -338,14 +338,20 @@ internal fun FittingTopDownPane(
                 // Dispersion rings FIRST (rings under dots).
                 // Notes §2.3 (device ruling 2026-10-08): ONE rotated
                 // minimum-enclosing ellipse of the kept shots, scaled ×1.05
-                // about its centre, @ 55 % alpha, 2 dp stroke, no fill — the
-                // same ellipse whose area the AREA column shows, so ring and
-                // table agree. Traced as a 72-step world-space path (mirror of
+                // about its centre, 2 dp stroke, no fill — the same ellipse
+                // whose area the AREA column shows, so ring and table agree.
+                // Traced as a 72-step world-space path (mirror of
                 // CombineTopDownView) because the canvas scales the two world
                 // axes differently — a rotated world ellipse is not a screen
                 // oval, so the old rotate() + drawOval cannot draw it. A
                 // collinear cloud (no enclosing ellipse) skips the ring; the
                 // dots below are still drawn.
+                // Legibility on the green ground (device feedback 2026-10-12):
+                // the dark-palette hues (teal A, green F) vanish on
+                // fairway/stripes, so every ring gets a symmetric light
+                // keyline — same path, white α0.55 at +1.5 dp total width
+                // (0.75 dp rim per side) — beneath colour ink bumped to α0.7.
+                // Ring centres/axes unchanged; dots stay the strongest marks.
                 order.forEachIndexed { index, _ ->
                     val ell = ellipses[index] ?: return@forEachIndexed
                     val color = FittingColors.clubColor(index)
@@ -366,19 +372,27 @@ internal fun FittingTopDownPane(
                     path.close()
                     drawPath(
                         path = path,
-                        color = color.copy(alpha = 0.55f),
+                        color = Color.White.copy(alpha = 0.55f),
+                        style = Stroke(width = 3.5.dp.toPx()),
+                    )
+                    drawPath(
+                        path = path,
+                        color = color.copy(alpha = 0.7f),
                         style = Stroke(width = 2.dp.toPx()),
                     )
                 }
 
                 // Kept shot dots (r = 3 dp ⇒ the 6 dp dots of notes §2.3),
-                // coloured per club.
+                // coloured per club — same keyline treatment as the rings:
+                // a 1 dp white α0.6 disc rim beneath ink bumped to α0.9, so
+                // every hue separates from rough, fairway and stripes alike.
                 order.forEachIndexed { index, key ->
                     val color = FittingColors.clubColor(index)
                     keptByClub[key].orEmpty().forEach { s ->
                         val x = sx(s.totalM)
                         val y = sy(s.sideM)
-                        drawCircle(color.copy(alpha = 0.8f), radius = 3.dp.toPx(), center = Offset(x, y))
+                        drawCircle(Color.White.copy(alpha = 0.6f), radius = 4.dp.toPx(), center = Offset(x, y))
+                        drawCircle(color.copy(alpha = 0.9f), radius = 3.dp.toPx(), center = Offset(x, y))
                     }
                 }
             }
