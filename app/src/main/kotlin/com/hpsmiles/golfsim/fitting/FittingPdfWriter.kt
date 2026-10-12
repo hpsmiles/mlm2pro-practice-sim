@@ -266,14 +266,19 @@ object FittingPdfWriter {
         canvas.drawRect(colX[0], rowTop + SUMMARY_H, PAGE_W - MARGIN_X, rowTop + SUMMARY_H + 0.5f, paints.rule)
     }
 
+    /**
+     * Summary-column index (club column + 12 metric columns: index 0 = CLUB,
+     * 1 = n, 2 = CHS … 11 = OFFLINE, 12 = AREA) for each of the 10 per-shot
+     * metrics, in shot-column order CARRY…OFFLINE. Shared by [drawShotHeader]
+     * and [drawShotRow] so header and row cells can never drift.
+     */
+    private val SHOT_COL_INDICES = listOf(5, 6, 3, 2, 4, 7, 8, 9, 10, 11)
+
     private fun drawShotHeader(canvas: Canvas, colX: FloatArray, rowTop: Float, paints: Paints) {
-        // Shot metrics align under the same summary metric columns (indices
-        // 5,6,3,2,4,7,8,9,10,11 of the 13-column layout: CARRY … OFFLINE).
         val header = listOf("CARRY", "TOTAL", "BALL", "CHS", "SMASH", "LAUNCH", "DIR", "SPIN", "SPIN AXIS", "OFFLINE")
-        val colIndices = listOf(5, 6, 3, 2, 4, 7, 8, 9, 10, 11)
         paints.shotHeader.textAlign = Paint.Align.CENTER
         header.forEachIndexed { i, label ->
-            val idx = colIndices[i]
+            val idx = SHOT_COL_INDICES[i]
             canvas.drawText(label, colX[idx] + colWFor(colX, idx) / 2f, rowTop + paints.shotBaseline(paints.shotHeader), paints.shotHeader)
         }
     }
@@ -283,14 +288,13 @@ object FittingPdfWriter {
             shot.carry, shot.total, shot.ball, shot.chs, shot.smash,
             shot.launchAngle, shot.dir, shot.spin, shot.spinAxis, shot.offline,
         )
-        val colIndices = listOf(5, 6, 3, 2, 4, 7, 8, 9, 10, 11)
         paints.shot.textAlign = Paint.Align.CENTER
         paints.shot.color = if (shot.isExcluded) INK_MUTED else INK_SOFT
         if (shot.isExcluded) {
             canvas.drawText("✕", colX[0] + 12f, rowTop + paints.shotBaseline(paints.shot), paints.shot)
         }
         values.forEachIndexed { i, value ->
-            val idx = colIndices[i]
+            val idx = SHOT_COL_INDICES[i]
             canvas.drawText(value, colX[idx] + colWFor(colX, idx) / 2f, rowTop + paints.shotBaseline(paints.shot), paints.shot)
         }
     }
