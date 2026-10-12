@@ -26,7 +26,11 @@ object FittingPdfData {
     /** Number of summary metric columns (the table's 12: n … OFFLINE, AREA). */
     const val SUMMARY_COL_COUNT = 12
 
-    /** One drill-down shot row — full record, matching FittingTable's SHOT_COLS. */
+    /**
+     * One drill-down shot row — full record. Extends FittingTable's on-screen
+     * SHOT_COLS with per-shot LAUNCH, SPIN AXIS and OFFLINE (from the entity)
+     * so the PDF's detail rows carry the same metrics as the summary row.
+     */
     data class ShotRow(
         val shotId: Long,
         val isExcluded: Boolean,
@@ -35,8 +39,11 @@ object FittingPdfData {
         val ball: String,
         val chs: String,
         val smash: String,
-        val spin: String,
+        val launchAngle: String,
         val dir: String,
+        val spin: String,
+        val spinAxis: String,
+        val offline: String,
     )
 
     /** One club's PDF block: formatted summary row + its shot rows + ring model. */
@@ -62,11 +69,11 @@ object FittingPdfData {
         val cells: List<String>,
     )
 
-    /** computeTopDownFit inputs derived from the kept shots + rings (FittingTopDownPane mirror). */
+    /** computeTopDownFitH inputs derived from the kept shots + rings (FittingTopDownPane mirror). */
     data class TopDownModel(
-        val minY: Double,
-        val maxY: Double,
-        val maxAbsX: Double,
+        val minDistM: Double,
+        val maxDistM: Double,
+        val maxAbsSideM: Double,
         val hasData: Boolean,
     )
 
@@ -204,7 +211,7 @@ object FittingPdfData {
             verdict?.let { spec.fmt(it.delta) } ?: "-"
         }
 
-    // ---- drill-down shot row (FittingTable SHOT_COLS formatters) ----
+    // ---- drill-down shot row (FittingTable SHOT_COLS formatters + LAUNCH/AXIS/OFFLINE) ----
 
     private fun shotRow(s: FittingShotEntity): ShotRow = ShotRow(
         shotId = s.id,
@@ -218,16 +225,22 @@ object FittingPdfData {
         } else {
             "-"
         },
-        spin = "${s.totalSpinRpm}",
+        // LAUNCH unsigned (FittingFormats.deg style); DIR / SPIN AXIS signed
+        // degrees; OFFLINE the shot's signed side in metres (summary column
+        // formats avg/worst, per-shot is the single value).
+        launchAngle = String.format(Locale.US, "%.1f°", s.launchAngleDeg),
         dir = String.format(Locale.US, "%+.1f°", s.launchDirDeg),
+        spin = "${s.totalSpinRpm}",
+        spinAxis = String.format(Locale.US, "%+.1f°", s.spinAxisDeg),
+        offline = String.format(Locale.US, "%+.1f m", s.sideM),
     )
 
     // ---- top-down model (FittingTopDownPane bounds derivation) ----
 
     private fun buildTopDownModel(clubs: List<ClubBlock>): TopDownModel {
-        var minY = Double.POSITIVE_INFINITY
-        var maxY = Double.NEGATIVE_INFINITY
-        var maxAbsX = 0.0
+        var minDistM = Double.POSITIVE_INFINITY
+        var maxDistM = Double.NEGATIVE_INFINITY
+        var maxAbsSideM = 0.0
         var hasData = false
         for (block in clubs) {
             if (block.keptPoints.isNotEmpty()) hasData = true
@@ -237,21 +250,21 @@ object FittingPdfData {
             if (ell != null) {
                 val halfSide = ell.projectedHalfSideM()
                 val halfTotal = ell.projectedHalfTotalM()
-                minY = minOf(minY, ell.centreTotalM - halfTotal)
-                maxY = maxOf(maxY, ell.centreTotalM + halfTotal)
-                maxAbsX = maxOf(maxAbsX, abs(ell.centreSideM) + halfSide)
+                minDistM = minOf(minDistM, ell.centreTotalM - halfTotal)
+                maxDistM = maxOf(maxDistM, ell.centreTotalM + halfTotal)
+                maxAbsSideM = maxOf(maxAbsSideM, abs(ell.centreSideM) + halfSide)
             } else {
                 block.keptPoints.forEach { (side, total) ->
-                    minY = minOf(minY, total)
-                    maxY = maxOf(maxY, total)
-                    maxAbsX = maxOf(maxAbsX, abs(side))
+                    minDistM = minOf(minDistM, total)
+                    maxDistM = maxOf(maxDistM, total)
+                    maxAbsSideM = maxOf(maxAbsSideM, abs(side))
                 }
             }
         }
         return TopDownModel(
-            minY = if (hasData) minY else 0.0,
-            maxY = if (hasData) maxY else 0.0,
-            maxAbsX = maxAbsX,
+            minDistM = if (hasData) minDistM else 0.0,
+            maxDistM = if (hasData) maxDistM else 0.0,
+            maxAbsSideM = maxAbsSideM,
             hasData = hasData,
         )
     }

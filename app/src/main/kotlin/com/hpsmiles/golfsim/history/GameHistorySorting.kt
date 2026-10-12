@@ -42,3 +42,14 @@ object GameHistorySorting {
         else -> score
     }
 }
+
+/**
+ * The game whose history the GAMES panel shows by default: the mode of the most
+ * recent result; an empty list or a cross-mode tie (same playedAtEpochMs) falls
+ * back to TARGET PRACTICE.
+ */
+fun defaultGameMode(results: List<GameResultEntity>): String {
+    val latest = results.maxByOrNull { it.playedAtEpochMs } ?: return GameModes.TARGET_PRACTICE
+    val latestModes = results.filter { it.playedAtEpochMs == latest.playedAtEpochMs }.map { it.mode }.toSet()
+    return if (latestModes.size == 1) latestModes.first() else GameModes.TARGET_PRACTICE
+}

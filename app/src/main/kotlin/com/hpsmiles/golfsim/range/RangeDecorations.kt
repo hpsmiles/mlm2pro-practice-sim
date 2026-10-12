@@ -21,13 +21,11 @@ import com.hpsmiles.golfsim.core.designsystem.GolfColors
  */
 object RangeDecorations {
 
-    // Painted-ground palette A - "Tour Broadcast" (same as PovRangeCanvas).
+    // Painted-ground palette A - "Tour Broadcast". The green ground tones are
+    // the shared GolfColors.Range* tokens (identical values — the fitting
+    // top-down pane renders the same facility); sky + haze stay local.
     private val SkyTop = Color(0xFFFCFDFE)
     private val SkyBottom = Color(0xFFD9E4EA)
-    private val RoughBase = Color(0xFF1E4D26)
-    private val Fairway = Color(0xFF3E8E43)
-    private val StripeLight = Color(0xFF47A04C)
-    private val StripeDark = Color(0xFF3A8440)
     private val Haze = Color.White.copy(alpha = 0.22f)
 
     /**
@@ -49,12 +47,12 @@ object RangeDecorations {
             )
         }
         val groundTop = horizonPx.coerceAtLeast(0f)
-        drawRect(RoughBase, topLeft = Offset(0f, groundTop), size = Size(w, h - groundTop))
+        drawRect(GolfColors.RangeRough, topLeft = Offset(0f, groundTop), size = Size(w, h - groundTop))
 
         val fairway = groundPath(cam, w, h, RangeScene.fairwayOutline())
         if (fairway != null) {
             val nearest = fairwayNearestDepth(cam)
-            drawPath(fairway, Fairway.copy(alpha = PovProjector.nearFadeFactor(nearest).toFloat()))
+            drawPath(fairway, GolfColors.RangeFairway.copy(alpha = PovProjector.nearFadeFactor(nearest).toFloat()))
         }
 
         for (index in 0 until RangeScene.stripeBandCount()) {
@@ -68,7 +66,7 @@ object RangeDecorations {
             )
             if (stripe != null) {
                 val nearest = stripeNearestDepth(cam, yFrom, yTo)
-                val base = if (RangeScene.stripeIsLight(0.0, yFrom)) StripeLight else StripeDark
+                val base = if (RangeScene.stripeIsLight(0.0, yFrom)) GolfColors.RangeStripeLight else GolfColors.RangeStripeDark
                 drawPath(stripe, base.copy(alpha = PovProjector.nearFadeFactor(nearest).toFloat()))
             }
         }

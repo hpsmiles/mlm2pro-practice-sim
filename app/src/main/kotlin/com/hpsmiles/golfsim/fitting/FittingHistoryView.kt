@@ -95,85 +95,103 @@ internal fun FittingHistoryView(
                 verticalArrangement = Arrangement.spacedBy(GolfSpacing.Md),
             ) {
                 items(history, key = { it.id }) { session ->
-                    val details = historyDetails[session.id].orEmpty()
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(64.dp)
-                            .clip(RoundedCornerShape(GolfSpacing.CornerCard))
-                            .background(GolfColors.Card)
-                            .clickable { onOpen(session.id) }
-                            .padding(GolfSpacing.Md),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Column(
-                            modifier = Modifier.weight(1f),
-                            verticalArrangement = Arrangement.spacedBy(GolfSpacing.Xs),
-                        ) {
-                            // Date/time (notes §3): completed-at preferred.
-                            Text(
-                                BagMappingFormats.dateTime(session.completedAtMs ?: session.startedAtMs),
-                                style = GolfTypography.Body,
-                                color = GolfColors.TextPrimary,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                            // Second line: colour-dotted club names in the
-                            // session's first-appearance order (the details map
-                            // is already ordered; index 0 = first club). A
-                            // session with no details entry shows only the date.
-                            if (details.isNotEmpty()) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(GolfSpacing.Xs),
-                                ) {
-                                    details.forEachIndexed { index, (name, _) ->
-                                        if (index > 0) {
-                                            Text("·", style = GolfTypography.BodySmall, color = GolfColors.TextSecondary)
-                                        }
-                                        Box(
-                                            Modifier
-                                                .size(6.dp)
-                                                .clip(CircleShape)
-                                                .background(FittingColors.clubColor(index)),
-                                        )
-                                        Text(
-                                            name,
-                                            style = GolfTypography.BodySmall,
-                                            color = GolfColors.TextSecondary,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis,
-                                        )
-                                    }
-                                }
-                            }
+                    FittingHistoryRow(
+                        session = session,
+                        details = historyDetails[session.id].orEmpty(),
+                        onClick = { onOpen(session.id) },
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * One 64 dp history row (notes §3): date/time, colour-dotted club names in
+ * that session's first-appearance order, "N shots" + VIEW →. Extracted for
+ * reuse — HISTORY's FITTINGS tab (2026-10-12 spec §4) renders the same row
+ * without the BACK-chip header (the sidebar is the navigation there). The
+ * whole row tap does the same as VIEW ([onClick]).
+ */
+@Composable
+internal fun FittingHistoryRow(
+    session: FittingSessionEntity,
+    details: List<Pair<String, Int>>,
+    onClick: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(64.dp)
+            .clip(RoundedCornerShape(GolfSpacing.CornerCard))
+            .background(GolfColors.Card)
+            .clickable(onClick = onClick)
+            .padding(GolfSpacing.Md),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(GolfSpacing.Xs),
+        ) {
+            // Date/time (notes §3): completed-at preferred.
+            Text(
+                BagMappingFormats.dateTime(session.completedAtMs ?: session.startedAtMs),
+                style = GolfTypography.Body,
+                color = GolfColors.TextPrimary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            // Second line: colour-dotted club names in the session's
+            // first-appearance order (the details map is already ordered;
+            // index 0 = first club). A session with no details entry shows
+            // only the date.
+            if (details.isNotEmpty()) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(GolfSpacing.Xs),
+                ) {
+                    details.forEachIndexed { index, (name, _) ->
+                        if (index > 0) {
+                            Text("·", style = GolfTypography.BodySmall, color = GolfColors.TextSecondary)
                         }
-                        // Right: N shots + VIEW → ghost chip. The whole row tap
-                        // does the same as VIEW (onOpen).
-                        Column(
-                            modifier = Modifier.padding(start = GolfSpacing.Md),
-                            horizontalAlignment = Alignment.End,
-                            verticalArrangement = Arrangement.spacedBy(GolfSpacing.Xs),
-                        ) {
-                            if (details.isNotEmpty()) {
-                                Text(
-                                    "${details.sumOf { it.second }} shots",
-                                    style = GolfTypography.Status,
-                                    color = GolfColors.TextMuted,
-                                )
-                            }
-                            Text(
-                                "VIEW →",
-                                style = ChipFont,
-                                color = GolfColors.TextSecondary,
-                                modifier = Modifier
-                                    .border(1.dp, GolfColors.Line, RoundedCornerShape(50))
-                                    .padding(horizontal = GolfSpacing.Sm, vertical = 2.dp),
-                            )
-                        }
+                        Box(
+                            Modifier
+                                .size(6.dp)
+                                .clip(CircleShape)
+                                .background(FittingColors.clubColor(index)),
+                        )
+                        Text(
+                            name,
+                            style = GolfTypography.BodySmall,
+                            color = GolfColors.TextSecondary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
                     }
                 }
             }
+        }
+        // Right: N shots + VIEW → ghost chip.
+        Column(
+            modifier = Modifier.padding(start = GolfSpacing.Md),
+            horizontalAlignment = Alignment.End,
+            verticalArrangement = Arrangement.spacedBy(GolfSpacing.Xs),
+        ) {
+            if (details.isNotEmpty()) {
+                Text(
+                    "${details.sumOf { it.second }} shots",
+                    style = GolfTypography.Status,
+                    color = GolfColors.TextMuted,
+                )
+            }
+            Text(
+                "VIEW →",
+                style = ChipFont,
+                color = GolfColors.TextSecondary,
+                modifier = Modifier
+                    .border(1.dp, GolfColors.Line, RoundedCornerShape(50))
+                    .padding(horizontal = GolfSpacing.Sm, vertical = 2.dp),
+            )
         }
     }
 }

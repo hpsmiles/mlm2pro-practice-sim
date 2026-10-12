@@ -60,6 +60,7 @@ import com.hpsmiles.golfsim.core.connect.HandshakeSequencer
 import com.hpsmiles.golfsim.core.connect.Mlm2proGattClient
 import com.hpsmiles.golfsim.core.connect.Mlm2proScanner
 import com.hpsmiles.golfsim.core.data.SessionRepository
+import com.hpsmiles.golfsim.core.data.entity.FittingShotEntity
 import com.hpsmiles.golfsim.core.data.record.ClubType
 import com.hpsmiles.golfsim.core.data.record.ShotSource
 import com.hpsmiles.golfsim.core.designsystem.GolfColors
@@ -670,6 +671,18 @@ fun AppRoot() {
         )
     }.collectAsState(initial = emptyList())
 
+    // HISTORY > FITTINGS (2026-10-12 spec §4): the read-only fitting results
+    // opened from the history sidebar. Hoisted here (HistoryScreen stays
+    // stateless about it) — mirror of the fitViewedShots flow above.
+    var historyViewedFittingId by remember { mutableStateOf<Long?>(null) }
+    val historyViewedFittingShots by remember(sessionRepository, repoReady, historyViewedFittingId) {
+        gatedFlow(
+            repoReady,
+            { historyViewedFittingId?.let { sessionRepository.observeFittingShots(it) } ?: flowOf(emptyList()) },
+            flowOf(emptyList()),
+        )
+    }.collectAsState(initial = emptyList())
+
     // M8: combine flows — Room truth, gated like the bag/fitting captures.
     // Kill/resume is FREE: they re-derive from the current db. combineActive
     // drives the picker RESUME card and the resume/completion bookkeeping.
@@ -799,14 +812,15 @@ fun AppRoot() {
     }
 
     /**
-     * M7 PDF export (2026-10-08): builds + renders the currently viewed
-     * session (live or read-only history) off the main thread, then fires the
-     * share sheet on the main dispatcher. Re-taps are ignored while running;
-     * failures are logged and swallowed (no UI surface — spec).
+     * M7 PDF export (2026-10-08): builds + renders [shots] off the main
+     * thread, then fires the share sheet on the main dispatcher. The caller
+     * resolves which session's shots to export — FIT passes its live or
+     * read-only viewed shots, HISTORY its viewed shots (2026-10-12 spec §4).
+     * Re-taps are ignored while running; failures are logged and swallowed
+     * (no UI surface — spec).
      */
-    fun exportFittingPdf() {
+    fun exportFittingPdf(shots: List<FittingShotEntity>) {
         if (exportingPdf) return
-        val shots = if (fittingController.viewedSessionId != null) fitViewedShots else fitShots
         if (shots.isEmpty()) return
         exportingPdf = true
         scope.launch {
@@ -1074,7 +1088,11 @@ fun AppRoot() {
                             onSetExcluded = { ids, excluded ->
                                 scope.launch { sessionRepository.setFittingShotsExcluded(ids, excluded) }
                             },
-                            onExportPdf = ::exportFittingPdf,
+                            onExportPdf = {
+                                exportFittingPdf(
+                                    if (fittingController.viewedSessionId != null) fitViewedShots else fitShots,
+                                )
+                            },
                         )
                     }
                     RangeTab.SETTINGS -> {
@@ -1136,6 +1154,16 @@ fun AppRoot() {
                             gameResults = gameResults,
                             combineHistory = combineHistory,
                             combineHistoryShots = combineHistoryShots,
+                            fittingController = fittingController,
+                            fittingHistory = fitHistory,
+                            fittingHistoryDetails = fitHistoryDetails,
+                            viewedFittingId = historyViewedFittingId,
+                            onOpenFitting = { historyViewedFittingId = it },
+                            fittingViewedShots = historyViewedFittingShots,
+                            onSetExcluded = { ids, excluded ->
+                                scope.launch { sessionRepository.setFittingShotsExcluded(ids, excluded) }
+                            },
+                            onExportFittingPdf = { exportFittingPdf(historyViewedFittingShots) },
                         )
                     }
                 }

@@ -5,25 +5,8 @@ import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.atan2
 import kotlin.math.cos
-import kotlin.math.max
-import kotlin.math.min
 import kotlin.math.sin
 import kotlin.math.sqrt
-
-/**
- * World→pixel mapping for the M7 top-down pane (design notes §2.3). World
- * frame: x lateral (side, metres), y down-range (rest position = total,
- * metres). Screen: origin at (originX, originY) = the world origin; a world
- * point (x, y) maps to (originX + x·pxPerM, originY − y·pxPerM).
- */
-data class TopDownFit(
-    /** World metres → screen px. Isotropic — one scale for both axes, rings stay circular. */
-    val pxPerM: Double,
-    /** Screen x of the world x = 0 axis (lateral centre). */
-    val originX: Double,
-    /** Screen y of the world y = 0 origin (the mat/tee). */
-    val originY: Double,
-)
 
 /**
  * Rotated minimum-enclosing ellipse (Löwner / MVEE) of the KEPT shots,
@@ -258,73 +241,74 @@ data class DispersionEllipse(
     }
 }
 
-/**
- * Computes the world→pixel mapping that fits the kept shots AND their
- * rotated enclosing-ellipse ring extents plus a buffer into the canvas
- * (device feedback 2026-10-08: "scaled to fit the shots and rings plus a
- * small buffer" — 0–150 m of empty range is useless on a driver fitting).
- * Isotropic; falls back to the full-range mapping when there is no data.
- *
- * [minY]/[maxY] are the min/max rest-distance (down-range, metres) and
- * [maxAbsX] the max |side| (lateral, metres) over the kept shots INCLUDING
- * each club's ellipse outer extents. [hasData] is false when there are
- * no kept shots — the mapping then matches the pre-fix full-range view
- * (`height / GROUND_END_Y`, origin [bottomMarginPx] above the canvas bottom).
- *
- * Behaviour:
- *  - ySpan = maxY − minY; a minimum span of [MIN_SPAN_M] is enforced by
- *    expanding symmetrically around the centre (prevents absurd zoom on 1–2
- *    clustered shots). pad = max([MIN_PAD_M], 0.06·ySpan) metres each side.
- *  - pxPerM = min(yFit, xFit) with yFit = height / (ySpan + 2·pad) and
- *    xFit = (width/2 − [lateralPadPx]) / maxAbsX (the x constraint is skipped
- *    when maxAbsX ≈ 0).
- *  - The y-window [minY − pad, maxY + pad] fills the canvas height when the
- *    lateral constraint doesn't bind; x stays centred (originX = width/2).
- */
-fun computeTopDownFit(
-    width: Double,
-    height: Double,
-    minY: Double,
-    maxY: Double,
-    maxAbsX: Double,
-    hasData: Boolean,
-    bottomMarginPx: Double = 0.0,
-    lateralPadPx: Double = DEFAULT_LATERAL_PAD_PX,
-): TopDownFit {
-    val originX = width / 2.0
-    if (!hasData) {
-        // Exact pre-fix mapping: the whole ground extent fitted to the height,
-        // origin a fixed [bottomMarginPx] above the canvas bottom — the empty
-        // state looks unchanged.
-        return TopDownFit(height / RangeScene.GROUND_END_Y, originX, height - bottomMarginPx)
-    }
-    var lo = minY
-    var hi = maxY
-    if (hi - lo < MIN_SPAN_M) {
-        val centre = (lo + hi) / 2.0
-        lo = centre - MIN_SPAN_M / 2.0
-        hi = centre + MIN_SPAN_M / 2.0
-    }
-    val pad = max(MIN_PAD_M, 0.06 * (hi - lo))
-    val yFit = height / (hi - lo + 2.0 * pad)
-    var pxPerM = yFit
-    if (maxAbsX > X_EPSILON) {
-        pxPerM = min(pxPerM, (width / 2.0 - lateralPadPx) / maxAbsX)
-    }
-    // Window bottom [lo − pad] maps to the canvas bottom (y = height); the
-    // world origin sits pxPerM·(lo − pad) below it (off-screen when zoomed).
-    val originY = height + (lo - pad) * pxPerM
-    return TopDownFit(pxPerM, originX, originY)
-}
-
-/** Smallest padded y-window, metres (1–2 clustered shots must not zoom absurdly). */
+/** Smallest fitted distance window, metres (1–2 clustered shots must not zoom absurdly). */
 private const val MIN_SPAN_M = 30.0
 
-/** Minimum vertical buffer each side of the y-window, metres. */
+/** Minimum buffer each side of the fitted distance window, metres. */
 private const val MIN_PAD_M = 10.0
 
-/** Side-buffer reserved on each lateral edge of the fitted x-extent, px. */
-private const val DEFAULT_LATERAL_PAD_PX = 48.0
+/** Lateral visibility factor over the fairway half-width — so the 28 m fairway is always visible. */
+private const val CORRIDOR_VISIBILITY_SCALE = 2.5
 
-/** Below this |side| the lateral constraint is skipped (shots on the centre line). */
-private const val X_EPSILON = 1e-9
+/**
+ * Horizontal (tee-left) plan fit. Screen mapping:
+ *   sx(d) = originX + d * pxPerMX   (d = distance metres from the tee)
+ *   sy(s) = midY - s * pxPerMY      (s = lateral metres, positive up)
+ * [originX] is the screen x of world distance 0 and may fall off-canvas when the
+ * fitted distance window excludes the tee.
+ */
+data class TopDownFitH(
+    val pxPerMX: Double,
+    val pxPerMY: Double,
+    val originX: Double,
+    val midY: Double,
+)
+
+const val LATERAL_CONTENT_MARGIN_M = 2.0
+const val DEFAULT_LEFT_PAD_PX = 26.0
+const val DEFAULT_RIGHT_PAD_PX = 12.0
+const val DEFAULT_V_PAD_PX = 12.0
+
+fun computeTopDownFitH(
+    width: Double,
+    height: Double,
+    minDistM: Double,
+    maxDistM: Double,
+    maxAbsSideM: Double,
+    hasData: Boolean,
+    leftPadPx: Double = DEFAULT_LEFT_PAD_PX,
+    rightPadPx: Double = DEFAULT_RIGHT_PAD_PX,
+    vPadPx: Double = DEFAULT_V_PAD_PX,
+): TopDownFitH {
+    val lo = if (hasData) minDistM else 0.0
+    val hi = if (hasData) maxDistM else RangeScene.FAIRWAY_END_Y
+    val span = maxOf(hi - lo, MIN_SPAN_M)
+    val centre = (lo + hi) / 2
+    val pad = maxOf(MIN_PAD_M, 0.06 * span)
+    val pxPerMX = (width - leftPadPx - rightPadPx) / (span + 2 * pad)
+    val originX = leftPadPx - (centre - span / 2 - pad) * pxPerMX
+    val lateralHalfM = maxOf(RangeScene.fairwayHalfWidth(0.0) * CORRIDOR_VISIBILITY_SCALE, maxAbsSideM + LATERAL_CONTENT_MARGIN_M)
+    val pxPerMY = (height / 2 - vPadPx) / lateralHalfM
+    return TopDownFitH(pxPerMX, pxPerMY, originX, height / 2)
+}
+
+/** Candidate distance-grid steps, metres, finest first. */
+private val GRID_STEP_CANDIDATES_M = doubleArrayOf(10.0, 25.0, 50.0, 100.0)
+
+/** Most labeled intervals allowed across the visible distance window. */
+private const val MAX_GRID_INTERVALS = 8.0
+
+/**
+ * Adaptive distance-grid step for the top-down pane's scale references
+ * (device feedback 2026-10-12): the smallest candidate step keeping
+ * ≤ [MAX_GRID_INTERVALS] intervals across the visible [spanM]. Fitting zooms
+ * (span ≥ [MIN_SPAN_M]) land on 10–25 m — always at least 2 labeled
+ * references; the full-range fallback (~370 m visible) lands on 50 m, so the
+ * gridlines coincide with the standing sign boards and never crowd.
+ */
+fun distanceGridStepM(spanM: Double): Double {
+    for (step in GRID_STEP_CANDIDATES_M) {
+        if (spanM / step <= MAX_GRID_INTERVALS) return step
+    }
+    return GRID_STEP_CANDIDATES_M.last()
+}

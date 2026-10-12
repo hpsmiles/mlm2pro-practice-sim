@@ -14,8 +14,11 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -48,7 +51,10 @@ import com.hpsmiles.golfsim.combine.overallEstimate
 import com.hpsmiles.golfsim.combine.toFacts
 import com.hpsmiles.golfsim.core.data.CombineSessionEntity
 import com.hpsmiles.golfsim.core.data.CombineShotEntity
+import com.hpsmiles.golfsim.core.data.entity.GameModes
 import com.hpsmiles.golfsim.core.data.entity.GameResultEntity
+import com.hpsmiles.golfsim.core.data.entity.FittingSessionEntity
+import com.hpsmiles.golfsim.core.data.entity.FittingShotEntity
 import com.hpsmiles.golfsim.core.data.record.ClubRecord
 import com.hpsmiles.golfsim.core.data.record.SessionSummary
 import com.hpsmiles.golfsim.core.data.record.SessionTitles
@@ -57,10 +63,16 @@ import com.hpsmiles.golfsim.core.designsystem.GolfColors
 import com.hpsmiles.golfsim.core.designsystem.GolfSpacing
 import com.hpsmiles.golfsim.core.designsystem.GolfTypography
 import com.hpsmiles.golfsim.core.designsystem.MetricChip
+import com.hpsmiles.golfsim.core.designsystem.NavRailButton
+import com.hpsmiles.golfsim.fitting.FittingController
+import com.hpsmiles.golfsim.fitting.FittingHistoryRow
+import com.hpsmiles.golfsim.fitting.FittingResultsView
 
 private enum class HistoryTab(val label: String) {
     SESSIONS("SESSIONS"),
     GAMES("GAMES"),
+    COMBINES("COMBINES"),
+    FITTINGS("FITTINGS"),
 }
 
 private enum class HistoryMode(val label: String) { ORDER("ORDER"), CLUBS("CLUBS") }
@@ -86,44 +98,82 @@ fun HistoryScreen(
     gameResults: List<GameResultEntity> = emptyList(),
     combineHistory: List<CombineSessionEntity> = emptyList(),
     combineHistoryShots: List<CombineShotEntity> = emptyList(),
+    fittingController: FittingController,
+    fittingHistory: List<FittingSessionEntity> = emptyList(),
+    fittingHistoryDetails: Map<Long, List<Pair<String, Int>>> = emptyMap(),
+    viewedFittingId: Long? = null,
+    onOpenFitting: (Long?) -> Unit = {},
+    fittingViewedShots: List<FittingShotEntity> = emptyList(),
+    onSetExcluded: (List<Long>, Boolean) -> Unit = { _, _ -> },
+    onExportFittingPdf: () -> Unit = {},
 ) {
     var tab by remember { mutableStateOf(HistoryTab.SESSIONS) }
     var viewedCombineId by remember { mutableStateOf<Long?>(null) }
 
     Box(modifier = modifier.fillMaxSize().background(GolfColors.Base)) {
         Row(modifier = Modifier.fillMaxSize()) {
-            HistorySidebar(tab = tab, onTabChange = { tab = it })
-            if (viewedCombineId != null) {
-                val session = combineHistory.firstOrNull { it.id == viewedCombineId }
-                val entry = session?.let { CombineCatalog.byId(it.combineId) }
-                if (session != null && entry != null) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        // Session-context header (Task 13 quality review): the same
-                        // CombineResultsView is otherwise indistinguishable across
-                        // sessions — mirror FittingResultsView's read-only date line
-                        // plus a DEMO marker for demo-sourced sessions.
-                        Text(
-                            text = GameHistoryFormats.dateTime(session.startedAtMs) +
-                                if (session.source == 1) " · DEMO" else "",
-                            style = GolfTypography.BodySmall,
-                            color = GolfColors.TextMuted,
-                            modifier = Modifier.padding(horizontal = GolfSpacing.Xl, vertical = GolfSpacing.Md),
-                        )
-                        CombineResultsView(
-                            entry = entry,
-                            facts = combineHistoryShots.filter { it.sessionId == session.id }.map { it.toFacts() },
-                            record = null,
-                            readOnly = true,
-                            onBack = { viewedCombineId = null },
-                            modifier = Modifier.weight(1f),
-                        )
+            // Switching sidebar tabs always closes an open read-only view
+            // (2026-10-12 spec §1/§4).
+            HistorySidebar(
+                tab = tab,
+                onTabChange = {
+                    tab = it
+                    viewedCombineId = null
+                    onOpenFitting(null)
+                },
+            )
+            when {
+                viewedCombineId != null -> {
+                    val session = combineHistory.firstOrNull { it.id == viewedCombineId }
+                    val entry = session?.let { CombineCatalog.byId(it.combineId) }
+                    if (session != null && entry != null) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            // Session-context header (Task 13 quality review): the same
+                            // CombineResultsView is otherwise indistinguishable across
+                            // sessions — mirror FittingResultsView's read-only date line
+                            // plus a DEMO marker for demo-sourced sessions.
+                            Text(
+                                text = GameHistoryFormats.dateTime(session.startedAtMs) +
+                                    if (session.source == 1) " · DEMO" else "",
+                                style = GolfTypography.BodySmall,
+                                color = GolfColors.TextMuted,
+                                modifier = Modifier.padding(horizontal = GolfSpacing.Xl, vertical = GolfSpacing.Md),
+                            )
+                            CombineResultsView(
+                                entry = entry,
+                                facts = combineHistoryShots.filter { it.sessionId == session.id }.map { it.toFacts() },
+                                record = null,
+                                readOnly = true,
+                                onBack = { viewedCombineId = null },
+                                modifier = Modifier.weight(1f),
+                            )
+                        }
+                    } else {
+                        // session vanished (discarded): reset after composition, the list renders next
+                        LaunchedEffect(Unit) { viewedCombineId = null }
                     }
-                } else {
-                    // session vanished (discarded): reset after composition, the list renders next
-                    LaunchedEffect(Unit) { viewedCombineId = null }
                 }
-            } else {
-                when (tab) {
+                viewedFittingId != null -> {
+                    // Vanished-session guard (mirror of the combine guard
+                    // above): if the viewed session leaves history, reset the
+                    // view after composition — the list renders next.
+                    LaunchedEffect(viewedFittingId, fittingHistory) {
+                        if (fittingHistory.none { it.id == viewedFittingId }) onOpenFitting(null)
+                    }
+                    // Read-only fitting results fill the content area like the
+                    // combine read-only view (2026-10-12 spec §4).
+                    FittingResultsView(
+                        modifier = Modifier.weight(1f),
+                        shots = fittingViewedShots,
+                        readOnly = true,
+                        controller = fittingController,
+                        onBack = { onOpenFitting(null) },
+                        onComplete = {},
+                        onSetExcluded = onSetExcluded,
+                        onExportPdf = onExportFittingPdf,
+                    )
+                }
+                else -> when (tab) {
                     HistoryTab.SESSIONS -> SessionsHistory(
                         summaries = summaries,
                         liveOnly = liveOnly,
@@ -140,9 +190,16 @@ fun HistoryScreen(
                     HistoryTab.GAMES -> GamesHistory(
                         gameResults = gameResults,
                         sortModel = GameHistorySorting,
+                    )
+                    HistoryTab.COMBINES -> CombinesHistory(
                         combineHistory = combineHistory,
                         combineHistoryShots = combineHistoryShots,
                         onOpenCombine = { viewedCombineId = it },
+                    )
+                    HistoryTab.FITTINGS -> FittingsHistory(
+                        fittingHistory = fittingHistory,
+                        fittingHistoryDetails = fittingHistoryDetails,
+                        onOpenFitting = onOpenFitting,
                     )
                 }
             }
@@ -150,6 +207,11 @@ fun HistoryScreen(
     }
 }
 
+/**
+ * 2026-10-12 spec §1: the sidebar mirrors NavRail — 96 dp (NavRailWidth),
+ * Panel background, one rail-sized NavRailButton per tab (same 80×40 dp
+ * component as the rail HISTORY button next to it).
+ */
 @Composable
 private fun HistorySidebar(
     tab: HistoryTab,
@@ -157,24 +219,18 @@ private fun HistorySidebar(
 ) {
     Column(
         modifier = Modifier
-            .width(56.dp)
+            .width(GolfSpacing.NavRailWidth)
             .fillMaxSize()
             .background(GolfColors.Panel)
-            .padding(vertical = GolfSpacing.Md),
+            .padding(vertical = GolfSpacing.Sm),
         verticalArrangement = Arrangement.spacedBy(GolfSpacing.Sm, Alignment.Top),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         HistoryTab.entries.forEach { t ->
-            val active = t == tab
-            Text(
-                text = t.label,
-                style = GolfTypography.Status.copy(fontSize = 10.sp),
-                color = if (active) GolfColors.Teal else GolfColors.TextMuted,
-                modifier = Modifier
-                    .clickable { onTabChange(t) }
-                    .background(if (active) GolfColors.Card else Color.Transparent, RoundedCornerShape(GolfSpacing.Sm))
-                    .border(1.dp, if (active) GolfColors.Teal else GolfColors.Line, RoundedCornerShape(GolfSpacing.Sm))
-                    .padding(horizontal = 4.dp, vertical = 8.dp),
+            NavRailButton(
+                label = t.label,
+                selected = t == tab,
+                onClick = { onTabChange(t) },
             )
         }
     }
@@ -275,16 +331,94 @@ private fun SessionsHistory(
     }
 }
 
+/**
+ * 2026-10-12 spec §2: a per-game switcher tops the panel; below it the
+ * existing GAME SCORES header + rows for the selected game only. The COMBINES
+ * section moved out to its own sidebar tab (spec §3).
+ */
 @Composable
 private fun GamesHistory(
     gameResults: List<GameResultEntity>,
     sortModel: GameHistorySorting,
+) {
+    var order by remember { mutableStateOf(GameHistorySorting.Order.RECENCY) }
+    var gameMode by remember { mutableStateOf(defaultGameMode(gameResults)) }
+    val grouped = remember(gameResults, order) { sortModel.sorted(gameResults, order) }
+    val results = grouped[gameMode].orEmpty()
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(GolfSpacing.Md),
+        verticalArrangement = Arrangement.spacedBy(GolfSpacing.Sm),
+    ) {
+        // Per-game switcher (spec §2): same chip idiom as the ORDER chips —
+        // selected = Teal text on Teal40, unselected = TextMuted + Line border.
+        Row(horizontalArrangement = Arrangement.spacedBy(GolfSpacing.Xs)) {
+            listOf(GameModes.TARGET_PRACTICE, GameModes.BREAK_PANE).forEach { mode ->
+                val active = mode == gameMode
+                Text(
+                    text = GameHistoryFormats.modeLabel(mode),
+                    style = GolfTypography.Status,
+                    color = if (active) GolfColors.Teal else GolfColors.TextMuted,
+                    modifier = Modifier
+                        .clickable { gameMode = mode }
+                        .background(if (active) GolfColors.Teal40 else Color.Transparent, RoundedCornerShape(50))
+                        .border(1.dp, if (active) GolfColors.Teal else GolfColors.Line, RoundedCornerShape(50))
+                        .padding(horizontal = GolfSpacing.Sm, vertical = 2.dp),
+                )
+            }
+        }
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text(
+                text = "GAME SCORES",
+                style = GolfTypography.ScreenTitle,
+                color = GolfColors.TextPrimary,
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(GolfSpacing.Xs)) {
+                GameHistorySorting.Order.entries.forEach { o ->
+                    val active = o == order
+                    Text(
+                        text = o.label,
+                        style = GolfTypography.Status,
+                        color = if (active) GolfColors.Teal else GolfColors.TextMuted,
+                        modifier = Modifier
+                            .clickable { order = o }
+                            .border(1.dp, if (active) GolfColors.Teal else GolfColors.Line, RoundedCornerShape(50))
+                            .padding(horizontal = GolfSpacing.Sm, vertical = 2.dp),
+                    )
+                }
+            }
+        }
+
+        if (results.isEmpty()) {
+            Text("NO GAMES YET", style = GolfTypography.Status, color = GolfColors.TextMuted)
+        } else {
+            results.forEach { result ->
+                GameResultRow(result)
+            }
+        }
+    }
+}
+
+/**
+ * 2026-10-12 spec §3: combines moved out of the games panel into their own
+ * sidebar tab. Complete sessions only (all 24 shots), own RECENT/BEST order
+ * chips (BEST = lowest overall HC), tap → read-only CombineResultsView via
+ * the existing viewedCombineId flow.
+ */
+@Composable
+private fun CombinesHistory(
     combineHistory: List<CombineSessionEntity>,
     combineHistoryShots: List<CombineShotEntity>,
     onOpenCombine: (Long) -> Unit,
 ) {
     var order by remember { mutableStateOf(GameHistorySorting.Order.RECENCY) }
-    val grouped = remember(gameResults, order) { sortModel.sorted(gameResults, order) }
     val combineRows = remember(combineHistory, combineHistoryShots, order) {
         combineHistory
             .mapNotNull { session ->
@@ -314,7 +448,7 @@ private fun GamesHistory(
             modifier = Modifier.fillMaxWidth(),
         ) {
             Text(
-                text = "GAME SCORES",
+                text = "COMBINES",
                 style = GolfTypography.ScreenTitle,
                 color = GolfColors.TextPrimary,
             )
@@ -334,31 +468,9 @@ private fun GamesHistory(
             }
         }
 
-        if (gameResults.isEmpty()) {
-            Text("NO GAMES YET", style = GolfTypography.Status, color = GolfColors.TextMuted)
+        if (combineRows.isEmpty()) {
+            Text("NO COMBINES YET", style = GolfTypography.Status, color = GolfColors.TextMuted)
         } else {
-            grouped.forEach { (mode, results) ->
-                if (results.isNotEmpty()) {
-                    Text(
-                        text = GameHistoryFormats.modeLabel(mode),
-                        style = GolfTypography.MetricLabel,
-                        color = GolfColors.TextSecondary,
-                        modifier = Modifier.padding(top = GolfSpacing.Sm),
-                    )
-                    results.forEach { result ->
-                        GameResultRow(result)
-                    }
-                }
-            }
-        }
-
-        if (combineRows.isNotEmpty()) {
-            Text(
-                text = "COMBINES",
-                style = GolfTypography.MetricLabel,
-                color = GolfColors.TextSecondary,
-                modifier = Modifier.padding(top = GolfSpacing.Sm),
-            )
             for ((session, est) in combineRows) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
@@ -387,6 +499,64 @@ private fun GamesHistory(
                         text = CombineFormats.formatHc(est),
                         style = GolfTypography.MetricValue,
                         color = GolfColors.Teal,
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * 2026-10-12 spec §4: fitting comparison history inside HISTORY. Mirrors
+ * FittingHistoryView's rows via the shared FittingHistoryRow, minus the BACK
+ * chip — the sidebar is the navigation. Tap → read-only results in place
+ * (the viewedFittingId != null branch in HistoryScreen).
+ */
+@Composable
+private fun FittingsHistory(
+    fittingHistory: List<FittingSessionEntity>,
+    fittingHistoryDetails: Map<Long, List<Pair<String, Int>>>,
+    onOpenFitting: (Long) -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(GolfSpacing.Md),
+        verticalArrangement = Arrangement.spacedBy(GolfSpacing.Md),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().height(52.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                "COMPARISON HISTORY",
+                style = GolfTypography.ScreenTitle,
+                color = GolfColors.TextPrimary,
+            )
+        }
+        if (fittingHistory.isEmpty()) {
+            Box(
+                Modifier
+                    .weight(1f)
+                    .fillMaxWidth(),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    "No completed comparisons yet",
+                    style = GolfTypography.BodySmall,
+                    color = GolfColors.TextMuted,
+                )
+            }
+        } else {
+            LazyColumn(
+                modifier = Modifier.weight(1f).fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(GolfSpacing.Md),
+            ) {
+                items(fittingHistory, key = { it.id }) { session ->
+                    FittingHistoryRow(
+                        session = session,
+                        details = fittingHistoryDetails[session.id].orEmpty(),
+                        onClick = { onOpenFitting(session.id) },
                     )
                 }
             }
