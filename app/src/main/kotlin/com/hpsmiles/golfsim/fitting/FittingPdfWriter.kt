@@ -5,24 +5,28 @@ import android.content.Intent
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
-import android.graphics.RectF
+import android.graphics.Path
 import android.graphics.Typeface
 import android.graphics.pdf.PdfDocument
 import android.util.Log
 import androidx.compose.ui.graphics.toArgb
 import androidx.core.content.FileProvider
+import com.hpsmiles.golfsim.range.RangeScene
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import kotlin.math.PI
+import kotlin.math.cos
+import kotlin.math.sin
 
 /**
  * M7 fitting-session PDF export (2026-10-08): renders [FittingPdfData.Pdf] as
  * an A4 LANDSCAPE (842×595 pt) document with the exact row layout the user
  * specified — per club a summary row + that club's shot rows, then the Δ row(s)
  * at the very end — and, below the table, the top-down range view re-drawn as
- * vector android.graphics (same world mapping, y-flip and rotation-sign fix as
+ * vector android.graphics (horizontal tee-left plan, same world mapping as
  * FittingTopDownPane). Light/print-friendly theme: white background, dark text,
  * club-colour dots/rings preserved, excluded shot rows greyed with a "✕" marker.
  *
@@ -60,6 +64,9 @@ object FittingPdfWriter {
     private val INK_MUTED = Color.rgb(0x8F, 0xA0, 0xAC)    // excluded values
     private val RULE = Color.rgb(0xC9, 0xD0, 0xD7)         // light row separators
     private val PANE_BORDER = Color.rgb(0x9A, 0xA5, 0xAE)  // top-down frame
+    private val ROUGH = Color.rgb(0xF5, 0xF8, 0xF5)        // near-white ground tint
+    private val FAIRWAY = Color.rgb(0xDD, 0xEC, 0xD8)      // light-green corridor
+    private val CENTER_LINE = Color.rgb(0xA9, 0xB6, 0xC0)  // mid centre line
 
     private val FILENAME_STAMP = SimpleDateFormat("yyyy-MM-dd-HHmm", Locale.US)
     private val DATE_STAMP = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US)
@@ -317,68 +324,90 @@ object FittingPdfWriter {
         h: Float,
         paints: Paints,
     ) {
-        // White pane with a light frame.
+        // White pane with a light frame; content is clipped to the pane interior.
         canvas.drawRect(left, top, left + w, top + h, paints.paneBg)
-        canvas.drawRect(left, top, left + w, top + h, paints.paneBorder)
+        canvas.save()
+        canvas.clipRect(left, top, left + w, top + h)
 
-        val fit = computeTopDownFit(
+        // Horizontal (tee-left) fit — mirrors FittingTopDownPane (spec §6): tee
+        // left, distance → right, lateral on the vertical axis (positive side up).
+        val fit = computeTopDownFitH(
             width = w.toDouble(), height = h.toDouble(),
-            minY = data.topDown.minY, maxY = data.topDown.maxY, maxAbsX = data.topDown.maxAbsX,
-            hasData = data.topDown.hasData,
-            bottomMarginPx = 8.0,
+            minDistM = data.topDown.minDistM, maxDistM = data.topDown.maxDistM,
+            maxAbsSideM = data.topDown.maxAbsSideM, hasData = data.topDown.hasData,
         )
-        val pxPerM = fit.pxPerM.toFloat()
-        val originX = (left + fit.originX).toFloat()
-        val originY = (top + fit.originY).toFloat()
+        fun sx(distM: Double) = (left + fit.originX + distM * fit.pxPerMX).toFloat()
+        fun sy(sideM: Double) = (top + fit.midY - sideM * fit.pxPerMY).toFloat()
 
-        // Simplified grid: light horizontal distance lines every 25 m (labelled
-        // every 50 m) + a vertical centre line at world x = 0, matching the y-flip.
+        // Shading (drawn first): near-white rough ground, then the light-green
+        // fairway corridor (tee 10 m → 330 m, lateral ±14 m) over it.
+        canvas.drawRect(left, top, left + w, top + h, paints.paneRough)
+        val corridorHalfM = RangeScene.fairwayHalfWidth(0.0)
+        canvas.drawRect(
+            sx(RangeScene.FAIRWAY_TEE_Y), sy(corridorHalfM),
+            sx(RangeScene.FAIRWAY_END_Y), sy(-corridorHalfM),
+            paints.paneFairway,
+        )
+
+        // Distance gridlines every 25 m (vertical now), labelled every 50 m at
+        // the bottom edge.
         var m = 0f
         while (m <= 400f) {
-            val y = originY - m * pxPerM
-            if (y in top..(top + h)) {
-                canvas.drawLine(left, y, left + w, y, paints.grid)
+            val x = sx(m.toDouble())
+            if (x in left..(left + w)) {
+                canvas.drawLine(x, top, x, top + h, paints.grid)
                 if (m.toInt() % 50 == 0) {
                     paints.gridLabel.textAlign = Paint.Align.LEFT
-                    canvas.drawText("${m.toInt()} m", left + 3f, y - 2f, paints.gridLabel)
+                    canvas.drawText("${m.toInt()} m", x + 2f, top + h - 3f, paints.gridLabel)
                 }
             }
             m += 25f
         }
-        if (originX in left..(left + w)) {
-            canvas.drawLine(originX, top, originX, top + h, paints.grid)
-        }
+        // Horizontal centre line at side = 0 (tee → ground end, mirroring the pane).
+        canvas.drawLine(
+            sx(RangeScene.FAIRWAY_TEE_Y), sy(0.0),
+            sx(RangeScene.GROUND_END_Y), sy(0.0),
+            paints.centerLine,
+        )
 
         // Dispersion rings FIRST (rings under dots) — one rotated MVEE per club,
-        // the same ellipse whose area the AREA column reports. The rotation-sign
-        // negation mirrors FittingTopDownPane's `-Math.toDegrees(angleRad)`
-        // (screen y grows down while world total grows up).
+        // the same ellipse whose area the AREA column reports. Traced as a
+        // 72-step world→screen path (mirror of FittingTopDownPane): under the
+        // anisotropic scale a rotated world ellipse is not a screen oval, so the
+        // old rotate() + drawOval could not draw it.
         data.clubs.forEach { club ->
             val ell = club.ellipse ?: return@forEach
-            val cx = originX + (ell.centreSideM * pxPerM).toFloat()
-            val cy = originY - (ell.centreTotalM * pxPerM).toFloat()
-            val a = (ell.semiAxisM * pxPerM).toFloat()
-            val b = (ell.semiCrossM * pxPerM).toFloat()
+            val cosA = cos(ell.angleRad)
+            val sinA = sin(ell.angleRad)
+            val path = Path()
+            val steps = 72
+            for (i in 0..steps) {
+                val t = 2.0 * PI * i / steps
+                val u = ell.semiAxisM * cos(t)
+                val v = ell.semiCrossM * sin(t)
+                val worldSide = ell.centreSideM + u * cosA - v * sinA
+                val worldDist = ell.centreTotalM + u * sinA + v * cosA
+                val px = sx(worldDist)
+                val py = sy(worldSide)
+                if (i == 0) path.moveTo(px, py) else path.lineTo(px, py)
+            }
+            path.close()
             paints.ring.color = FittingColors.clubColor(club.colorIndex).toArgb()
             paints.ring.alpha = 140 // ~55 %
-            canvas.save()
-            canvas.rotate(-Math.toDegrees(ell.angleRad).toFloat(), cx, cy)
-            canvas.drawOval(RectF(cx - a, cy - b, cx + a, cy + b), paints.ring)
-            canvas.restore()
+            canvas.drawPath(path, paints.ring)
         }
 
-        // Kept shot dots (≈6 dp) in club colours.
+        // Kept shot dots (≈6 dp) in club colours — lateral (side) maps to y.
         data.clubs.forEach { club ->
             paints.dot.color = FittingColors.clubColor(club.colorIndex).toArgb()
             paints.dot.alpha = 204 // ~0.8
             club.keptPoints.forEach { (side, total) ->
-                val x = originX + (side * pxPerM).toFloat()
-                val y = originY - (total * pxPerM).toFloat()
-                if (x in left..(left + w) && y in top..(top + h)) {
-                    canvas.drawCircle(x, y, 3f, paints.dot)
-                }
+                canvas.drawCircle(sx(total), sy(side), 3f, paints.dot)
             }
         }
+
+        canvas.restore()
+        canvas.drawRect(left, top, left + w, top + h, paints.paneBorder)
     }
 
     // ---- paints ----
@@ -409,6 +438,9 @@ object FittingPdfWriter {
         val rule = Paint().apply { color = RULE }
         val paneBg = Paint().apply { color = Color.WHITE; style = Paint.Style.FILL }
         val paneBorder = Paint().apply { color = PANE_BORDER; style = Paint.Style.STROKE; strokeWidth = 1f }
+        val paneRough = Paint().apply { color = ROUGH; style = Paint.Style.FILL }
+        val paneFairway = Paint().apply { color = FAIRWAY; style = Paint.Style.FILL }
+        val centerLine = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = CENTER_LINE; strokeWidth = 0.7f }
         val grid = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = RULE; strokeWidth = 0.6f }
         val gridLabel = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = INK_MUTED; textSize = 6.5f }
         val ring = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeWidth = 1.4f }

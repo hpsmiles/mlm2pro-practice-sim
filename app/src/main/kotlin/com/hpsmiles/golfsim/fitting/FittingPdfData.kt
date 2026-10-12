@@ -62,11 +62,11 @@ object FittingPdfData {
         val cells: List<String>,
     )
 
-    /** computeTopDownFit inputs derived from the kept shots + rings (FittingTopDownPane mirror). */
+    /** computeTopDownFitH inputs derived from the kept shots + rings (FittingTopDownPane mirror). */
     data class TopDownModel(
-        val minY: Double,
-        val maxY: Double,
-        val maxAbsX: Double,
+        val minDistM: Double,
+        val maxDistM: Double,
+        val maxAbsSideM: Double,
         val hasData: Boolean,
     )
 
@@ -225,9 +225,9 @@ object FittingPdfData {
     // ---- top-down model (FittingTopDownPane bounds derivation) ----
 
     private fun buildTopDownModel(clubs: List<ClubBlock>): TopDownModel {
-        var minY = Double.POSITIVE_INFINITY
-        var maxY = Double.NEGATIVE_INFINITY
-        var maxAbsX = 0.0
+        var minDistM = Double.POSITIVE_INFINITY
+        var maxDistM = Double.NEGATIVE_INFINITY
+        var maxAbsSideM = 0.0
         var hasData = false
         for (block in clubs) {
             if (block.keptPoints.isNotEmpty()) hasData = true
@@ -237,21 +237,21 @@ object FittingPdfData {
             if (ell != null) {
                 val halfSide = ell.projectedHalfSideM()
                 val halfTotal = ell.projectedHalfTotalM()
-                minY = minOf(minY, ell.centreTotalM - halfTotal)
-                maxY = maxOf(maxY, ell.centreTotalM + halfTotal)
-                maxAbsX = maxOf(maxAbsX, abs(ell.centreSideM) + halfSide)
+                minDistM = minOf(minDistM, ell.centreTotalM - halfTotal)
+                maxDistM = maxOf(maxDistM, ell.centreTotalM + halfTotal)
+                maxAbsSideM = maxOf(maxAbsSideM, abs(ell.centreSideM) + halfSide)
             } else {
                 block.keptPoints.forEach { (side, total) ->
-                    minY = minOf(minY, total)
-                    maxY = maxOf(maxY, total)
-                    maxAbsX = maxOf(maxAbsX, abs(side))
+                    minDistM = minOf(minDistM, total)
+                    maxDistM = maxOf(maxDistM, total)
+                    maxAbsSideM = maxOf(maxAbsSideM, abs(side))
                 }
             }
         }
         return TopDownModel(
-            minY = if (hasData) minY else 0.0,
-            maxY = if (hasData) maxY else 0.0,
-            maxAbsX = maxAbsX,
+            minDistM = if (hasData) minDistM else 0.0,
+            maxDistM = if (hasData) maxDistM else 0.0,
+            maxAbsSideM = maxAbsSideM,
             hasData = hasData,
         )
     }

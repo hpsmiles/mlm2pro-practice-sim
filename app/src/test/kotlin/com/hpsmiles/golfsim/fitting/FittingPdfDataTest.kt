@@ -8,6 +8,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.util.Locale
+import kotlin.math.abs
 
 /**
  * M7 PDF export (2026-10-08): pure row-order + formatting tests for
@@ -229,10 +230,45 @@ class FittingPdfDataTest {
         assertNotNull(ell)
         // Buffered ellipse extents subsume the raw shot extremes (the ellipse
         // contains every kept point, so its extents reach at least the raw ones).
-        assertTrue(pdf.topDown.minY <= 95.0)   // lowest kept total
-        assertTrue(pdf.topDown.maxY >= 110.0)  // highest kept total
-        assertTrue(pdf.topDown.maxAbsX >= 10.0)
+        assertTrue(pdf.topDown.minDistM <= 95.0)   // lowest kept total
+        assertTrue(pdf.topDown.maxDistM >= 110.0)  // highest kept total
+        assertTrue(pdf.topDown.maxAbsSideM >= 10.0)
         assertEquals(3, pdf.clubs.single().keptPoints.size)
+    }
+
+    @Test
+    fun `top-down model - bounds mirror the pane derivation exactly`() {
+        // The same derivation FittingTopDownPane uses (spec §6): the buffered
+        // enclosing ellipse's projected extents define the distance window and
+        // the lateral half-extent that feed computeTopDownFitH.
+        val shots = listOf(
+            shot(1, 1, "A", side = 0.0, total = 100.0, ts = 100),
+            shot(2, 1, "A", side = 10.0, total = 110.0, ts = 200),
+            shot(3, 1, "A", side = 5.0, total = 95.0, ts = 300),
+        )
+        val pdf = FittingPdfData.build(shots)
+        val ell = pdf.clubs.single().ellipse!!
+        val halfTotal = ell.projectedHalfTotalM()
+        val halfSide = ell.projectedHalfSideM()
+        assertEquals(ell.centreTotalM - halfTotal, pdf.topDown.minDistM, 1e-9)
+        assertEquals(ell.centreTotalM + halfTotal, pdf.topDown.maxDistM, 1e-9)
+        assertEquals(abs(ell.centreSideM) + halfSide, pdf.topDown.maxAbsSideM, 1e-9)
+    }
+
+    @Test
+    fun `top-down model - under three kept shots falls back to per-shot extremes`() {
+        // 2 kept shots → no enclosing ellipse → raw per-shot extremes shape the
+        // fit (FittingTopDownPane's no-ellipse fallback branch).
+        val shots = listOf(
+            shot(1, 1, "A", side = -4.0, total = 100.0, ts = 100),
+            shot(2, 1, "A", side = 6.0, total = 120.0, ts = 200),
+        )
+        val pdf = FittingPdfData.build(shots)
+        assertTrue(pdf.topDown.hasData)
+        assertNull(pdf.clubs.single().ellipse)
+        assertEquals(100.0, pdf.topDown.minDistM, 1e-9)
+        assertEquals(120.0, pdf.topDown.maxDistM, 1e-9)
+        assertEquals(6.0, pdf.topDown.maxAbsSideM, 1e-9)
     }
 
     @Test
