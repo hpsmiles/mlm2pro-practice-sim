@@ -42,14 +42,14 @@ Live BLE scanner + GATT client → decoder → physics → UI. Flat range grid, 
 
 **Exit:** hit a ball, see it land within ~2s; carry matches Rapsodo. **Shipped** (tracers, painted range and follow-cam followed 2026-09-24/25).
 
-### M4 follow-ups (requested 2026-09-24 — TODO, not scheduled yet)
+### M4 follow-ups (requested 2026-09-24 — complete)
 
 - **Ball follow-cam view** *(shipped 2026-09-25)*: replay the flight from a camera set distance
    BEHIND THE BALL (translating with it) instead of the fixed player POV — the
    standard sim-software view. Needs a travelling-camera projection layer on
    top of the existing `TrajectorySample` stream (pure math change in
    `PovProjector`, no 3D engine).
-- Visit the ball-flight eye line after multiple shots on the same spot.
+- **Visit the ball-flight eye line after multiple shots on the same spot** *(done 2026-10-13)*.
 
 ## M5 — Sessions & Persistence
 

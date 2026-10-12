@@ -10,3 +10,7 @@ captures/
 .cxx/
 .superpowers/
 .worktrees/
+# Release signing (kept local only — never commit the keystore or its passwords)
+keystore.properties
+*.jks
+*.keystore
