@@ -19,6 +19,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -41,22 +42,26 @@ import com.hpsmiles.golfsim.range.RangeScene
 import com.hpsmiles.golfsim.range.RangeSigns
 import kotlin.math.PI
 import kotlin.math.abs
+import kotlin.math.ceil
 import kotlin.math.cos
 import kotlin.math.sin
 
 /**
  * M7 top-down (design notes §2.3, reoriented per spec §6): horizontal plan
  * view — tee on the LEFT, distance → right, lateral on the vertical axis
- * (positive side draws higher), mirroring `CombineTopDownView`. Rough
- * surrounds the constant 28 m fairway corridor; kept shots are per-club
- * coloured dots with ONE rotated minimum-enclosing ellipse (Löwner / MVEE,
- * scaled ×1.05) per club (≥3 kept shots; 55 % alpha, 2 dp stroke, no fill —
- * the same ellipse whose area the table's AREA column reports, so ring and
- * table agree), traced as a 72-step world-space path (required under
- * anisotropic scale — a rotated world ellipse is not a screen oval).
- * Excluded shots are never drawn — they stay visible in the table drill-down.
- * Legend chips (colour dot + name + count badge) wrap to a second row beyond
- * 4 clubs and are not tappable in v1.
+ * (positive side draws higher), mirroring `CombineTopDownView`. Shading is the
+ * range POV's own ground palette (GolfColors.Range*): dark rough surrounds
+ * the constant 28 m fairway corridor with its 10 m mown stripes (device
+ * feedback 2026-10-12). Adaptive vertical distance gridlines ("N m" labels,
+ * combine idiom) and right-edge lateral guide labels give scale at any zoom.
+ * Kept shots are per-club coloured dots with ONE rotated minimum-enclosing
+ * ellipse (Löwner / MVEE, scaled ×1.05) per club (≥3 kept shots; 55 % alpha,
+ * 2 dp stroke, no fill — the same ellipse whose area the table's AREA column
+ * reports, so ring and table agree), traced as a 72-step world-space path
+ * (required under anisotropic scale — a rotated world ellipse is not a screen
+ * oval). Excluded shots are never drawn — they stay visible in the table
+ * drill-down. Legend chips (colour dot + name + count badge) wrap to a second
+ * row beyond 4 clubs and are not tappable in v1.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -103,12 +108,16 @@ internal fun FittingTopDownPane(
                 modifier = Modifier.padding(horizontal = GolfSpacing.Md),
             )
         }
-        Box(Modifier.fillMaxSize()) {
+        // clipToBounds: for zoomed windows the unguarded draws below (fairway
+        // rect, centre/guide lines, mat, rings, dots) extend off-canvas by
+        // design — they must never paint outside the pane (2026-10-12).
+        Box(Modifier.fillMaxSize().clipToBounds()) {
             Canvas(Modifier.fillMaxSize()) {
                 val w = size.width
                 val h = size.height
-                // Rough everywhere; the fairway corridor shades over it below.
-                drawRect(GolfColors.HoleRough)
+                // Rough everywhere (the range POV's rough green); the fairway
+                // corridor shades over it below.
+                drawRect(GolfColors.RangeRough)
                 // Content-fit mapping (device feedback 2026-10-08), same bounds
                 // rule as before — kept shots AND their enclosing-ellipse ring
                 // extents plus a buffer drive the window (0–150 m of empty
@@ -161,16 +170,30 @@ internal fun FittingTopDownPane(
                 fun sy(sideM: Double) = (fit.midY - sideM * fit.pxPerMY).toFloat()
 
                 // Fairway corridor (tee 10 m → 330 m, lateral ±14 m — the
-                // constant 28 m band) shaded over the rough.
+                // constant 28 m band) in the range POV's fairway green, with
+                // the same 10 m mown stripes the range shows (pure RangeScene
+                // banding; subtle enough that dots/rings stay legible).
                 val corridorHalfM = RangeScene.fairwayHalfWidth(0.0)
                 drawRect(
-                    color = GolfColors.HoleFairway,
+                    color = GolfColors.RangeFairway,
                     topLeft = Offset(sx(RangeScene.FAIRWAY_TEE_Y), sy(corridorHalfM)),
                     size = Size(
                         sx(RangeScene.FAIRWAY_END_Y) - sx(RangeScene.FAIRWAY_TEE_Y),
                         sy(-corridorHalfM) - sy(corridorHalfM),
                     ),
                 )
+                for (band in 0 until RangeScene.stripeBandCount()) {
+                    val (yFrom, yTo) = RangeScene.stripeBand(band)
+                    drawRect(
+                        color = if (RangeScene.stripeIsLight(0.0, yFrom)) {
+                            GolfColors.RangeStripeLight
+                        } else {
+                            GolfColors.RangeStripeDark
+                        },
+                        topLeft = Offset(sx(yFrom), sy(corridorHalfM)),
+                        size = Size(sx(yTo) - sx(yFrom), sy(-corridorHalfM) - sy(corridorHalfM)),
+                    )
+                }
 
                 // Lateral gridlines every 20 m — horizontal lines spanning the
                 // canvas (the old vertical grid rotated with the view).
@@ -184,6 +207,29 @@ internal fun FittingTopDownPane(
                         )
                     }
                     lateralM += 20.0
+                }
+
+                // Distance scale references (device feedback 2026-10-12):
+                // vertical gridlines + "N m" labels in the combine idiom
+                // (TextMuted 10.sp, top edge, centred on each line). The step
+                // adapts to the visible window (distanceGridStepM) — ≥ 2
+                // references at fitting zooms, no crowding at full range (50 m
+                // steps coincide with the sign boards).
+                val visLoM = (0.0 - fit.originX) / fit.pxPerMX
+                val visHiM = (w.toDouble() - fit.originX) / fit.pxPerMX
+                val stepM = distanceGridStepM(visHiM - visLoM)
+                labelPaint.apply {
+                    isAntiAlias = true
+                    textAlign = android.graphics.Paint.Align.CENTER
+                    textSize = 10.sp.toPx()
+                    color = GolfColors.TextMuted.toArgb()
+                }
+                var gridM = ceil(visLoM / stepM) * stepM
+                while (gridM <= visHiM) {
+                    val x = sx(gridM)
+                    drawLine(GolfColors.Line.copy(alpha = 0.5f), Offset(x, 0f), Offset(x, h), 1f)
+                    drawContext.canvas.nativeCanvas.drawText("${gridM.toInt()} m", x, 12.sp.toPx(), labelPaint)
+                    gridM += stepM
                 }
 
                 // Practice-grid identity matching the POV view: a solid centre
@@ -204,6 +250,25 @@ internal fun FittingTopDownPane(
                         Color.White.copy(alpha = RangeScene.GUIDE_LINE_ALPHA),
                         Offset(teeLeft, y), Offset(groundRight, y), 1f,
                         pathEffect = PathEffect.dashPathEffect(floatArrayOf(dashPx, gapPx)),
+                    )
+                }
+                // Lateral references (device feedback 2026-10-12): each dashed
+                // guide's distance from centre ("10 m" / "20 m"), TextMuted
+                // 10.sp right-aligned at the canvas edge just above its line —
+                // the spacing stays readable at any zoom; quiet furniture,
+                // drawn before rings/dots so data always wins.
+                labelPaint.apply {
+                    isAntiAlias = true
+                    textAlign = android.graphics.Paint.Align.RIGHT
+                    textSize = 10.sp.toPx()
+                    color = GolfColors.TextMuted.toArgb()
+                }
+                for (guideM in RangeScene.GUIDE_LINE_LATERALS_M) {
+                    drawContext.canvas.nativeCanvas.drawText(
+                        "${abs(guideM).toInt()} m",
+                        w - rightPadPx,
+                        sy(guideM) - 2.dp.toPx(),
+                        labelPaint,
                     )
                 }
 

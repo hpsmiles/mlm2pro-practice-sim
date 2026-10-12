@@ -54,6 +54,29 @@ class FittingTopDownFitTest {
         assertEquals(26.0, fit.originX + 135.0 * fit.pxPerMX, 1e-9)       // lo − pad at the left pad
         assertEquals(W - 12.0, fit.originX + 185.0 * fit.pxPerMX, 1e-9)   // hi + pad at the right pad
     }
+
+    @Test
+    fun distanceGridStepPicksSmallestStepUnderTheCap() {
+        assertEquals(10.0, distanceGridStepM(30.0), 1e-9)   // tightest zoom (MIN_SPAN_M)
+        assertEquals(10.0, distanceGridStepM(60.0), 1e-9)
+        assertEquals(25.0, distanceGridStepM(120.0), 1e-9)
+        assertEquals(50.0, distanceGridStepM(330.0), 1e-9)  // fairway length
+        assertEquals(50.0, distanceGridStepM(369.6), 1e-9)  // full-range window incl. pad
+    }
+
+    @Test
+    fun distanceGridStepClampsBeyondCoarsestCandidate() {
+        assertEquals(100.0, distanceGridStepM(900.0), 1e-9)
+    }
+
+    @Test
+    fun distanceGridStepKeepsAtLeastTwoReferencesAtAnyZoom() {
+        // The contract behind the device ask: span / step >= 2 for every
+        // window a fitting session can produce (MIN_SPAN_M … full range).
+        for (span in listOf(30.0, 50.0, 80.0, 120.0, 200.0, 330.0, 369.6)) {
+            assertTrue("span $span", span / distanceGridStepM(span) >= 2.0)
+        }
+    }
 }
 
 /**

@@ -14,8 +14,16 @@ object GolfColors {
     val Card = Color(0xFF151A1F)
     val Line = Color(0xFF28303A)
     val HoleFairway = Color(0xFF161B21)
-    /** Rough surround for plan views — quieter than Base, green-tinted; dots/rings must stay readable (tune on device). */
-    val HoleRough = Color(0xFF101612)
+
+    // Painted-range ground palette ("Tour Broadcast") — the single source of
+    // truth shared by the range POV (RangeDecorations) and the fitting
+    // top-down pane (device feedback 2026-10-12: the plan view must read as
+    // the same facility — green mown fairway over dark rough — not near-black
+    // tints). White dots and club-colour rings stay legible on these greens.
+    val RangeRough = Color(0xFF1E4D26)
+    val RangeFairway = Color(0xFF3E8E43)
+    val RangeStripeLight = Color(0xFF47A04C)
+    val RangeStripeDark = Color(0xFF3A8440)
 
     val TextPrimary = Color(0xFFE7EBEE)
     val TextSecondary = Color(0xFF8FA0AC)

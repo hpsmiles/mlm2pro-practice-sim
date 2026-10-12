@@ -143,8 +143,20 @@ internal fun FittingResultsView(
                     modifier = Modifier.fillMaxWidth(),
                 )
             }
-            // Top-down under the table (spec §5) — fixed height, device-tunable.
-            FittingTopDownPane(shots = shots, modifier = Modifier.fillMaxWidth().height(360.dp))
+            // Top-down under the table (spec §5), framed as a sibling card —
+            // same clip/background/padding geometry as the table card plus a
+            // 1 dp Line border, so the pane sits horizontally inline with the
+            // table (device feedback 2026-10-12). Fixed height, device-tunable.
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(GolfSpacing.CornerCard))
+                    .background(GolfColors.Card)
+                    .border(1.dp, GolfColors.Line, RoundedCornerShape(GolfSpacing.CornerCard))
+                    .padding(GolfSpacing.Md),
+            ) {
+                FittingTopDownPane(shots = shots, modifier = Modifier.fillMaxWidth().height(360.dp))
+            }
             // Bottom spacing so the pane never sits flush on the scroll edge.
             Spacer(Modifier.height(GolfSpacing.Md))
         }

@@ -291,3 +291,24 @@ fun computeTopDownFitH(
     val pxPerMY = (height / 2 - vPadPx) / lateralHalfM
     return TopDownFitH(pxPerMX, pxPerMY, originX, height / 2)
 }
+
+/** Candidate distance-grid steps, metres, finest first. */
+private val GRID_STEP_CANDIDATES_M = doubleArrayOf(10.0, 25.0, 50.0, 100.0)
+
+/** Most labeled intervals allowed across the visible distance window. */
+private const val MAX_GRID_INTERVALS = 8.0
+
+/**
+ * Adaptive distance-grid step for the top-down pane's scale references
+ * (device feedback 2026-10-12): the smallest candidate step keeping
+ * ≤ [MAX_GRID_INTERVALS] intervals across the visible [spanM]. Fitting zooms
+ * (span ≥ [MIN_SPAN_M]) land on 10–25 m — always at least 2 labeled
+ * references; the full-range fallback (~370 m visible) lands on 50 m, so the
+ * gridlines coincide with the standing sign boards and never crowd.
+ */
+fun distanceGridStepM(spanM: Double): Double {
+    for (step in GRID_STEP_CANDIDATES_M) {
+        if (spanM / step <= MAX_GRID_INTERVALS) return step
+    }
+    return GRID_STEP_CANDIDATES_M.last()
+}
