@@ -59,6 +59,8 @@ class FittingTopDownFitTest {
     fun distanceGridStepPicksSmallestStepUnderTheCap() {
         assertEquals(10.0, distanceGridStepM(30.0), 1e-9)   // tightest zoom (MIN_SPAN_M)
         assertEquals(10.0, distanceGridStepM(60.0), 1e-9)
+        assertEquals(10.0, distanceGridStepM(80.0), 1e-9)   // boundary: exactly 8 intervals
+        assertEquals(25.0, distanceGridStepM(81.0), 1e-9)   // just above → next step up
         assertEquals(25.0, distanceGridStepM(120.0), 1e-9)
         assertEquals(50.0, distanceGridStepM(330.0), 1e-9)  // fairway length
         assertEquals(50.0, distanceGridStepM(369.6), 1e-9)  // full-range window incl. pad

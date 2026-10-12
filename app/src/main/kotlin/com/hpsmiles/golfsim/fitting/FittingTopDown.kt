@@ -172,7 +172,9 @@ internal fun FittingTopDownPane(
                 // Fairway corridor (tee 10 m → 330 m, lateral ±14 m — the
                 // constant 28 m band) in the range POV's fairway green, with
                 // the same 10 m mown stripes the range shows (pure RangeScene
-                // banding; subtle enough that dots/rings stay legible).
+                // banding; subtle enough that dots/rings stay legible). The
+                // base rect stays as a safety floor under the 32 stripe bands
+                // (they tile 10–330 m exactly — this guards any future gap).
                 val corridorHalfM = RangeScene.fairwayHalfWidth(0.0)
                 drawRect(
                     color = GolfColors.RangeFairway,
@@ -210,25 +212,28 @@ internal fun FittingTopDownPane(
                 }
 
                 // Distance scale references (device feedback 2026-10-12):
-                // vertical gridlines + "N m" labels in the combine idiom
-                // (TextMuted 10.sp, top edge, centred on each line). The step
-                // adapts to the visible window (distanceGridStepM) — ≥ 2
-                // references at fitting zooms, no crowding at full range (50 m
-                // steps coincide with the sign boards).
+                // vertical gridlines (combine parity α0.6) + "N m" labels at
+                // the top edge, centred on each line. Labels are TextSecondary
+                // — TextMuted is functionally invisible on the green rough
+                // (≈1.7:1; review 2026-10-12). The step adapts to the visible
+                // window (distanceGridStepM) — ≥ 2 references at fitting
+                // zooms, no crowding at full range (50 m steps coincide with
+                // the sign boards).
                 val visLoM = (0.0 - fit.originX) / fit.pxPerMX
                 val visHiM = (w.toDouble() - fit.originX) / fit.pxPerMX
                 val stepM = distanceGridStepM(visHiM - visLoM)
+                val distLabelBaselineY = 12.sp.toPx()
                 labelPaint.apply {
                     isAntiAlias = true
                     textAlign = android.graphics.Paint.Align.CENTER
                     textSize = 10.sp.toPx()
-                    color = GolfColors.TextMuted.toArgb()
+                    color = GolfColors.TextSecondary.toArgb()
                 }
                 var gridM = ceil(visLoM / stepM) * stepM
                 while (gridM <= visHiM) {
                     val x = sx(gridM)
-                    drawLine(GolfColors.Line.copy(alpha = 0.5f), Offset(x, 0f), Offset(x, h), 1f)
-                    drawContext.canvas.nativeCanvas.drawText("${gridM.toInt()} m", x, 12.sp.toPx(), labelPaint)
+                    drawLine(GolfColors.Line.copy(alpha = 0.6f), Offset(x, 0f), Offset(x, h), 1f)
+                    drawContext.canvas.nativeCanvas.drawText("${gridM.toInt()} m", x, distLabelBaselineY, labelPaint)
                     gridM += stepM
                 }
 
@@ -253,15 +258,18 @@ internal fun FittingTopDownPane(
                     )
                 }
                 // Lateral references (device feedback 2026-10-12): each dashed
-                // guide's distance from centre ("10 m" / "20 m"), TextMuted
-                // 10.sp right-aligned at the canvas edge just above its line —
-                // the spacing stays readable at any zoom; quiet furniture,
-                // drawn before rings/dots so data always wins.
+                // guide's distance from centre ("10 m" / "20 m"), 10.sp
+                // right-aligned at the canvas edge just above its line — the
+                // spacing stays readable at any zoom. Ink = white at the centre
+                // line's alpha so it reads on BOTH the fairway band (the ±10 m
+                // labels sit inside the ±14 m corridor) and the rough (±20 m)
+                // — TextMuted was invisible there (review 2026-10-12) — while
+                // thin text strokes stay subordinate to the α0.8 filled dots.
                 labelPaint.apply {
                     isAntiAlias = true
                     textAlign = android.graphics.Paint.Align.RIGHT
                     textSize = 10.sp.toPx()
-                    color = GolfColors.TextMuted.toArgb()
+                    color = Color.White.copy(alpha = RangeScene.CENTER_LINE_ALPHA).toArgb()
                 }
                 for (guideM in RangeScene.GUIDE_LINE_LATERALS_M) {
                     drawContext.canvas.nativeCanvas.drawText(
