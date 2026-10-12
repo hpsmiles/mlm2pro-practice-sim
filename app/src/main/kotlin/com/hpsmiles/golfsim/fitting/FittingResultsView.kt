@@ -7,11 +7,14 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -27,12 +30,14 @@ import com.hpsmiles.golfsim.core.designsystem.GolfTypography
 import com.hpsmiles.golfsim.range.ChipFont
 
 /**
- * FIT results view (design notes §2): TABLE | TOP-DOWN segmented switch over
- * the same session's kept/excluded shots. [readOnly] = a completed history
+ * FIT results view (design notes §2, layout per spec §5): one scrollable page —
+ * the metric table card with the coloured top-down pane stacked UNDER it, the
+ * page as the single vertical scroll owner (expanding a club drill-down pushes
+ * the pane down; nothing overlays it). [readOnly] = a completed history
  * session: exclusion controls are disabled, END COMPARISON is hidden, and the
  * header context line reads the viewed session's date instead of live counts.
- * The TABLE mode renders inside a Card-framed region (notes §2.2); the
- * TOP-DOWN pane is the coloured canvas + buffered-box rings in FittingTopDown.kt.
+ * The TABLE renders inside a Card-framed region (notes §2.2); the top-down
+ * pane is the coloured canvas + enclosing-ellipse rings in FittingTopDown.kt.
  * SAVE PDF (2026-10-08) exports the viewed shots — live or read-only — via the
  * share sheet ([onExportPdf] is threaded from AppRoot, which renders + shares).
  */
@@ -69,34 +74,6 @@ internal fun FittingResultsView(
                     .border(1.dp, GolfColors.Line, RoundedCornerShape(50))
                     .padding(horizontal = GolfSpacing.Md, vertical = GolfSpacing.Xs),
             )
-            // Segmented switch TABLE | TOP-DOWN (notes §2.1.2): one pill
-            // container, selected segment = Teal40 background + Teal text.
-            Row(
-                modifier = Modifier
-                    .background(GolfColors.Panel, RoundedCornerShape(50))
-                    .border(1.dp, GolfColors.Line, RoundedCornerShape(50))
-                    .padding(2.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                FittingResultsMode.entries.forEach { mode ->
-                    val selected = controller.resultsMode == mode
-                    Text(
-                        mode.label,
-                        style = ChipFont,
-                        color = if (selected) GolfColors.Teal else GolfColors.TextSecondary,
-                        modifier = Modifier
-                            .clickable { controller.resultsMode = mode }
-                            .then(
-                                if (selected) {
-                                    Modifier.background(GolfColors.Teal40, RoundedCornerShape(50))
-                                } else {
-                                    Modifier
-                                },
-                            )
-                            .padding(horizontal = GolfSpacing.Md, vertical = GolfSpacing.Xs),
-                    )
-                }
-            }
             // Shot-context line (notes §2.1.4): live counts, or the viewed
             // session's date when read-only (history). weight(1f, fill = false)
             // so it ellipsizes at its natural width across the full free space
@@ -136,12 +113,21 @@ internal fun FittingResultsView(
                 )
             }
         }
-        if (controller.resultsMode == FittingResultsMode.TABLE) {
+        // Single scroll owner (spec §5): the page scrolls; the table card and
+        // the top-down pane stack vertically, so expanding a club drill-down
+        // grows the page and pushes the pane down — it can never overlay it.
+        Column(
+            Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(GolfSpacing.Md),
+        ) {
             // Card-framed table region (notes §2.2): Card surface, corner,
-            // Md padding around the scrollable table.
+            // Md padding around the table (the table's own vertical scroll is
+            // gone — the page scrolls; the horizontal metric scroll stays).
             Box(
                 Modifier
-                    .weight(1f)
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(GolfSpacing.CornerCard))
                     .background(GolfColors.Card)
@@ -154,11 +140,13 @@ internal fun FittingResultsView(
                     onSetExcluded = onSetExcluded,
                     readOnly = readOnly,
                     distanceMode = controller.distanceMode,
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier.fillMaxWidth(),
                 )
             }
-        } else {
-            FittingTopDownPane(shots = shots, modifier = Modifier.weight(1f))
+            // Top-down under the table (spec §5) — fixed height, device-tunable.
+            FittingTopDownPane(shots = shots, modifier = Modifier.fillMaxWidth().height(360.dp))
+            // Bottom spacing so the pane never sits flush on the scroll edge.
+            Spacer(Modifier.height(GolfSpacing.Md))
         }
     }
 }

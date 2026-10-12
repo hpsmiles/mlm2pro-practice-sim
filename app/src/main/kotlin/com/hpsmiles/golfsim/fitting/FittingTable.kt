@@ -19,7 +19,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -90,7 +89,10 @@ internal fun FittingTable(
     // row scroll in lockstep (design notes §2.2 — a single scrollable region).
     val metricScroll = rememberScrollState()
 
-    Column(modifier.verticalScroll(rememberScrollState())) {
+    // No internal vertical scroll (spec §5): the enclosing results page is the
+    // single scroll owner, so a drill-down expansion grows the page and pushes
+    // the top-down pane below it down. The horizontal metric scroll stays.
+    Column(modifier) {
         // Header row: frozen CLUB cell + scrollable metric labels.
         Row(verticalAlignment = Alignment.CenterVertically) {
             FrozenHeaderCell()
