@@ -64,7 +64,7 @@ Derived, not independently discounted (independent start/end discounts break zer
 
 ## 4. Layer 2 — shed→real conversion
 
-- Fitted SG offsets applied per shot, one per station: `CONVERSION_APPROACH_100M`, `CONVERSION_APPROACH_150M`, and `CONVERSION_DRIVER` — the DRIVER value fitted ≈ −0.08…−0.12 SG/shot (encodes the missing real-course penalty stakes for offline drives).
+- Fitted SG offsets applied per shot, one per station: `CONVERSION_APPROACH_100M`, `CONVERSION_APPROACH_150M`, and `CONVERSION_DRIVER` — the DRIVER value fitted at −0.065042 SG/shot (encodes the missing real-course penalty stakes for offline drives).
 - Applied to per-shot SG at the scoring seam before any solve, so station estimates, the overall solve, per-shot chips, and the locked benchmark band all shift consistently.
 - Fitted by 1-D numeric root-find on the calibration session (§6) so each station solves to its declared anchor.
 - Rationale recorded with the constants: the approach conversion represents how much shed proximity overstates real-course proximity (wind, lie variance, forgiving green); the driver conversion represents the missing real-course penalty stakes for offline drives (no OB/trees/water in the shed).
@@ -109,6 +109,6 @@ Tuning rules: only the declared parameters (`d50` per band, `k`, `γ`, `κ_fairw
 | shedTightening | 0.25 | 0.3 | |
 | CONVERSION_APPROACH_100M | — | −0.169254 | fitted on §6 session (SG/shot) |
 | CONVERSION_APPROACH_150M | — | −0.221857 | fitted on §6 session (SG/shot) |
-| CONVERSION_DRIVER | — | −0.065042 | fitted; ≈ −0.08…−0.12 SG/shot (missing penalty stakes) |
+| CONVERSION_DRIVER | — | −0.065042 | fitted (missing penalty stakes) |
 
 Winning combo κ_rough 0.12 / γ 1.0 / κ_fairway 0.05 / shedTightening 0.3 → station estimates 3.000 / −1.000 / 8.000 exactly on anchors, emergent overall 2.834 (gate 2.5 ± 1.0) on the 2026-10-12 calibration session.
