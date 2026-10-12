@@ -17,11 +17,8 @@ class CombineResultsTest {
     @Test
     fun `golden fixture reproduces at the app layer`() {
         // 100 m station (indices 0,1,6,7,12,13), rests 1,6,7,8,10,12 m, all on green
-        val rests = listOf(1.0, 6.0, 7.0, 8.0, 10.0, 12.0)
-        val indices = listOf(0, 1, 6, 7, 12, 13)
-        val facts = indices.zip(rests).map { (index, rest) ->
-            CombineShotFacts(index, Lie.GREEN, rest)
-        }
+        val facts = goldenFacts
+        val rests = facts.map { it.restDistanceM }
         val results = combineResults(approach, facts)
         assertEquals(1, results.stations.size)
         assertEquals(0, results.stations[0].stationIndex)
@@ -60,9 +57,7 @@ class CombineResultsTest {
 
     @Test
     fun `combineResults is order independent`() {
-        val rests = listOf(1.0, 6.0, 7.0, 8.0, 10.0, 12.0)
-        val indices = listOf(0, 1, 6, 7, 12, 13)
-        val facts = indices.zip(rests).map { (index, rest) -> CombineShotFacts(index, Lie.GREEN, rest) }
+        val facts = goldenFacts
 
         val forward = combineResults(approach, facts)
         val reversed = combineResults(approach, facts.reversed())
@@ -99,9 +94,8 @@ class CombineResultsTest {
 
     @Test
     fun `driver station rates drives against per-band typical drives`() {
-        val indices = listOf(4, 5, 10, 11, 16, 17) // DRIVER station indices
-        val rests = listOf(74.48, 138.55, 184.30, 205.57, 102.32, 169.54)
-        val facts = indices.zip(rests).map { (index, rest) -> CombineShotFacts(index, Lie.FAIRWAY, rest) }
+        val facts = driverDemoFacts
+        val rests = facts.map { it.restDistanceM }
         val results = combineResults(approach, facts)
         assertEquals(1, results.stations.size)
         assertEquals("DRIVER", results.stations[0].label)
@@ -116,18 +110,14 @@ class CombineResultsTest {
     @Test
     fun `golden fixture locks to the tour band`() {
         // Overall ≈ -5.84 (clamped low) -> nearest anchor is TOUR (-5).
-        val rests = listOf(1.0, 6.0, 7.0, 8.0, 10.0, 12.0)
-        val indices = listOf(0, 1, 6, 7, 12, 13)
-        val facts = indices.zip(rests).map { (index, rest) -> CombineShotFacts(index, Lie.GREEN, rest) }
+        val facts = goldenFacts
         assertEquals(SkillBand.TOUR, combineResults(approach, facts).lockedBand)
     }
 
     @Test
     fun `driver demo run locks to the 18 handicap band`() {
         // Overall ≈ 21.83 -> nearest anchor is HCP18 (18).
-        val indices = listOf(4, 5, 10, 11, 16, 17) // DRIVER station indices
-        val rests = listOf(74.48, 138.55, 184.30, 205.57, 102.32, 169.54)
-        val facts = indices.zip(rests).map { (index, rest) -> CombineShotFacts(index, Lie.FAIRWAY, rest) }
+        val facts = driverDemoFacts
         assertEquals(SkillBand.HCP18, combineResults(approach, facts).lockedBand)
     }
 
