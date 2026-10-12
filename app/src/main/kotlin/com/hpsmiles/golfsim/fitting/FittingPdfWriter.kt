@@ -267,10 +267,10 @@ object FittingPdfWriter {
     }
 
     private fun drawShotHeader(canvas: Canvas, colX: FloatArray, rowTop: Float, paints: Paints) {
-        // CARRY/TOTAL/BALL/CHS/SMASH/SPIN/DIR align under the same summary
-        // metric columns (indices 5,6,3,2,4,9,8 of the 12-column layout).
-        val header = listOf("CARRY", "TOTAL", "BALL", "CHS", "SMASH", "SPIN", "DIR")
-        val colIndices = listOf(5, 6, 3, 2, 4, 9, 8)
+        // Shot metrics align under the same summary metric columns (indices
+        // 5,6,3,2,4,7,8,9,10,11 of the 13-column layout: CARRY … OFFLINE).
+        val header = listOf("CARRY", "TOTAL", "BALL", "CHS", "SMASH", "LAUNCH", "DIR", "SPIN", "SPIN AXIS", "OFFLINE")
+        val colIndices = listOf(5, 6, 3, 2, 4, 7, 8, 9, 10, 11)
         paints.shotHeader.textAlign = Paint.Align.CENTER
         header.forEachIndexed { i, label ->
             val idx = colIndices[i]
@@ -279,8 +279,11 @@ object FittingPdfWriter {
     }
 
     private fun drawShotRow(canvas: Canvas, shot: FittingPdfData.ShotRow, colX: FloatArray, rowTop: Float, paints: Paints) {
-        val values = listOf(shot.carry, shot.total, shot.ball, shot.chs, shot.smash, shot.spin, shot.dir)
-        val colIndices = listOf(5, 6, 3, 2, 4, 9, 8)
+        val values = listOf(
+            shot.carry, shot.total, shot.ball, shot.chs, shot.smash,
+            shot.launchAngle, shot.dir, shot.spin, shot.spinAxis, shot.offline,
+        )
+        val colIndices = listOf(5, 6, 3, 2, 4, 7, 8, 9, 10, 11)
         paints.shot.textAlign = Paint.Align.CENTER
         paints.shot.color = if (shot.isExcluded) INK_MUTED else INK_SOFT
         if (shot.isExcluded) {

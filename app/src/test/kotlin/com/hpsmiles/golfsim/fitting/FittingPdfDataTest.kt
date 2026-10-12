@@ -76,6 +76,29 @@ class FittingPdfDataTest {
     }
 
     @Test
+    fun `shot row - launch, spin axis and offline formatted per shot`() {
+        // The PDF's per-shot detail rows now carry LAUNCH, SPIN AXIS and
+        // OFFLINE alongside DIR (user review 2026-10-12): LAUNCH unsigned,
+        // DIR/SPIN AXIS signed degrees, OFFLINE the shot's signed side in metres.
+        val shots = listOf(shot(1, 1, "A", side = -3.5, dir = -2.0, ts = 100))
+        val row = FittingPdfData.build(shots).clubs.single().shots.single()
+        assertEquals("12.0°", row.launchAngle)
+        assertEquals("-2.0°", row.dir)
+        assertEquals("-4.0°", row.spinAxis)
+        assertEquals("-3.5 m", row.offline)
+    }
+
+    @Test
+    fun `shot row - excluded shots still carry the new metrics`() {
+        val shots = listOf(shot(1, 1, "A", excluded = true, side = 2.5, ts = 100))
+        val row = FittingPdfData.build(shots).clubs.single().shots.single()
+        assertTrue(row.isExcluded)
+        assertEquals("12.0°", row.launchAngle)
+        assertEquals("-4.0°", row.spinAxis)
+        assertEquals("+2.5 m", row.offline)
+    }
+
+    @Test
     fun `delta row - auto-pair two clubs, cells are dash where delta is null`() {
         // club2 has no kept shots (only an excluded one) → every delta is null.
         val shots = listOf(
