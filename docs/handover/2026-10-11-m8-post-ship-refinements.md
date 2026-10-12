@@ -1,8 +1,8 @@
 # Handover — M8 post-ship refinements
 
 **Date:** 2026-10-11 (evening) · **Repo:** `C:\aaa\code\golf sim`
-**Branch:** `m8-custom-combines` (NOT merged to master) · **HEAD:** `a239383` · **Working tree:** clean
-**Why this doc:** the refinement increment is complete through T4; only the T5 on-device gate remains (blocked on the tablet being connected).
+**Branch:** `m8-custom-combines` (NOT merged to master) · **HEAD:** `a6f3336` · **Working tree:** clean
+**Why this doc:** the refinement increment is **complete (T1–T5 shipped and verified on the tablet)**. The next piece of work is a fitting-results follow-up (see §2).
 
 ---
 
@@ -20,23 +20,25 @@
 
 **Test state:** 340 green — `:core:scoring:test` 25, `:app:testDebugUnitTest` 308, `:core:data` `CombineRepositoryTest` 7.
 
-**Increment status:** the 5-task refinement increment is **shipped through T4** (`ceead19`, `8047f81`, `74d2152`, `a239383`). **Only T5's on-device gate remains** — it needs the Lenovo tablet connected (`:app:installDebug` + the checklist in §5/§8). Design + plan are committed (`f69c346`).
+**Increment status: COMPLETE.** All five tasks shipped and verified on the tablet: `ceead19` (T1), `8047f81` (T2), `74d2152` (T3), `a239383` (T4), `a6f3336` (T5 device-checklist corrections). Design + plan are committed (`f69c346`).
+
+**T5 device checklist result:** passed, with two corrections folded into `a6f3336`:
+- **VS BANDS clarified** — the card now carries the caption "AVG STROKES GAINED PER SHOT VS EACH BENCHMARK · TEAL = THIS SESSION'S" and highlights the locked band in teal. (The strip is the 4-band solve's mean per-shot SG, NOT a handicap-vs-band figure; a 25+ overall with only −0.6 vs TOUR is expected — the estimate is the zero crossing of the SG-vs-band curve, extrapolated along a shallow slope.)
+- **Top-down ring** — one **enclosing** ring per station (M7 minimum-enclosing `DispersionEllipse.fromKept`, 5% buffer, containment-verified), traced as a dashed path because the plan view scales the two world axes differently. Replaces the σ-based ellipse.
 
 ---
 
-## 2. Remaining work (T5 only)
+## 2. Next work (NOT started) — fitting top-down placement + orientation
 
-```powershell
-cd 'C:\aaa\code\golf sim'
-git status --short          # expect clean
-git log --oneline -6        # expect HEAD a239383
-$env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"
-.\gradlew.bat --console=plain :app:installDebug     # needs the tablet connected (adb serial HA2C96BN)
-```
+User request after the M8 device review (2026-10-12):
 
-Then walk the user through the on-device checklist (§5 T5 row + §8) and commit any corrections. `gradlew build` already passed for `a239383`.
+> "The top down view in this is better than the view in the fit. I think the left to right, vs up/down is better. I also think in the fitting results the top down view should automatically be shown under the table, it doesn't need it's own tab."
 
-**If the tablet is not connected**, stop and ask the user to connect it — nothing else is outstanding.
+So, for **M7 fitting results** (`FittingResultsView.kt` / `FittingTopDown.kt`):
+1. **Orientation**: adopt the combine's **horizontal** plan view (tee left, down-range to the right) instead of the current vertical one (tee at the bottom, down-range up).
+2. **Placement**: the top-down pane renders **automatically under the TABLE**, removing its own tab.
+
+Reuse from the M8 work: `CombineTopDownView.kt` (horizontal mapping, corridor, 50 m gridlines, dashed enclosing ring drawn as a transformed path) and `DispersionEllipse` (already shared). Watch out: M7 has extra behaviours to preserve — the auto-fit `computeTopDownFit` bounds, buffered-box rings, club colours by first appearance, the PDF export (`FittingPdfData` / `FittingPdfWriter`) which mirrors the top-down pane, and the `TopDownModel` derivation. Not yet brainstormed/spec'd — start with the brainstorming skill.
 
 
 ---
@@ -85,7 +87,7 @@ Rules learned the hard way:
 | T2 | Room v7: `combine_shots.restXM/restYM` (+ `MIGRATION_6_7`, `7.json`, migration test, repository + AppRoot append) | **DONE** | `8047f81` |
 | T3 | Results redesign (`CombineResultsView` rewrite) | **DONE** | `74d2152` |
 | T4 | Top-down dispersion view (`CombineTopDownView.kt` + pure `CombineDispersion` + tests + toggle) | **DONE** | `a239383` |
-| T5 | Final gate (`gradlew build` ✅, `:app:installDebug`, on-device checklist) | **build green; device gate pending** | — |
+| T5 | Final gate (`gradlew build` ✅, `:app:installDebug`, on-device checklist) | **DONE** — checklist passed, corrections in `a6f3336` | `a6f3336` |
 
 ---
 

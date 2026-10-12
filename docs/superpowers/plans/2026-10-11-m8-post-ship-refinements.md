@@ -230,14 +230,14 @@ git commit -m "feat(combine): top-down dispersion view"
 
 ### Task 5: Final gate
 
-- [ ] **Step 1:** `.\gradlew.bat build` → BUILD SUCCESSFUL.
-- [ ] **Step 2:** `.\gradlew.bat :app:installDebug` (tablet `TB373FU - 16`).
-- [ ] **Step 3:** hand the user the on-device checklist: results hero + per-target row + VS BANDS + record
+- [x] **Step 1:** `.\gradlew.bat build` → BUILD SUCCESSFUL.
+- [x] **Step 2:** `.\gradlew.bat :app:installDebug` (tablet `TB373FU - 16`).
+- [x] **Step 3:** hand the user the on-device checklist: results hero + per-target row + VS BANDS + record
   banner; SHOTS collapsed by default and expanding to the ledger scored against the locked band; TOP-DOWN
   toggle showing the three groups with 1σ rings, the 100 m/150 m greens + pins and the per-group stats;
   HISTORY drill read-only version of both views; a new demo run storing coordinates (older sessions show
   "no dispersion data").
-- [ ] **Step 4:** commit any checklist corrections.
+- [x] **Step 4:** commit any checklist corrections.
 
 ## Self-review
 
