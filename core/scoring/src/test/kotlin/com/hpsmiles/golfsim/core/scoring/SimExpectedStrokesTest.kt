@@ -123,6 +123,20 @@ class SimExpectedStrokesTest {
     }
 
     @Test
+    fun `zero sum - band golfer scores zero sg against own band`() {
+        for (band in bands) {
+            for (start in SimExpectedStrokes.START_DISTANCES) {
+                val eStart = SimExpectedStrokes.simStartValue(band, start)
+                val sum = SimExpectedStrokes.outcomeGrid(band, start).sumOf { o ->
+                    o.probability *
+                        (eStart - SimExpectedStrokes.simEndValue(band, o.lie, o.metres) - 1.0)
+                }
+                assertEquals("zero-sum band=$band start=$start", 0.0, sum, 1e-9)
+            }
+        }
+    }
+
+    @Test
     fun `drive sg is zero at the scratch typical-drive reference`() {
         // DRIVER_HOLE_M 340 − SCRATCH typicalDriveM 239.6 = 100.4 (reuses public const from ExpectedStrokes.kt)
         assertEquals(
