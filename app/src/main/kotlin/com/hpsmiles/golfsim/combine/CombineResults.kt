@@ -1,12 +1,12 @@
 package com.hpsmiles.golfsim.combine
 
 import com.hpsmiles.golfsim.core.data.CombineShotEntity
+import com.hpsmiles.golfsim.core.scoring.CombineConversions
 import com.hpsmiles.golfsim.core.scoring.HandicapEstimate
 import com.hpsmiles.golfsim.core.scoring.Lie
+import com.hpsmiles.golfsim.core.scoring.SimExpectedStrokes
 import com.hpsmiles.golfsim.core.scoring.SkillBand
-import com.hpsmiles.golfsim.core.scoring.drivingStrokesGained
 import com.hpsmiles.golfsim.core.scoring.handicapMatchSg
-import com.hpsmiles.golfsim.core.scoring.strokesGained
 
 /**
  * Raw scoring facts for one shot — the fields the SG engine needs, plus the finish
@@ -113,17 +113,18 @@ private fun perShotSg(entry: CombineCatalogEntry, fact: CombineShotFacts): Map<S
     SkillBand.entries.associateWith { shotSgForBand(entry, fact, it) }
 
 /**
- * SG for one combine shot against a single [band]. DRIVER-station shots are rated against the
- * band's typical drive ([drivingStrokesGained] on the rest lie/distance); every other station uses
- * the TEE-table [strokesGained] from its [CombinePlan.shotInput]. This is the routing shared by the
- * four-band solve and the benchmark-locked ledger column.
+ * SG for one combine shot against a single [band]: DRIVER-station shots are rated against the
+ * band's typical drive in sim terms ([SimExpectedStrokes.simDrivingStrokesGained]) plus the fitted
+ * driver conversion; every other station uses the sim model from its [CombinePlan.shotInput] start
+ * plus the fitted per-station approach conversion. Spec §3–§5.
  */
 fun shotSgForBand(entry: CombineCatalogEntry, fact: CombineShotFacts, band: SkillBand): Double {
     val station = entry.stations[CombinePlan.stationIndexFor(fact.shotIndex)]
     return if (station.kind == StationKind.DRIVER) {
-        drivingStrokesGained(band, fact.restLie, fact.restDistanceM)
+        SimExpectedStrokes.simDrivingStrokesGained(band, fact.restLie, fact.restDistanceM) + CombineConversions.DRIVER
     } else {
         val input = CombinePlan.shotInput(entry, fact.shotIndex, fact.restLie, fact.restDistanceM)
-        strokesGained(band, input.startLie, input.startM, input.endLie, input.endM)
+        SimExpectedStrokes.simStrokesGained(band, input.startLie, input.startM, input.endLie, input.endM) +
+            CombineConversions.approachOffsetFor(station.startDistanceM)
     }
 }

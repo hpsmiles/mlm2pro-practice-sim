@@ -12,11 +12,12 @@ import kotlin.math.sqrt
  */
 object SimExpectedStrokes {
 
-    // Fitting knobs — public vars so the app-module fitting harness can scan them; task 9 pins them as private consts.
-    var GAMMA = 1.05
-    var K_FAIRWAY = 0.10
-    var K_ROUGH = 0.15
-    var SHED_TIGHTENING = 0.25
+    // Fitted knobs — pinned to the task-9 harness winning combo (κ_r 0.12, γ 1.0, κ_f 0.05,
+    // shedTightening 0.3); the calibration session solves to the owner's anchors (spec §4, §8).
+    private const val GAMMA = 1.0
+    private const val K_FAIRWAY = 0.05
+    private const val K_ROUGH = 0.12
+    private const val SHED_TIGHTENING = 0.3
 
     private const val K_SLOPE = 0.4
     private const val RAMP_TAPIN_M = 1.0
@@ -88,6 +89,10 @@ object SimExpectedStrokes {
         val roughShare = MISS_ROUGH_SHARE.getValue(band)
         val nodes = ArrayList<Outcome>(14)
         for (z in GREEN_Z) {
+            // Accepted mass-preserving collapse: for long/weak approaches the 15.0 m ceiling
+            // pins up to 5/9 green nodes at 15.0 (the real table prices beyond 15 m anyway);
+            // probabilities are untouched so the grid still sums to 1 — only the proximity
+            // spread truncates at the green edge.
             val x = (mean + z * sd).coerceIn(GREEN_NODE_FLOOR_M, GREEN_NODE_CEILING_M)
             nodes.add(Outcome(Lie.GREEN, x, g / GREEN_Z.size))
         }

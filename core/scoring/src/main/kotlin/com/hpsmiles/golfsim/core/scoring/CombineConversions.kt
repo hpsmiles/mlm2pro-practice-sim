@@ -2,13 +2,14 @@ package com.hpsmiles.golfsim.core.scoring
 
 /**
  * Layer 2: fitted shed→real conversion offsets (SG per shot, per station kind).
- * Public vars exist for the fitting harness; task 9 pins these to fitted literals
- * (vars become vals) and the calibration record lives in the spec §8 tuning log. Spec §4.
+ * Fitted to the owner's declared anchors by the task-9 harness (spec §4, §8 tuning log);
+ * pinned literals — the calibration session (2026-10-12) solves to +3 / −1 / +8.
+ * Spec §4.
  */
 object CombineConversions {
-    var APPROACH_100M = 0.0
-    var APPROACH_150M = 0.0
-    var DRIVER = 0.0
+    val APPROACH_100M = -0.169254
+    val APPROACH_150M = -0.221857
+    val DRIVER = -0.065042
 
     /**
      * Approach conversion at a start distance: linear interpolation between the two fitted

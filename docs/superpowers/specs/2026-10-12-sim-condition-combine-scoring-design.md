@@ -17,7 +17,7 @@ Cross-checks: the owner's Rapsodo combines rate ≈ 5.5 HCP for similar shot qua
 Two-layer scoring replaces the single-layer real-course SG path:
 
 1. **Layer 1 — sim-native pricing.** Positions are valued at their in-shed cost. Fixes relative distortions: green vs rough vs fairway finishes, band compression across stations, driver-station sensitivity to rough rests.
-2. **Layer 2 — shed→real conversion.** One fitted SG constant per station kind (approach / driver) converts the shed-internal solve into real-course-equivalent HCs, calibrated to the owner's declared anchors (§6).
+2. **Layer 2 — shed→real conversion.** Per-station fitted SG constants convert the shed-internal solve into real-course-equivalent HCs, calibrated to the owner's declared anchors (§6): `CONVERSION_APPROACH_100M`, `CONVERSION_APPROACH_150M` (interpolated/extrapolated between stations), and `CONVERSION_DRIVER`.
 
 Considered and rejected:
 - *Calibration offsets on raw real-course SG.* Mechanism-blind: leaves rough/green/driver structure distorted, and needs station-differentiated offsets that are pure curve-fitting.

@@ -1,13 +1,14 @@
 package com.hpsmiles.golfsim.combine
 
 import com.hpsmiles.golfsim.core.data.CombineShotEntity
+import com.hpsmiles.golfsim.core.scoring.CombineConversions
 import com.hpsmiles.golfsim.core.scoring.HandicapEstimate
 import com.hpsmiles.golfsim.core.scoring.Lie
+import com.hpsmiles.golfsim.core.scoring.SimExpectedStrokes
 import com.hpsmiles.golfsim.core.scoring.SkillBand
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
-import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class CombineResultsTest {
@@ -23,9 +24,9 @@ class CombineResultsTest {
         assertEquals(1, results.stations.size)
         assertEquals(0, results.stations[0].stationIndex)
         assertEquals("100 m", results.stations[0].label)
-        assertEquals(-5.84, results.overall.est, 0.05)
-        assertTrue(results.overall.clampedLow)
-        assertEquals(listOf("TOUR+", "SCR", "SCR", "SCR", "≈3", "≈7"), results.stations[0].chips)
+        assertEquals(7.3109, results.overall.est, 0.05)
+        assertFalse(results.overall.clampedLow)
+        assertEquals(listOf("TOUR+", "≈7", "≈10", "≈11", "≈12", "≈13"), results.stations[0].chips)
         assertEquals("AVG TO PIN", results.stations[0].avgLabel)
         assertEquals(rests.average(), results.stations[0].avgValue, 1e-9)
     }
@@ -99,53 +100,54 @@ class CombineResultsTest {
         val results = combineResults(approach, facts)
         assertEquals(1, results.stations.size)
         assertEquals("DRIVER", results.stations[0].label)
-        assertEquals(21.83, results.stations[0].estimate.est, 0.1)
+        assertEquals(27.0026, results.stations[0].estimate.est, 0.1)
         assertEquals("AVG TOTAL", results.stations[0].avgLabel)
         assertEquals(340.0 - rests.average(), results.stations[0].avgValue, 1e-6)
-        assertEquals(listOf("SCR", "≈13", "25+", "25+", "≈0", "25+"), results.stations[0].chips)
+        assertEquals(listOf("SCR", "≈17", "25+", "25+", "≈4", "25+"), results.stations[0].chips)
     }
 
     // ---- Benchmark lock (Task 1) ----
 
     @Test
-    fun `golden fixture locks to the tour band`() {
-        // Overall ≈ -5.84 (clamped low) -> nearest anchor is TOUR (-5).
+    fun `golden fixture locks to the ten handicap band`() {
+        // Overall ≈ 7.31 -> nearest anchor is HCP10 (10).
         val facts = goldenFacts
-        assertEquals(SkillBand.TOUR, combineResults(approach, facts).lockedBand)
+        assertEquals(SkillBand.HCP10, combineResults(approach, facts).lockedBand)
     }
 
     @Test
     fun `driver demo run locks to the 18 handicap band`() {
-        // Overall ≈ 21.83 -> nearest anchor is HCP18 (18).
+        // Overall ≈ 27.0 -> nearest anchor is HCP18 (18).
         val facts = driverDemoFacts
         assertEquals(SkillBand.HCP18, combineResults(approach, facts).lockedBand)
     }
 
     @Test
     fun `scratch-level driver run locks to the scratch band`() {
-        // Six drives that each leave the SCRATCH typical-drive reference rest (100.4 m),
-        // so the four-band solve lands exactly on the 0 anchor -> SCRATCH.
+        // Six drives that each leave the SCRATCH typical-drive reference rest (100.4 m).
         val indices = listOf(4, 5, 10, 11, 16, 17) // DRIVER station indices
         val facts = indices.map { CombineShotFacts(it, Lie.FAIRWAY, DRIVER_HOLE_M - 239.6) }
         val results = combineResults(approach, facts)
-        assertEquals(0.0, results.overall.est, 0.01)
+        assertEquals(3.5091, results.overall.est, 0.01)
         assertEquals(SkillBand.SCRATCH, results.lockedBand)
     }
 
     @Test
-    fun `shotSgForBand routes approach shots through the tee table`() {
-        // 100 m approach, rest 1.0 m on the green: strokesGained(SCRATCH, FAIRWAY, 100, GREEN, 1)
-        // = ES(SCRATCH, FAIRWAY, 100.0) - ES(SCRATCH, GREEN, 1.0) - 1 = 3.026739 - 1.076 - 1.
+    fun `shotSgForBand routes approach shots through the sim model plus approach conversion`() {
         val fact = CombineShotFacts(0, Lie.GREEN, 1.0)
-        assertEquals(0.951, shotSgForBand(approach, fact, SkillBand.SCRATCH), 0.01)
+        val input = CombinePlan.shotInput(approach, 0, fact.restLie, fact.restDistanceM)
+        val expected = SimExpectedStrokes.simStrokesGained(
+            SkillBand.SCRATCH, input.startLie, input.startM, fact.restLie, fact.restDistanceM,
+        ) + CombineConversions.approachOffsetFor(100.0)
+        assertEquals(expected, shotSgForBand(approach, fact, SkillBand.SCRATCH), 1e-9)
     }
 
     @Test
-    fun `shotSgForBand routes driver shots through the typical-drive table`() {
-        // Driver rest 41.23 m: drivingStrokesGained(HCP18, FAIRWAY, 41.23)
-        // = ES(HCP18, FAIRWAY, 146.1) - ES(HCP18, FAIRWAY, 41.23) = 4.437826 - 3.401696.
+    fun `shotSgForBand routes driver shots through the sim drive model plus driver conversion`() {
         val fact = CombineShotFacts(4, Lie.FAIRWAY, 41.23)
-        assertEquals(1.036, shotSgForBand(approach, fact, SkillBand.HCP18), 0.01)
+        val expected = SimExpectedStrokes.simDrivingStrokesGained(SkillBand.HCP18, fact.restLie, fact.restDistanceM) +
+            CombineConversions.DRIVER
+        assertEquals(expected, shotSgForBand(approach, fact, SkillBand.HCP18), 1e-9)
     }
 
     @Test
