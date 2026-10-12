@@ -48,11 +48,18 @@ is unchanged.
 ## 3. Top-down dispersion view
 
 - Reached from the results screen via a **TOP-DOWN** toggle.
-- Plan view, horizontal, tee at the left, 0–330 m to the right: the fairway corridor at its constant 28 m
-  width, distance gridlines and labels every 50 m, and the 100 m and 150 m greens drawn as circles with pins.
-- Three colour-coded shot groups (100 m, 150 m, driver): finish dots, a centroid marker, and a single
-  **1σ** dispersion ellipse drawn dashed. Approach groups are plotted relative to their own pin; the driver
-  group is plotted in absolute hole coordinates (its finishes along the corridor).
+- Plan view, horizontal, **true-scale** — one pixels-per-metre for both axes, so greens render as real
+  circles and rings keep their shape. The distance window is cropped to the session's actual content
+  (greens, finishes, ring extents), snapped outward to 25 m and clamped to the fairway; the full 0–330 m
+  corridor appears only when content demands it, and the tee marker shows only when inside the window.
+- The fairway corridor at its constant 28 m width wears the range treatment (mown stripes on the rough
+  ground, framed card pane) — same palette as the fitting top-down. Distance gridlines + labels every
+  50 m inside the window; ±10/±20 m dashed lateral guides with labels give the lateral scale. The 100 m
+  and 150 m greens are drawn as circles with pins.
+- Three colour-coded shot groups (100 m, 150 m, driver): finish dots, a centroid marker, and the
+  minimum-enclosing dispersion ring drawn dashed (M7 5%-buffer ellipse, containment-verified). Approach
+  groups are plotted relative to their own pin; the driver group is plotted in absolute hole coordinates
+  (its finishes along the corridor).
 - Side panel: per-group stats — avg to pin (approaches) / avg total (driver), long–short spread, left–right
   spread.
 

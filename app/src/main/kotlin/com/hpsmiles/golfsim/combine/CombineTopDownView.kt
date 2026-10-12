@@ -2,11 +2,14 @@ package com.hpsmiles.golfsim.combine
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -15,8 +18,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -32,17 +37,25 @@ import com.hpsmiles.golfsim.fitting.FittingColors
 import com.hpsmiles.golfsim.range.RangeScene
 import kotlin.math.PI
 import kotlin.math.abs
+import kotlin.math.ceil
 import kotlin.math.cos
+import kotlin.math.floor
 import kotlin.math.sin
 
 private val SidePanelWidth = 210.dp
 
 /**
  * M8 post-ship spec §3: horizontal plan view of a completed session's finish points.
- * Tee on the left, 0–330 m to the right, the constant 28 m corridor, 50 m gridlines,
- * each approach station's green + pin, and one colour-coded group per station (finish
- * dots, centroid, one dashed 1σ ellipse) beside a per-group stats panel. Falls back to
- * an empty state when no shot carries rest coordinates (pre-v7 sessions).
+ * Horizontal corridor cropped to the session's actual content (snapped to 25 m, the
+ * full 0–330 m only when content demands it), true-scale 28 m corridor band, 50 m
+ * gridlines, ±10/±20 m dashed lateral guides with edge labels (fitting top-down
+ * parity), each approach station's green + pin, and one colour-coded group per
+ * station (finish dots, centroid, one dashed 1σ ellipse) beside a per-group stats
+ * panel. Falls back to an empty state when no shot carries rest coordinates
+ * (pre-v7 sessions). Colour treatment matches the fitting top-down (2026-10-13):
+ * the pane is framed as a Card sibling and draws the painted-range ground —
+ * green rough backdrop, mown fairway stripes, white-alpha centre/guide ink,
+ * white keylines under the colour marks (TextMuted vanishes on the greens).
  */
 @Composable
 internal fun CombineTopDownView(
@@ -79,13 +92,26 @@ internal fun CombineTopDownView(
     }
 
     Row(modifier, horizontalArrangement = Arrangement.spacedBy(GolfSpacing.Lg)) {
-        CombineTopDownCanvas(
-            entry = entry,
-            groups = groups,
-            pointsByStation = pointsByStation,
-            rings = rings,
-            modifier = Modifier.weight(1f).fillMaxHeight(),
-        )
+        // Framed like the fitting top-down pane (FittingResultsView parity):
+        // Card surface, card corner, 1 dp Line border, Md padding — the map
+        // reads as the same framed facility card.
+        Box(
+            Modifier
+                .weight(1f)
+                .fillMaxHeight()
+                .clip(RoundedCornerShape(GolfSpacing.CornerCard))
+                .background(GolfColors.Card)
+                .border(1.dp, GolfColors.Line, RoundedCornerShape(GolfSpacing.CornerCard))
+                .padding(GolfSpacing.Md),
+        ) {
+            CombineTopDownCanvas(
+                entry = entry,
+                groups = groups,
+                pointsByStation = pointsByStation,
+                rings = rings,
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
         Column(
             modifier = Modifier.width(SidePanelWidth).fillMaxHeight(),
             verticalArrangement = Arrangement.spacedBy(GolfSpacing.Md),
@@ -132,89 +158,213 @@ private fun CombineTopDownCanvas(
         }
     }
     Canvas(modifier) {
-        drawRect(GolfColors.Base)
+        // Range-consistent ground (fitting top-down parity): dark rough
+        // everywhere; the mown fairway corridor shades over it below.
+        drawRect(GolfColors.RangeRough)
 
         val leftPad = 26.dp.toPx()
         val rightPad = 12.dp.toPx()
-        val vPad = 12.dp.toPx()
-        val worldWidthM = RangeScene.FAIRWAY_END_Y
-        val pxPerMX = (size.width - leftPad - rightPad) / worldWidthM.toFloat()
+        // ONE scale for both world axes, so greens are true circles and rings keep
+        // their true shape. The DISTANCE window is cropped to this session's actual
+        // content (snapped outward to 25 m), so empty range left/right of the action
+        // is trimmed away; the lateral window is sized to fit everything. Spare pane
+        // space stays quiet background around the centred corridor.
+        val fairwayEndM = RangeScene.FAIRWAY_END_Y
         val corridorHalfM = RangeScene.fairwayHalfWidth(0.0)
         val midY = size.height / 2f
-        // Lateral window: at least a couple of corridors tall, else wide enough to hold
-        // every group's 1σ ring plus a small margin (so no ring is clipped).
-        val lateralHalfM = maxOf(
-            corridorHalfM * 2.5,
-            groups.maxOf { abs(it.centroidX) + 2.5 * it.sigmaX + 2.0 },
-        )
-        val pxPerMY = (size.height / 2f - vPad) / lateralHalfM.toFloat()
-        fun sx(restY: Double) = leftPad + (restY * pxPerMX).toFloat()
-        fun sy(restX: Double) = midY - (restX * pxPerMY).toFloat()
 
-        // Corridor (the constant 28 m fairway band) + centre line.
+        // Distance content extent (world Y): every approach green (centre ± radius),
+        // every finish dot, and every ring's worst-case downrange reach (centre ± the
+        // larger semi-axis — same worst-case convention as the lateral window).
+        val greenDistancesM = entry.stations
+            .filter { it.kind == StationKind.APPROACH }
+            .flatMap { station ->
+                val pin = station.pins.firstOrNull() ?: PinOffset(0.0, 0.0)
+                val centreM = station.startDistanceM + pin.dy
+                listOf(centreM - station.greenRadiusM, centreM + station.greenRadiusM)
+            }
+        val dotDistancesM = pointsByStation.values.flatMap { points -> points.map { it.second } }
+        val ringDistancesM = rings.values.filterNotNull().flatMap { ring ->
+            val reachM = maxOf(ring.semiAxisM, ring.semiCrossM)
+            listOf(ring.centreTotalM - reachM, ring.centreTotalM + reachM)
+        }
+        val distanceExtentM = greenDistancesM + dotDistancesM + ringDistancesM
+        // Snap outward to 25 m and clamp to the fairway; fall back to the full
+        // corridor when the session carries no distance content at all.
+        var windowMinM = distanceExtentM.minOrNull()
+            ?.let { floor(it / 25.0) * 25.0 }?.coerceAtLeast(0.0) ?: 0.0
+        var windowMaxM = distanceExtentM.maxOrNull()
+            ?.let { ceil(it / 25.0) * 25.0 }?.coerceAtMost(fairwayEndM) ?: fairwayEndM
+        // Guard: a degenerate window would blow up pxPerM — keep at least 50 m,
+        // centred on the content and clamped inside the fairway.
+        if (windowMaxM - windowMinM < 50.0) {
+            val centreM = (windowMinM + windowMaxM) / 2.0
+            windowMinM = (centreM - 25.0).coerceAtLeast(0.0)
+            windowMaxM = (windowMinM + 50.0).coerceAtMost(fairwayEndM)
+            windowMinM = windowMaxM - 50.0
+        }
+        val windowWidthM = windowMaxM - windowMinM
+
+        val pxPerM = (size.width - leftPad - rightPad) / windowWidthM.toFloat()
+        // Lateral half-window: the corridor, the biggest green (radius + pin offset),
+        // and every station's enclosing ring (rotated world ellipse → worst-case
+        // lateral extent is centre ± the larger semi-axis), each with margin.
+        val ringLateralHalfM = rings.values.filterNotNull().maxOfOrNull { ring ->
+            abs(ring.centreSideM) + maxOf(ring.semiAxisM, ring.semiCrossM)
+        } ?: 0.0
+        val greenLateralHalfM = entry.stations
+            .filter { it.kind == StationKind.APPROACH }
+            .maxOfOrNull { station ->
+                val pin = station.pins.firstOrNull() ?: PinOffset(0.0, 0.0)
+                abs(pin.dx) + station.greenRadiusM
+            } ?: 0.0
+        val lateralHalfM = maxOf(
+            corridorHalfM,
+            greenLateralHalfM,
+            ringLateralHalfM,
+        ) + 2.0
+        fun sx(restY: Double) = leftPad + ((restY - windowMinM) * pxPerM).toFloat()
+        fun sy(restX: Double) = midY - (restX * pxPerM).toFloat()
+
+        // Corridor (the constant 28 m fairway band) + centre line, spanning the
+        // cropped window — the band is the backdrop, not content. Range palette
+        // (fitting parity): RangeFairway base + the same 10 m mown stripes the
+        // range and fitting show, intersected with the window so the crop stays
+        // clean; the base rect stays as a safety floor under the stripes.
         val corridorTop = sy(corridorHalfM)
         val corridorBottom = sy(-corridorHalfM)
         drawRect(
-            color = GolfColors.HoleFairway,
-            topLeft = Offset(sx(0.0), corridorTop),
-            size = Size(sx(worldWidthM) - sx(0.0), corridorBottom - corridorTop),
+            color = GolfColors.RangeFairway,
+            topLeft = Offset(sx(windowMinM), corridorTop),
+            size = Size(sx(windowMaxM) - sx(windowMinM), corridorBottom - corridorTop),
         )
+        for (band in 0 until RangeScene.stripeBandCount()) {
+            val (yFrom, yTo) = RangeScene.stripeBand(band)
+            val loM = maxOf(yFrom, windowMinM)
+            val hiM = minOf(yTo, windowMaxM)
+            if (loM >= hiM) continue
+            drawRect(
+                color = if (RangeScene.stripeIsLight(0.0, yFrom)) {
+                    GolfColors.RangeStripeLight
+                } else {
+                    GolfColors.RangeStripeDark
+                },
+                topLeft = Offset(sx(loM), corridorTop),
+                size = Size(sx(hiM) - sx(loM), corridorBottom - corridorTop),
+            )
+        }
         drawLine(
-            GolfColors.Line,
-            Offset(sx(0.0), midY),
-            Offset(sx(worldWidthM), midY),
+            Color.White.copy(alpha = RangeScene.CENTER_LINE_ALPHA),
+            Offset(sx(windowMinM), midY),
+            Offset(sx(windowMaxM), midY),
             1.5f,
         )
 
-        // 50 m gridlines + labels.
-        labelPaint.color = GolfColors.TextMuted.toArgb()
+        // Vertical extent of the lateral window (content band); gridlines and labels
+        // stay inside it so the spare space above/below remains quiet.
+        val bandTop = sy(lateralHalfM).coerceAtLeast(0f)
+        val bandBottom = sy(-lateralHalfM).coerceAtMost(size.height)
+
+        // 50 m gridlines + labels, only inside the window (window edges snap to 25 m
+        // but get no gridline/label of their own). Label ink = TextSecondary —
+        // fitting parity: TextMuted is functionally invisible on the green rough.
+        labelPaint.color = GolfColors.TextSecondary.toArgb()
         labelPaint.textSize = 10.sp.toPx()
-        var gridM = 50.0
-        while (gridM <= worldWidthM) {
+        var gridM = maxOf(50.0, ceil(windowMinM / 50.0) * 50.0)
+        while (gridM <= windowMaxM) {
             val x = sx(gridM)
-            drawLine(GolfColors.Line.copy(alpha = 0.6f), Offset(x, 0f), Offset(x, size.height), 1f)
-            drawContext.canvas.nativeCanvas.drawText("${gridM.toInt()} m", x, 12.sp.toPx(), labelPaint)
+            drawLine(GolfColors.Line.copy(alpha = 0.6f), Offset(x, bandTop), Offset(x, bandBottom), 1f)
+            drawContext.canvas.nativeCanvas.drawText("${gridM.toInt()} m", x, bandTop - 4.dp.toPx(), labelPaint)
             gridM += 50.0
         }
 
-        // Tee marker at the world origin.
-        drawCircle(GolfColors.TextPrimary, radius = 2.dp.toPx(), center = Offset(sx(0.0), sy(0.0)))
+        // Lateral scale references (fitting top-down parity): the range's
+        // practice-grid laterals (±10/±20 m) as light dashed guides across the
+        // corridor, each labelled "N m" right-aligned at the canvas edge just
+        // above its line. The dash cycle is honest at true scale (4 m on / 2 m
+        // off × pxPerM). Guides beyond the lateral window are skipped; groups
+        // draw later so data always wins over this quiet furniture. Ink is
+        // fitting's white-alpha (centre-line alpha for labels, guide alpha for
+        // the dashes) so it reads on BOTH the fairway band and the rough.
+        val dashPx = (RangeScene.GUIDE_DASH_ON_M * pxPerM).toFloat()
+        val gapPx = (RangeScene.GUIDE_DASH_OFF_M * pxPerM).toFloat()
+        val visibleGuidesM = RangeScene.GUIDE_LINE_LATERALS_M.filter { abs(it) <= lateralHalfM }
+        for (guideM in visibleGuidesM) {
+            val y = sy(guideM)
+            drawLine(
+                Color.White.copy(alpha = RangeScene.GUIDE_LINE_ALPHA),
+                Offset(sx(windowMinM), y),
+                Offset(sx(windowMaxM), y),
+                1f,
+                pathEffect = PathEffect.dashPathEffect(floatArrayOf(dashPx, gapPx)),
+            )
+        }
+        labelPaint.textAlign = android.graphics.Paint.Align.RIGHT
+        labelPaint.textSize = 10.sp.toPx()
+        labelPaint.color = Color.White.copy(alpha = RangeScene.CENTER_LINE_ALPHA).toArgb()
+        for (guideM in visibleGuidesM) {
+            drawContext.canvas.nativeCanvas.drawText(
+                "${abs(guideM).toInt()} m",
+                size.width - rightPad,
+                sy(guideM) - 2.dp.toPx(),
+                labelPaint,
+            )
+        }
 
-        // Approach greens + pins (each station's visit-1 pin).
+        // Tee marker at the world origin — only when the cropped window includes it.
+        if (windowMinM <= 0.0) {
+            drawCircle(GolfColors.TextPrimary, radius = 2.5.dp.toPx(), center = Offset(sx(0.0), sy(0.0)))
+        }
+
+        // Approach greens + pins (each station's visit-1 pin) — true circles now
+        // that both axes share one scale. Teal boundary gets fitting's white
+        // keyline (α0.55, +1.5 dp total width) beneath the outline bumped to
+        // α0.7 — the colour-on-green remedy — so the circle separates from the
+        // mown fairway; the fill tint stays subtle.
         for (station in entry.stations) {
             if (station.kind != StationKind.APPROACH) continue
             val pin = station.pins.firstOrNull() ?: PinOffset(0.0, 0.0)
             val gx = sx(station.startDistanceM + pin.dy)
             val gy = sy(pin.dx)
-            val rx = (station.greenRadiusM * pxPerMX).toFloat()
-            val ry = (station.greenRadiusM * pxPerMY).toFloat()
-            drawOval(
+            val r = (station.greenRadiusM * pxPerM).toFloat()
+            drawCircle(
                 color = GolfColors.Teal.copy(alpha = 0.18f),
-                topLeft = Offset(gx - rx, gy - ry),
-                size = Size(2 * rx, 2 * ry),
+                radius = r,
+                center = Offset(gx, gy),
             )
-            drawOval(
-                color = GolfColors.Teal.copy(alpha = 0.5f),
-                topLeft = Offset(gx - rx, gy - ry),
-                size = Size(2 * rx, 2 * ry),
+            drawCircle(
+                color = Color.White.copy(alpha = 0.55f),
+                radius = r,
+                center = Offset(gx, gy),
+                style = Stroke(1.5f + 1.5.dp.toPx()),
+            )
+            drawCircle(
+                color = GolfColors.Teal.copy(alpha = 0.7f),
+                radius = r,
+                center = Offset(gx, gy),
                 style = Stroke(1.5f),
             )
-            drawCircle(GolfColors.TextPrimary, radius = 2.5.dp.toPx(), center = Offset(gx, gy))
+            drawCircle(GolfColors.TextPrimary, radius = 3.dp.toPx(), center = Offset(gx, gy))
         }
 
-        // One colour-coded group per station: finish dots, one enclosing ring, centroid.
+        // One colour-coded group per station: finish dots, one enclosing ring,
+        // centroid — each on fitting's keyline recipe (white halo beneath the
+        // colour ink) so every hue separates from rough, fairway and stripes.
         for ((index, group) in groups.withIndex()) {
             val color = FittingColors.clubColor(index)
             val points = pointsByStation[group.stationIndex].orEmpty()
             for ((restX, restY) in points) {
-                drawCircle(color, radius = 3.5.dp.toPx(), center = Offset(sx(restY), sy(restX)))
+                val c = Offset(sx(restY), sy(restX))
+                drawCircle(Color.White.copy(alpha = 0.6f), radius = 4.5.dp.toPx() + 1.dp.toPx(), center = c)
+                drawCircle(color.copy(alpha = 0.9f), radius = 4.5.dp.toPx(), center = c)
             }
-            // The ring is the station's minimum-enclosing ellipse (world frame), so it
-            // covers every finish dot. Traced point-by-point because the canvas scales
-            // the two world axes differently (a rotated world ellipse is not an oval).
+            // The ring is the station's minimum-enclosing ellipse in the WORLD frame;
+            // because it can be rotated relative to the canvas axes it is not an oval,
+            // so it is traced point-by-point (both axes now share one scale).
             val ring = rings[group.stationIndex]
             if (group.hasRing && ring != null) {
                 val path = Path()
+                val dash = PathEffect.dashPathEffect(floatArrayOf(6.dp.toPx(), 4.dp.toPx()))
                 val steps = 72
                 for (i in 0..steps) {
                     val t = 2.0 * PI * i / steps
@@ -227,19 +377,37 @@ private fun CombineTopDownCanvas(
                     if (i == 0) path.moveTo(px, py) else path.lineTo(px, py)
                 }
                 path.close()
+                // Symmetric white keyline (same dashed path, +1.5 dp total
+                // width, 0.75 dp rim per side) beneath the colour ink bumped
+                // to α0.7 — fitting's ring treatment.
                 drawPath(
                     path = path,
-                    color = color,
+                    color = Color.White.copy(alpha = 0.55f),
+                    style = Stroke(
+                        1.5f + 1.5.dp.toPx(),
+                        pathEffect = dash,
+                    ),
+                )
+                drawPath(
+                    path = path,
+                    color = color.copy(alpha = 0.7f),
                     style = Stroke(
                         1.5f,
-                        pathEffect = PathEffect.dashPathEffect(floatArrayOf(6.dp.toPx(), 4.dp.toPx())),
+                        pathEffect = dash,
                     ),
                 )
             }
             val cx = sx(group.centroidY)
             val cy = sy(group.centroidX)
-            drawCircle(color, radius = 5.dp.toPx(), center = Offset(cx, cy), style = Stroke(2f))
-            drawCircle(color, radius = 2.dp.toPx(), center = Offset(cx, cy))
+            drawCircle(
+                Color.White.copy(alpha = 0.6f),
+                radius = 6.dp.toPx(),
+                center = Offset(cx, cy),
+                style = Stroke(2f + 1.5.dp.toPx()),
+            )
+            drawCircle(color.copy(alpha = 0.9f), radius = 6.dp.toPx(), center = Offset(cx, cy), style = Stroke(2f))
+            drawCircle(Color.White.copy(alpha = 0.6f), radius = 2.5.dp.toPx() + 1.dp.toPx(), center = Offset(cx, cy))
+            drawCircle(color.copy(alpha = 0.9f), radius = 2.5.dp.toPx(), center = Offset(cx, cy))
         }
     }
 }
