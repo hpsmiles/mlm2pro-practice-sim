@@ -101,12 +101,14 @@ Tuning rules: only the declared parameters (`d50` per band, `k`, `γ`, `κ_fairw
 
 | Parameter | Seed | Final | Note |
 |---|---|---|---|
-| κ_fairway | 0.10 | — | |
-| κ_rough | 0.15 | — | seed 0.15; calibration scan settles at the 0.12 boundary |
-| γ | 1.05 | — | |
-| d50 (TOUR/SCRATCH/HCP10/HCP18) | 3.2 / 2.75 / 2.2 / 1.8 m | — | |
-| slope k | 0.4 /m | — | |
-| shedTightening | 0.25 | — | |
-| CONVERSION_APPROACH_100M | — | — | fitted on §6 session |
-| CONVERSION_APPROACH_150M | — | — | fitted on §6 session |
-| CONVERSION_DRIVER | — | — | fitted; ≈ −0.08…−0.12 SG/shot (missing penalty stakes) |
+| κ_fairway | 0.10 | 0.05 | |
+| κ_rough | 0.15 | 0.12 | seed 0.15; calibration scan settled at the grid's lower boundary (0.12) |
+| γ | 1.05 | 1.0 | |
+| d50 (TOUR/SCRATCH/HCP10/HCP18) | 3.2 / 2.75 / 2.2 / 1.8 m | 3.2 / 2.75 / 2.2 / 1.8 m | unchanged |
+| slope k | 0.4 /m | 0.4 /m | unchanged seed |
+| shedTightening | 0.25 | 0.3 | |
+| CONVERSION_APPROACH_100M | — | −0.169254 | fitted on §6 session (SG/shot) |
+| CONVERSION_APPROACH_150M | — | −0.221857 | fitted on §6 session (SG/shot) |
+| CONVERSION_DRIVER | — | −0.065042 | fitted; ≈ −0.08…−0.12 SG/shot (missing penalty stakes) |
+
+Winning combo κ_rough 0.12 / γ 1.0 / κ_fairway 0.05 / shedTightening 0.3 → station estimates 3.000 / −1.000 / 8.000 exactly on anchors, emergent overall 2.834 (gate 2.5 ± 1.0) on the 2026-10-12 calibration session.
