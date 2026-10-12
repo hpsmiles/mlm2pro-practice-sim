@@ -34,9 +34,9 @@ JVM-pure, deterministic, metres throughout. Real-course tables remain the substr
   `E_sim_green(band, d) = 1 + (1 − p_sim(band, d)) · γ`
   - `p_sim` — one-putt probability on a dead-flat, known-speed green; logistic in `d` with per-band inflection `d50` (TOUR ≈ 3.2 m falling to HCP18 ≈ 1.8 m) and slope `k ≈ 0.4 /m`, seeded from published make-rate tables shifted favourably for zero break-reading and no speed variance.
   - `γ ≈ 1.05` — expected follow-up strokes after a missed first putt (tap-in range on a flat green).
-  - Relief shape: vanishes at tap-in distance, grows through the 3–15 m rest band (≈ 0.05–0.2 strokes there). The real scratch table prices an 18 ft putt at 1.89; flat-sim says ≈ 1.75.
+  - Relief shape: vanishes at tap-in distance, grows with distance (long-range 3-putt removal); no upper bound is guarded — the honest-zone constraint is relief ≥ 0 for d ≥ 3.0 m. The real scratch table prices an 18 ft putt at 1.89; flat-sim says ≈ 1.75.
 - **FAIRWAY** (missed green): `E_sim = (1 − κ_fairway) · E_real`, seed `κ_fairway ≈ 0.10` (range 0.05–0.15). Flat, predictable surrounds make chips slightly cheaper.
-- **ROUGH**: `E_sim = (1 − κ_rough) · E_real`, seed range **0.12–0.20**. The driver anchor pins this knob (§6): with 2 of 6 driver rests in rough, κ_rough is the only parameter that materially moves the driver station, and the +8 HC target pins it near 0.15. (The 0.25–0.4 brainstorm range overshoots the gate — recorded here so the constraint survives.)
+- **ROUGH**: `E_sim = (1 − κ_rough) · E_real`. Seed range 0.12–0.20; the calibration scan settles at the 0.12 boundary and the driver anchor is absorbed by CONVERSION_DRIVER instead.
 
 ### 3.2 Start values — `simStartValue(band, lie, m)`
 
@@ -56,17 +56,17 @@ Derived, not independently discounted (independent start/end discounts break zer
 ### 3.4 Guards (JVM-tested)
 
 - Monotone-increasing in distance per lie; relief ≥ 0; sane value floors.
-- Cross-lie ordering: `GREEN ≤ FAIRWAY ≤ ROUGH` at equal distance.
+- `E_sim ≤ E_real` (relief ≥ 0) for d ≥ 3.0 m (below 3.0 the flat-sim model may conservatively overprice tap-ins; the overcharge is absorbed by Layer 2); tap-in E(0.3) ∈ (1.0, 1.15]; no cross-lie ordering guard (chipping from tight fairway beats an equal-length putt on the real substrate).
 - Band ordering: `TOUR ≤ SCRATCH ≤ HCP10 ≤ HCP18` for every priced position.
-- **Zero-sum:** a band golfer playing their own modelled distribution scores SG ≈ 0 against their own band anchor (layer 1 only, pre-conversion).
+- **Zero-sum:** a band golfer playing their own modelled distribution scores SG ≈ 0 against their own band anchor (layer 1 only, pre-conversion). Zero-sum is exact by construction (E_start = 1 + Σ p·E_end).
 
 ## 4. Layer 2 — shed→real conversion
 
-- One fitted SG offset per station kind: `CONVERSION_APPROACH`, `CONVERSION_DRIVER` (driver expected ≈ 0 — κ_rough does the driver work; the residual absorbs the missing penalty stakes).
+- Fitted SG offsets applied per shot, one per station: `CONVERSION_APPROACH_100M`, `CONVERSION_APPROACH_150M`, and `CONVERSION_DRIVER` — the DRIVER value fitted ≈ −0.08…−0.12 SG/shot (encodes the missing real-course penalty stakes for offline drives).
 - Applied to per-shot SG at the scoring seam before any solve, so station estimates, the overall solve, per-shot chips, and the locked benchmark band all shift consistently.
 - Fitted by 1-D numeric root-find on the calibration session (§6) so each station solves to its declared anchor.
 - Rationale recorded with the constants: the approach conversion represents how much shed proximity overstates real-course proximity (wind, lie variance, forgiving green); the driver conversion represents the missing real-course penalty stakes for offline drives (no OB/trees/water in the shed).
-- **Single-constant constraint:** one APPROACH constant must bring both approach stations within gate tolerance. This requires layer-1 parameters to make the raw station gap match the anchor gap (≈ 4 HC between the 100 m and 150 m stations on 2026-10-12). If the fit cannot satisfy both within tolerance, fall back to per-station constants (three named constants, same fitting procedure); prefer the single constant when possible (simpler; generalises to the WEDGES combine).
+- **Per-station constants (empirical outcome):** the single APPROACH constant failed on the calibration data (raw station gap 2.21 HC vs anchor gap 4 HC), so the primary path is three fitted constants — CONVERSION_APPROACH_100M, CONVERSION_APPROACH_150M, CONVERSION_DRIVER. The WEDGES combine uses `approachOffsetFor(startDistanceM)`: linear interpolation between the two fitted approach stations, linear extrapolation outside [100, 150].
 
 ## 5. Seam (the only app change)
 
@@ -83,6 +83,8 @@ Owner-declared anchors (real HC 0.0; session self-rated ≈ 2.5 HC):
 | DRIVER | avg total 236.2 m, avg offline 14.5 m, 4/6 fairway (offline per drive 6.1 / 8.9 / 26.1 / 12.9 / 21.5 / 11.3 m; rough rests are shots 10 and 16) | **+8 HC ± 1.0** |
 | Overall | — | **2.5 HC ± 1.0, emergent (not fitted)** |
 
+Fitting procedure: per-combo knob grid (κ_rough, γ, κ_fairway, shedTightening within §3/§8 ranges), three 1-D bisects (one per station anchor), accept when emergent overall ∈ [1.5, 3.5]; report back if no combo passes.
+
 Procedure: fit layer-1 parameters and layer-2 constants against this session, then re-run the exact stored rows through production `combineResults` (scratch-test pattern) — all four targets within tolerance ⇒ gate passed.
 
 Tuning rules: only the declared parameters (`d50` per band, `k`, `γ`, `κ_fairway`, `κ_rough`, `shedTightening`, distribution seeds) within the documented ranges; stop as soon as the gate passes; record seeds and finals in §8. The constants live in code; any later change goes through this document.
@@ -98,10 +100,11 @@ Tuning rules: only the declared parameters (`d50` per band, `k`, `γ`, `κ_fairw
 | Parameter | Seed | Final | Note |
 |---|---|---|---|
 | κ_fairway | 0.10 | — | |
-| κ_rough | 0.15 | — | pinned by driver anchor |
+| κ_rough | 0.15 | — | seed 0.15; calibration scan settles at the 0.12 boundary |
 | γ | 1.05 | — | |
 | d50 (TOUR/SCRATCH/HCP10/HCP18) | 3.2 / 2.75 / 2.2 / 1.8 m | — | |
 | slope k | 0.4 /m | — | |
 | shedTightening | 0.25 | — | |
-| CONVERSION_APPROACH | — | — | fitted on §6 session |
-| CONVERSION_DRIVER | — | — | fitted; expected ≈ 0 |
+| CONVERSION_APPROACH_100M | — | — | fitted on §6 session |
+| CONVERSION_APPROACH_150M | — | — | fitted on §6 session |
+| CONVERSION_DRIVER | — | — | fitted; ≈ −0.08…−0.12 SG/shot (missing penalty stakes) |
