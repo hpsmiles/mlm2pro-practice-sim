@@ -88,4 +88,37 @@ class SimExpectedStrokesTest {
     fun `tee is not priced`() {
         SimExpectedStrokes.simEndValue(SkillBand.SCRATCH, Lie.TEE, 100.0)
     }
+
+    @Test
+    fun `outcome grid probabilities sum to one`() {
+        for (band in bands) {
+            for (start in SimExpectedStrokes.START_DISTANCES) {
+                val total = SimExpectedStrokes.outcomeGrid(band, start).sumOf { it.probability }
+                assertEquals("prob sum band=$band start=$start", 1.0, total, 1e-9)
+            }
+        }
+    }
+
+    @Test
+    fun `start value is monotone in distance and band ordered`() {
+        for (band in bands) {
+            var prev = 0.0
+            var d = 50.0
+            while (d <= 150.0 + 1e-9) {
+                val e = SimExpectedStrokes.simStartValue(band, d)
+                assertTrue("start non-monotone at $d", e >= prev - 1e-9)
+                prev = e
+                d += 5.0
+            }
+        }
+        for (d in listOf(50.0, 70.0, 90.0, 100.0, 150.0)) {
+            for (i in 0 until bands.size - 1) {
+                assertTrue(
+                    "start band order at $d",
+                    SimExpectedStrokes.simStartValue(bands[i], d) <=
+                        SimExpectedStrokes.simStartValue(bands[i + 1], d) + 1e-9,
+                )
+            }
+        }
+    }
 }
