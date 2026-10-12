@@ -11,75 +11,48 @@ import kotlin.math.sin
 import kotlin.math.sqrt
 
 /**
- * Ground-truth tests for the M7 top-down content-fit mapping (device feedback
- * 2026-10-08): fits the kept shots AND their 2σ ring extents plus a buffer,
- * with a 30 m minimum span and a lateral clamp. All values hand-computed.
+ * Ground-truth tests for the M7 horizontal top-down fit (HISTORY-nav /
+ * fitting-results rework, Task 3): the tee sits at the LEFT and distance grows
+ * to the right, with an independent (non-isotropic) lateral scale. All values
+ * hand-computed for W = 1000, H = 400.
  */
 class FittingTopDownFitTest {
 
-    /** World y (rest distance, m) → screen y (px) under the returned mapping. */
-    private fun screenY(fit: TopDownFit, worldY: Double): Double =
-        fit.originY - worldY * fit.pxPerM
-
-    @Test
-    fun `basic fit - clustered shots map to a padded window with isotropic scale`() {
-        // Shots clustered 200–220 m: span 20 < 30 → expand to [195, 225] around
-        // the centre 210; pad = max(10, 0.06·30) = 10 → window [185, 235].
-        // yFit = 1000 / (30 + 20) = 20; xFit = (500 − 48) / 10 = 45.2 → scale 20.
-        val fit = computeTopDownFit(
-            width = 1000.0, height = 1000.0,
-            minY = 200.0, maxY = 220.0, maxAbsX = 10.0, hasData = true,
-        )
-        assertEquals(20.0, fit.pxPerM, 1e-9)
-        assertEquals(500.0, fit.originX, 1e-9)
-        // Window bottom [185] at the canvas bottom, top [235] at the canvas top.
-        assertEquals(1000.0, screenY(fit, 185.0), 1e-9)
-        assertEquals(0.0, screenY(fit, 235.0), 1e-9)
-        // Isotropic: one scale for both axes (single pxPerM field).
-        assertEquals(fit.pxPerM, fit.pxPerM, 0.0)
+    private companion object {
+        const val W = 1000.0
+        const val H = 400.0
     }
 
     @Test
-    fun `empty kept set - full-range fallback identical to the pre-fix mapping`() {
-        // Pre-fix: pxPerM = h / GROUND_END_Y = 600 / 350, originX = w/2 = 400,
-        // originY = h − bottomMarginPx = 600 − 12 = 588.
-        val fit = computeTopDownFit(
-            width = 800.0, height = 600.0,
-            minY = 0.0, maxY = 0.0, maxAbsX = 0.0, hasData = false,
-            bottomMarginPx = 12.0,
-        )
-        assertEquals(600.0 / 350.0, fit.pxPerM, 1e-12)
-        assertEquals(400.0, fit.originX, 1e-9)
-        assertEquals(588.0, fit.originY, 1e-9)
+    fun noDataFallbackCoversFairway() {
+        val fit = computeTopDownFitH(W, H, 0.0, 0.0, 0.0, hasData = false)
+        val px = (W - 26.0 - 12.0) / (330.0 + 2 * 19.8)   // span 330, pad = 0.06 * 330
+        assertEquals(px, fit.pxPerMX, 1e-9)
+        assertEquals(26.0 + 19.8 * px, fit.originX, 1e-9)  // world 0 sits one pad in from the left
+        assertEquals((H / 2 - 12.0) / 35.0, fit.pxPerMY, 1e-9)
+        assertEquals(H / 2, fit.midY, 1e-9)
     }
 
     @Test
-    fun `span floor - same-distance shots clamp the span to at least 30 m`() {
-        // All shots at 210 m: span 0 → expand symmetrically to [195, 225];
-        // pad = 10 → window [185, 235] fills the full 1000 px height.
-        val fit = computeTopDownFit(
-            width = 1000.0, height = 1000.0,
-            minY = 210.0, maxY = 210.0, maxAbsX = 5.0, hasData = true,
-        )
-        assertEquals(20.0, fit.pxPerM, 1e-9)
-        assertEquals(1000.0, screenY(fit, 185.0), 1e-9)
-        assertEquals(0.0, screenY(fit, 235.0), 1e-9)
+    fun distanceWindowExpandsAndPads() {
+        val fit = computeTopDownFitH(W, H, 150.0, 170.0, 5.0, hasData = true)
+        val px = (W - 38.0) / 50.0                          // span 20 → 30, centre 160, lo 145, pad 10
+        assertEquals(px, fit.pxPerMX, 1e-9)
+        assertEquals(26.0 - 135.0 * px, fit.originX, 1e-9)
+        assertEquals(35.0, (H / 2 - 12.0) / fit.pxPerMY, 1e-9)  // corridor floor (14 m × 2.5)
     }
 
     @Test
-    fun `lateral clamp - wide lateral spread reduces the scale below the y-fit`() {
-        // Same y-cluster as the basic fit but a wide 100 m lateral spread:
-        // xFit = (500 − 48) / 100 = 4.52 < yFit 20 → the lateral constraint binds.
-        val fit = computeTopDownFit(
-            width = 1000.0, height = 1000.0,
-            minY = 200.0, maxY = 220.0, maxAbsX = 100.0, hasData = true,
-        )
-        val xFit = (500.0 - 48.0) / 100.0
-        assertEquals(xFit, fit.pxPerM, 1e-9)
-        assertEquals(500.0, fit.originX, 1e-9)
-        assertEquals(1000.0 + 185.0 * xFit, fit.originY, 1e-9)
-        // The vertical window still spans its full 50 m, just scaled down.
-        assertEquals(50.0 * xFit, screenY(fit, 185.0) - screenY(fit, 235.0), 1e-9)
+    fun lateralExpandsForWideDispersion() {
+        val fit = computeTopDownFitH(W, H, 100.0, 100.0, 40.0, hasData = true)
+        assertEquals(42.0, (H / 2 - 12.0) / fit.pxPerMY, 1e-9)  // 40 + 2 m content margin
+    }
+
+    @Test
+    fun windowEdgesMapToPads() {
+        val fit = computeTopDownFitH(W, H, 150.0, 170.0, 5.0, hasData = true)
+        assertEquals(26.0, fit.originX + 135.0 * fit.pxPerMX, 1e-9)       // lo − pad at the left pad
+        assertEquals(W - 12.0, fit.originX + 185.0 * fit.pxPerMX, 1e-9)   // hi + pad at the right pad
     }
 }
 

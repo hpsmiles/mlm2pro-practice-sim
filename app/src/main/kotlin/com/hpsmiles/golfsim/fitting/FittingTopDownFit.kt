@@ -328,3 +328,45 @@ private const val DEFAULT_LATERAL_PAD_PX = 48.0
 
 /** Below this |side| the lateral constraint is skipped (shots on the centre line). */
 private const val X_EPSILON = 1e-9
+
+/**
+ * Horizontal (tee-left) plan fit. Screen mapping:
+ *   sx(d) = originX + d * pxPerMX   (d = distance metres from the tee)
+ *   sy(s) = midY - s * pxPerMY      (s = lateral metres, positive up)
+ * [originX] is the screen x of world distance 0 and may fall off-canvas when the
+ * fitted distance window excludes the tee.
+ */
+data class TopDownFitH(
+    val pxPerMX: Double,
+    val pxPerMY: Double,
+    val originX: Double,
+    val midY: Double,
+)
+
+const val LATERAL_CONTENT_MARGIN_M = 2.0
+const val DEFAULT_LEFT_PAD_PX = 26.0
+const val DEFAULT_RIGHT_PAD_PX = 12.0
+const val DEFAULT_V_PAD_PX = 12.0
+
+fun computeTopDownFitH(
+    width: Double,
+    height: Double,
+    minDistM: Double,
+    maxDistM: Double,
+    maxAbsSideM: Double,
+    hasData: Boolean,
+    leftPadPx: Double = DEFAULT_LEFT_PAD_PX,
+    rightPadPx: Double = DEFAULT_RIGHT_PAD_PX,
+    vPadPx: Double = DEFAULT_V_PAD_PX,
+): TopDownFitH {
+    val lo = if (hasData) minDistM else 0.0
+    val hi = if (hasData) maxDistM else RangeScene.FAIRWAY_END_Y
+    val span = maxOf(hi - lo, MIN_SPAN_M)
+    val centre = (lo + hi) / 2
+    val pad = maxOf(MIN_PAD_M, 0.06 * span)
+    val pxPerMX = (width - leftPadPx - rightPadPx) / (span + 2 * pad)
+    val originX = leftPadPx - (centre - span / 2 - pad) * pxPerMX
+    val lateralHalfM = maxOf(RangeScene.fairwayHalfWidth(0.0) * 2.5, maxAbsSideM + LATERAL_CONTENT_MARGIN_M)
+    val pxPerMY = (height / 2 - vPadPx) / lateralHalfM
+    return TopDownFitH(pxPerMX, pxPerMY, originX, height / 2)
+}
