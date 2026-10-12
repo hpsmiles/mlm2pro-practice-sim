@@ -23,9 +23,9 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.unit.dp
@@ -39,15 +39,21 @@ import com.hpsmiles.golfsim.range.ChipFont
 import com.hpsmiles.golfsim.range.RangeMat
 import com.hpsmiles.golfsim.range.RangeScene
 import com.hpsmiles.golfsim.range.RangeSigns
+import kotlin.math.PI
 import kotlin.math.abs
+import kotlin.math.cos
+import kotlin.math.sin
 
 /**
- * M7 top-down (design notes §2.3): kept shots as per-club coloured dots over
- * the same world mapping and grid + distance boards as `TopDownCanvas`
- * (x = side, y = REST position = total), with ONE rotated minimum-enclosing
- * ellipse (Löwner / MVEE) of the kept shots, scaled ×1.05, per club (≥3 kept
- * shots; 55 % alpha, 2 dp stroke, no fill — the same ellipse whose area the
- * table's AREA column reports, so ring and table agree).
+ * M7 top-down (design notes §2.3, reoriented per spec §6): horizontal plan
+ * view — tee on the LEFT, distance → right, lateral on the vertical axis
+ * (positive side draws higher), mirroring `CombineTopDownView`. Rough
+ * surrounds the constant 28 m fairway corridor; kept shots are per-club
+ * coloured dots with ONE rotated minimum-enclosing ellipse (Löwner / MVEE,
+ * scaled ×1.05) per club (≥3 kept shots; 55 % alpha, 2 dp stroke, no fill —
+ * the same ellipse whose area the table's AREA column reports, so ring and
+ * table agree), traced as a 72-step world-space path (required under
+ * anisotropic scale — a rotated world ellipse is not a screen oval).
  * Excluded shots are never drawn — they stay visible in the table drill-down.
  * Legend chips (colour dot + name + count badge) wrap to a second row beyond
  * 4 clubs and are not tappable in v1.
@@ -101,21 +107,21 @@ internal fun FittingTopDownPane(
             Canvas(Modifier.fillMaxSize()) {
                 val w = size.width
                 val h = size.height
-                drawRect(GolfColors.Base)
-                // Content-fit mapping (device feedback 2026-10-08): fits the
-                // kept shots AND their enclosing-ellipse ring extents plus a
-                // buffer — 0–150 m of empty range is useless on a driver
-                // fitting. Falls back to the full-range mapping when there are
-                // no kept shots. World mapping otherwise identical to
-                // TopDownCanvas: origin bottom-centre, x lateral (side),
-                // y rest-distance (total).
+                // Rough everywhere; the fairway corridor shades over it below.
+                drawRect(GolfColors.HoleRough)
+                // Content-fit mapping (device feedback 2026-10-08), same bounds
+                // rule as before — kept shots AND their enclosing-ellipse ring
+                // extents plus a buffer drive the window (0–150 m of empty
+                // range is useless on a driver fitting); full-range fallback
+                // when there are no kept shots. Mapping is now the horizontal
+                // contract (spec §6): tee left, distance → right.
                 val ellipses = order.map { key ->
                     val kept = keptByClub[key].orEmpty()
                     DispersionEllipse.fromKept(kept.map { it.sideM to it.totalM })
                 }
-                var minY = Double.POSITIVE_INFINITY
-                var maxY = Double.NEGATIVE_INFINITY
-                var maxAbsX = 0.0
+                var minDistM = Double.POSITIVE_INFINITY
+                var maxDistM = Double.NEGATIVE_INFINITY
+                var maxAbsSideM = 0.0
                 var hasData = false
                 order.forEachIndexed { index, key ->
                     val kept = keptByClub[key].orEmpty()
@@ -127,154 +133,178 @@ internal fun FittingTopDownPane(
                     if (ell != null) {
                         val halfSide = ell.projectedHalfSideM()
                         val halfTotal = ell.projectedHalfTotalM()
-                        minY = minOf(minY, ell.centreTotalM - halfTotal)
-                        maxY = maxOf(maxY, ell.centreTotalM + halfTotal)
-                        maxAbsX = maxOf(maxAbsX, abs(ell.centreSideM) + halfSide)
+                        minDistM = minOf(minDistM, ell.centreTotalM - halfTotal)
+                        maxDistM = maxOf(maxDistM, ell.centreTotalM + halfTotal)
+                        maxAbsSideM = maxOf(maxAbsSideM, abs(ell.centreSideM) + halfSide)
                     } else {
                         // 1–2 kept shots (no ellipse): per-shot extremes still
                         // shape the fit's bounds.
                         kept.forEach { s ->
-                            minY = minOf(minY, s.totalM)
-                            maxY = maxOf(maxY, s.totalM)
-                            maxAbsX = maxOf(maxAbsX, abs(s.sideM))
+                            minDistM = minOf(minDistM, s.totalM)
+                            maxDistM = maxOf(maxDistM, s.totalM)
+                            maxAbsSideM = maxOf(maxAbsSideM, abs(s.sideM))
                         }
                     }
                 }
-                val fit = computeTopDownFit(
+                val leftPadPx = 26.dp.toPx()
+                val rightPadPx = 12.dp.toPx()
+                val vPadPx = 12.dp.toPx()
+                val fit = computeTopDownFitH(
                     width = w.toDouble(), height = h.toDouble(),
-                    minY = minY, maxY = maxY, maxAbsX = maxAbsX, hasData = hasData,
-                    bottomMarginPx = 8.sp.toPx().toDouble(),
+                    minDistM = minDistM, maxDistM = maxDistM,
+                    maxAbsSideM = maxAbsSideM, hasData = hasData,
+                    leftPadPx = leftPadPx.toDouble(),
+                    rightPadPx = rightPadPx.toDouble(),
+                    vPadPx = vPadPx.toDouble(),
                 )
-                val pxPerM = fit.pxPerM.toFloat()
-                val originX = fit.originX.toFloat()
-                val originY = fit.originY.toFloat()
+                fun sx(distM: Double) = (fit.originX + distM * fit.pxPerMX).toFloat()
+                fun sy(sideM: Double) = (fit.midY - sideM * fit.pxPerMY).toFloat()
 
-                // Standing distance boards (RangeSigns) — same fixed-size icons
-                // as TopDownCanvas, not world-scaled (readability at 300+ m).
+                // Fairway corridor (tee 10 m → 330 m, lateral ±14 m — the
+                // constant 28 m band) shaded over the rough.
+                val corridorHalfM = RangeScene.fairwayHalfWidth(0.0)
+                drawRect(
+                    color = GolfColors.HoleFairway,
+                    topLeft = Offset(sx(RangeScene.FAIRWAY_TEE_Y), sy(corridorHalfM)),
+                    size = Size(
+                        sx(RangeScene.FAIRWAY_END_Y) - sx(RangeScene.FAIRWAY_TEE_Y),
+                        sy(-corridorHalfM) - sy(corridorHalfM),
+                    ),
+                )
+
+                // Lateral gridlines every 20 m — horizontal lines spanning the
+                // canvas (the old vertical grid rotated with the view).
+                var lateralM = -60.0
+                while (lateralM <= 60.0) {
+                    val y = sy(lateralM)
+                    if (y >= 0f && y <= h) {
+                        drawLine(
+                            GolfColors.Line.copy(alpha = 0.5f),
+                            Offset(0f, y), Offset(w, y), 1f,
+                        )
+                    }
+                    lateralM += 20.0
+                }
+
+                // Practice-grid identity matching the POV view: a solid centre
+                // line at side = 0 and light dashed guides at side = ±10/±20 m,
+                // running from the tee to the ground end — horizontal now.
+                val midY = fit.midY.toFloat()
+                val teeLeft = sx(RangeScene.FAIRWAY_TEE_Y)
+                val groundRight = sx(RangeScene.GROUND_END_Y)
+                drawLine(
+                    Color.White.copy(alpha = RangeScene.CENTER_LINE_ALPHA),
+                    Offset(teeLeft, midY), Offset(groundRight, midY), 1.5f,
+                )
+                val dashPx = (RangeScene.GUIDE_DASH_ON_M * fit.pxPerMX).toFloat()
+                val gapPx = (RangeScene.GUIDE_DASH_OFF_M * fit.pxPerMX).toFloat()
+                for (guideM in RangeScene.GUIDE_LINE_LATERALS_M) {
+                    val y = sy(guideM)
+                    drawLine(
+                        Color.White.copy(alpha = RangeScene.GUIDE_LINE_ALPHA),
+                        Offset(teeLeft, y), Offset(groundRight, y), 1f,
+                        pathEffect = PathEffect.dashPathEffect(floatArrayOf(dashPx, gapPx)),
+                    )
+                }
+
+                // Range mat at the origin (orientation cue; ball at (0, 0) —
+                // right-handed golfer) — the world rect rotated: its distance
+                // extent maps to screen x, its lateral extent to screen y.
+                drawRect(
+                    color = RangeMat.BASE,
+                    topLeft = Offset(sx(RangeMat.BASE_Y_MIN), sy(RangeMat.BASE_X_MAX)),
+                    size = Size(
+                        sx(RangeMat.BASE_Y_MAX) - sx(RangeMat.BASE_Y_MIN),
+                        sy(RangeMat.BASE_X_MIN) - sy(RangeMat.BASE_X_MAX),
+                    ),
+                )
+                drawRect(
+                    color = RangeMat.STRIP,
+                    topLeft = Offset(sx(RangeMat.STRIP_Y_MIN), sy(RangeMat.STRIP_X_MAX)),
+                    size = Size(
+                        sx(RangeMat.STRIP_Y_MAX) - sx(RangeMat.STRIP_Y_MIN),
+                        sy(RangeMat.STRIP_X_MIN) - sy(RangeMat.STRIP_X_MAX),
+                    ),
+                )
+                // Ball dot at the origin (same world point as the POV tee ball).
+                drawCircle(Color.White, radius = 2.sp.toPx(), center = Offset(sx(0.0), sy(0.0)))
+
+                // Standing distance boards (RangeSigns) along the bottom edge —
+                // same fixed-size icons as before (readability at 300+ m), each
+                // board's base at the bottom padding; off-canvas signs skipped.
                 labelPaint.apply {
                     isAntiAlias = true
                     textAlign = android.graphics.Paint.Align.CENTER
+                    textSize = 10.sp.toPx()
+                    color = GolfColors.TextPrimary.toArgb()
                 }
+                val signBaseY = h - vPadPx
+                val wIcon = 26.dp.toPx()
+                val hIcon = 16.dp.toPx()
                 for (sign in RangeSigns.signPlan()) {
-                    val x = originX + (sign.xM * pxPerM).toFloat()
-                    val y = originY - sign.distanceM * pxPerM
-                    val wIcon = 26.dp.toPx()
-                    val hIcon = 16.dp.toPx()
-                    // Thin post down to the ground position.
-                    drawLine(GolfColors.Line, Offset(x, y), Offset(x, y - hIcon), 1f)
+                    val x = sx(sign.distanceM.toDouble())
+                    if (x < 0f || x > w) continue
+                    // Thin post up to the board.
+                    drawLine(GolfColors.Line, Offset(x, signBaseY), Offset(x, signBaseY - hIcon), 1f)
                     // Board + teal top edge.
                     drawRoundRect(
                         color = GolfColors.Card,
-                        topLeft = Offset(x - wIcon / 2f, y - hIcon),
+                        topLeft = Offset(x - wIcon / 2f, signBaseY - hIcon),
                         size = Size(wIcon, hIcon),
                         cornerRadius = CornerRadius(2.dp.toPx()),
                     )
                     drawLine(
                         GolfColors.Teal,
-                        Offset(x - wIcon / 2f, y - hIcon),
-                        Offset(x + wIcon / 2f, y - hIcon),
+                        Offset(x - wIcon / 2f, signBaseY - hIcon),
+                        Offset(x + wIcon / 2f, signBaseY - hIcon),
                         strokeWidth = 2f,
                     )
-                    labelPaint.textSize = 10.sp.toPx()
-                    labelPaint.color = GolfColors.TextPrimary.toArgb()
-                    drawContext.canvas.nativeCanvas.drawText("${sign.distanceM}", x, y - hIcon * 0.3f, labelPaint)
+                    drawContext.canvas.nativeCanvas.drawText("${sign.distanceM}", x, signBaseY - hIcon * 0.3f, labelPaint)
                 }
-
-                // Lateral gridlines every 20 m (TopDownCanvas grid).
-                var lateralM = -60f
-                while (lateralM <= 60f) {
-                    val x = originX + lateralM * pxPerM
-                    if (x >= 0f && x <= w) {
-                        drawLine(
-                            GolfColors.Line.copy(alpha = 0.5f),
-                            Offset(x, 0f), Offset(x, originY), 1f,
-                        )
-                    }
-                    lateralM += 20f
-                }
-
-                // Practice-grid identity matching the POV view: a solid centre
-                // line at x = 0 and light dashed guide lines at x = +/-10/+/-20,
-                // from the tee to the ground end.
-                val teeTop = originY - RangeScene.FAIRWAY_TEE_Y.toFloat() * pxPerM
-                val groundTop = originY - RangeScene.GROUND_END_Y.toFloat() * pxPerM
-                drawLine(
-                    Color.White.copy(alpha = RangeScene.CENTER_LINE_ALPHA),
-                    Offset(originX, teeTop), Offset(originX, groundTop), 1.5f,
-                )
-                val dashPx = RangeScene.GUIDE_DASH_ON_M.toFloat() * pxPerM
-                val gapPx = RangeScene.GUIDE_DASH_OFF_M.toFloat() * pxPerM
-                for (guideM in RangeScene.GUIDE_LINE_LATERALS_M) {
-                    val x = originX + guideM.toFloat() * pxPerM
-                    drawLine(
-                        Color.White.copy(alpha = RangeScene.GUIDE_LINE_ALPHA),
-                        Offset(x, teeTop), Offset(x, groundTop), 1f,
-                        pathEffect = PathEffect.dashPathEffect(floatArrayOf(dashPx, gapPx)),
-                    )
-                }
-
-                // Range mat quad at the origin (orientation cue; ball at (0, 0)
-                // right of centre — right-handed golfer) — same as TopDownCanvas.
-                val matLeft = originX + (RangeMat.BASE_X_MIN * pxPerM)
-                val matRight = originX + (RangeMat.BASE_X_MAX * pxPerM)
-                val matTop = originY - (RangeMat.BASE_Y_MAX * pxPerM)
-                val matBottom = originY - (RangeMat.BASE_Y_MIN * pxPerM)
-                drawRect(
-                    color = RangeMat.BASE,
-                    topLeft = Offset(matLeft.toFloat(), matTop.toFloat()),
-                    size = Size((matRight - matLeft).toFloat(), (matBottom - matTop).toFloat()),
-                )
-                val stripLeft = originX + (RangeMat.STRIP_X_MIN * pxPerM)
-                val stripRight = originX + (RangeMat.STRIP_X_MAX * pxPerM)
-                val stripTop = originY - (RangeMat.STRIP_Y_MAX * pxPerM)
-                val stripBottom = originY - (RangeMat.STRIP_Y_MIN * pxPerM)
-                drawRect(
-                    color = RangeMat.STRIP,
-                    topLeft = Offset(stripLeft.toFloat(), stripTop.toFloat()),
-                    size = Size((stripRight - stripLeft).toFloat(), (stripBottom - stripTop).toFloat()),
-                )
-                // Ball dot at the origin (same world point as the POV tee ball).
-                drawCircle(Color.White, radius = 2.sp.toPx(), center = Offset(originX, originY))
 
                 // Dispersion rings FIRST (rings under dots).
                 // Notes §2.3 (device ruling 2026-10-08): ONE rotated
                 // minimum-enclosing ellipse of the kept shots, scaled ×1.05
                 // about its centre, @ 55 % alpha, 2 dp stroke, no fill — the
                 // same ellipse whose area the AREA column shows, so ring and
-                // table agree. A collinear cloud (no enclosing ellipse) skips
-                // the ring; the dots below are still drawn.
+                // table agree. Traced as a 72-step world-space path (mirror of
+                // CombineTopDownView) because the canvas scales the two world
+                // axes differently — a rotated world ellipse is not a screen
+                // oval, so the old rotate() + drawOval cannot draw it. A
+                // collinear cloud (no enclosing ellipse) skips the ring; the
+                // dots below are still drawn.
                 order.forEachIndexed { index, _ ->
                     val ell = ellipses[index] ?: return@forEachIndexed
                     val color = FittingColors.clubColor(index)
-                    val centreX = originX + (ell.centreSideM * pxPerM).toFloat()
-                    val centreY = originY - (ell.centreTotalM * pxPerM).toFloat()
-                    val aPx = (ell.semiAxisM * pxPerM).toFloat()
-                    val bPx = (ell.semiCrossM * pxPerM).toFloat()
-                    rotate(
-                        // Screen y grows DOWN but world total grows UP (the
-                        // canvas y-flips), so a +θ rotation computed in math
-                        // space renders as −θ here — negate so the ring tilts
-                        // the same way as the dots it encloses (device
-                        // feedback 2026-10-08).
-                        degrees = -Math.toDegrees(ell.angleRad).toFloat(),
-                        pivot = Offset(centreX, centreY),
-                    ) {
-                        drawOval(
-                            color = color.copy(alpha = 0.55f),
-                            topLeft = Offset(centreX - aPx, centreY - bPx),
-                            size = Size(2f * aPx, 2f * bPx),
-                            style = Stroke(width = 2.dp.toPx()),
-                        )
+                    val cosA = cos(ell.angleRad)
+                    val sinA = sin(ell.angleRad)
+                    val path = Path()
+                    val steps = 72
+                    for (i in 0..steps) {
+                        val t = 2.0 * PI * i / steps
+                        val u = ell.semiAxisM * cos(t)
+                        val v = ell.semiCrossM * sin(t)
+                        val worldSide = ell.centreSideM + u * cosA - v * sinA
+                        val worldDist = ell.centreTotalM + u * sinA + v * cosA
+                        val px = sx(worldDist)
+                        val py = sy(worldSide)
+                        if (i == 0) path.moveTo(px, py) else path.lineTo(px, py)
                     }
+                    path.close()
+                    drawPath(
+                        path = path,
+                        color = color.copy(alpha = 0.55f),
+                        style = Stroke(width = 2.dp.toPx()),
+                    )
                 }
 
-                // Kept shot dots (6 dp), coloured per club (notes §2.3 —
-                // 6 dp dots replaces the plan's 3.sp radius).
+                // Kept shot dots (r = 3 dp ⇒ the 6 dp dots of notes §2.3),
+                // coloured per club.
                 order.forEachIndexed { index, key ->
                     val color = FittingColors.clubColor(index)
                     keptByClub[key].orEmpty().forEach { s ->
-                        val x = originX + (s.sideM * pxPerM).toFloat()
-                        val y = originY - (s.totalM * pxPerM).toFloat()
+                        val x = sx(s.totalM)
+                        val y = sy(s.sideM)
                         drawCircle(color.copy(alpha = 0.8f), radius = 3.dp.toPx(), center = Offset(x, y))
                     }
                 }

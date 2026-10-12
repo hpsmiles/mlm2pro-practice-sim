@@ -14,6 +14,8 @@ object GolfColors {
     val Card = Color(0xFF151A1F)
     val Line = Color(0xFF28303A)
     val HoleFairway = Color(0xFF161B21)
+    /** Rough surround for plan views — quieter than Base, green-tinted; dots/rings must stay readable (tune on device). */
+    val HoleRough = Color(0xFF101612)
 
     val TextPrimary = Color(0xFFE7EBEE)
     val TextSecondary = Color(0xFF8FA0AC)
