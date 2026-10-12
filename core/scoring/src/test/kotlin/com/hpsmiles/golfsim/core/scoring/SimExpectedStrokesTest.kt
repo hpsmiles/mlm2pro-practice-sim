@@ -51,4 +51,41 @@ class SimExpectedStrokesTest {
             assertTrue("tap-in out of range for $band: $e", e > 1.0 && e <= 1.15)
         }
     }
+
+    @Test
+    fun `fairway and rough relief is nonnegative from 3m`() {
+        for (band in bands) {
+            var d = 3.0
+            while (d <= 60.0 + 1e-9) {
+                for (lie in listOf(Lie.FAIRWAY, Lie.ROUGH)) {
+                    val relief = expectedStrokes(band, lie, d) -
+                        SimExpectedStrokes.simEndValue(band, lie, d)
+                    assertTrue("negative relief at $lie d=$d band=$band", relief >= -1e-9)
+                }
+                d += 1.0
+            }
+        }
+    }
+
+    @Test
+    fun `end values are monotone per lie and floored at 1`() {
+        for (band in bands) {
+            for (lie in listOf(Lie.FAIRWAY, Lie.ROUGH)) {
+                var prev = 0.0
+                var d = 3.0
+                while (d <= 200.0 + 1e-9) {
+                    val e = SimExpectedStrokes.simEndValue(band, lie, d)
+                    assertTrue("non-monotone $lie at $d", e >= prev - 1e-9)
+                    assertTrue("below floor $lie at $d", e >= 1.0 - 1e-9)
+                    prev = e
+                    d += 5.0
+                }
+            }
+        }
+    }
+
+    @Test(expected = IllegalStateException::class)
+    fun `tee is not priced`() {
+        SimExpectedStrokes.simEndValue(SkillBand.SCRATCH, Lie.TEE, 100.0)
+    }
 }
