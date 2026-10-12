@@ -51,6 +51,24 @@ class GameHistorySortingTest {
         assertEquals(listOf(8, 12, 15), sorted[GameModes.BREAK_PANE]!!.map { it.score })
     }
 
+    @Test
+    fun defaultGameModeEmptyIsTargetPractice() {
+        assertEquals(GameModes.TARGET_PRACTICE, defaultGameMode(emptyList()))
+    }
+
+    @Test
+    fun defaultGameModeFollowsMostRecentResult() {
+        // newest BP → BP; newest TP → TP (other result older)
+        assertEquals(GameModes.BREAK_PANE, defaultGameMode(listOf(result(GameModes.TARGET_PRACTICE, 80, 100), result(GameModes.BREAK_PANE, 10, 200))))
+        assertEquals(GameModes.TARGET_PRACTICE, defaultGameMode(listOf(result(GameModes.BREAK_PANE, 10, 100), result(GameModes.TARGET_PRACTICE, 80, 200))))
+    }
+
+    @Test
+    fun defaultGameModeTieFallsBackToTargetPractice() {
+        // same playedAtEpochMs across both modes → TARGET PRACTICE
+        assertEquals(GameModes.TARGET_PRACTICE, defaultGameMode(listOf(result(GameModes.TARGET_PRACTICE, 80, 200), result(GameModes.BREAK_PANE, 10, 200))))
+    }
+
     private fun result(mode: String, score: Int, playedAt: Long, id: Long = 0) = GameResultEntity(
         id = id,
         mode = mode,
