@@ -59,19 +59,31 @@ To build and install from source instead, see [Building](#building-from-source).
 
 The app is a Bluetooth LE client that talks to the monitor directly, the same
 way GSPro / E6 / Awesome Golf do. Rapsodo gates that behind a session token that
-you authorize once in the Rapsodo app.
+you authorize once in the Rapsodo app, and only one app can hold the monitor's
+link at a time — so the order matters:
 
-1. **Power on the MLM2PRO** and set it up so it's charged and in range of the
+1. **Turn on the monitor.** Power up the MLM2PRO and give it a few seconds to
+   boot and settle. Make sure it's charged and within a few metres of the
    tablet.
-2. **Free the monitor's Bluetooth link** — close the Rapsodo app and any other
-   sim or phone that might be holding a connection. Only one client can connect
-   at a time.
-3. **Authorize third-party access** in the Rapsodo app:
+
+2. **Connect in the Rapsodo app.** Open the Rapsodo app and connect to the
+   monitor as usual. This is also the right moment to physically align and level
+   the unit for your bay — **our app has no alignment camera or device-setup
+   view of its own**, so do any positioning/alignment here while you have the
+   Rapsodo display in front of you.
+
+3. **Authorize third-party access.** Still in the Rapsodo app, go to
    *Play → Simulation → 3rd Party Apps → Awesome Golf → Authenticate Now*.
    - Re-authorize **every 24 hours** (a Rapsodo requirement).
    - The session token lasts about **3 hours**.
-4. **Open this app** and grant the Bluetooth permissions when prompted. It scans
-   for the monitor and connects automatically — no menu diving required.
+
+4. **Disconnect in the Rapsodo app.** Close/end the connection in the Rapsodo
+   app so it releases the monitor's Bluetooth link back to the system. Only one
+   client can hold the link, so this step is what frees it for us.
+
+5. **Connect this app.** Now open the MLM2PRO Practice Sim and grant the
+   Bluetooth permissions when prompted. It scans for the monitor and connects
+   automatically — no menu diving required.
 
 The connection state shows in the left rail. Once connected the app arms itself
 and waits for shots.
