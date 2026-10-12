@@ -17,6 +17,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.nativeCanvas
@@ -26,9 +27,13 @@ import androidx.compose.ui.unit.sp
 import com.hpsmiles.golfsim.core.designsystem.GolfColors
 import com.hpsmiles.golfsim.core.designsystem.GolfSpacing
 import com.hpsmiles.golfsim.core.designsystem.GolfTypography
+import com.hpsmiles.golfsim.fitting.DispersionEllipse
 import com.hpsmiles.golfsim.fitting.FittingColors
 import com.hpsmiles.golfsim.range.RangeScene
+import kotlin.math.PI
 import kotlin.math.abs
+import kotlin.math.cos
+import kotlin.math.sin
 
 private val SidePanelWidth = 210.dp
 
@@ -56,6 +61,11 @@ internal fun CombineTopDownView(
                 }
             }
     }
+    // One enclosing ring per station: the M7 minimum-enclosing ellipse (5% buffer,
+    // containment-verified) so the ring covers every finish dot for that station.
+    val rings = remember(pointsByStation) {
+        pointsByStation.mapValues { (_, points) -> DispersionEllipse.fromKept(points) }
+    }
 
     if (groups.isEmpty()) {
         Box(modifier, contentAlignment = Alignment.Center) {
@@ -73,6 +83,7 @@ internal fun CombineTopDownView(
             entry = entry,
             groups = groups,
             pointsByStation = pointsByStation,
+            rings = rings,
             modifier = Modifier.weight(1f).fillMaxHeight(),
         )
         Column(
@@ -112,6 +123,7 @@ private fun CombineTopDownCanvas(
     entry: CombineCatalogEntry,
     groups: List<CombineDispersion.Group>,
     pointsByStation: Map<Int, List<Pair<Double, Double>>>,
+    rings: Map<Int, DispersionEllipse?>,
     modifier: Modifier = Modifier,
 ) {
     val labelPaint = remember {
@@ -190,20 +202,38 @@ private fun CombineTopDownCanvas(
             drawCircle(GolfColors.TextPrimary, radius = 2.5.dp.toPx(), center = Offset(gx, gy))
         }
 
-        // One colour-coded group per station: finish dots, 1σ ring, centroid.
+        // One colour-coded group per station: finish dots, one enclosing ring, centroid.
         for ((index, group) in groups.withIndex()) {
             val color = FittingColors.clubColor(index)
-            for ((restX, restY) in pointsByStation[group.stationIndex].orEmpty()) {
+            val points = pointsByStation[group.stationIndex].orEmpty()
+            for ((restX, restY) in points) {
                 drawCircle(color, radius = 3.5.dp.toPx(), center = Offset(sx(restY), sy(restX)))
             }
-            val rx = (group.sigmaY * pxPerMX).toFloat()
-            val ry = (group.sigmaX * pxPerMY).toFloat()
-            if (group.hasRing && rx > 0.5f && ry > 0.5f) {
-                drawOval(
+            // The ring is the station's minimum-enclosing ellipse (world frame), so it
+            // covers every finish dot. Traced point-by-point because the canvas scales
+            // the two world axes differently (a rotated world ellipse is not an oval).
+            val ring = rings[group.stationIndex]
+            if (group.hasRing && ring != null) {
+                val path = Path()
+                val steps = 72
+                for (i in 0..steps) {
+                    val t = 2.0 * PI * i / steps
+                    val u = ring.semiAxisM * cos(t)
+                    val v = ring.semiCrossM * sin(t)
+                    val worldX = ring.centreSideM + u * cos(ring.angleRad) - v * sin(ring.angleRad)
+                    val worldY = ring.centreTotalM + u * sin(ring.angleRad) + v * cos(ring.angleRad)
+                    val px = sx(worldY)
+                    val py = sy(worldX)
+                    if (i == 0) path.moveTo(px, py) else path.lineTo(px, py)
+                }
+                path.close()
+                drawPath(
+                    path = path,
                     color = color,
-                    topLeft = Offset(sx(group.centroidY) - rx, sy(group.centroidX) - ry),
-                    size = Size(2 * rx, 2 * ry),
-                    style = Stroke(1.5f, pathEffect = PathEffect.dashPathEffect(floatArrayOf(6.dp.toPx(), 4.dp.toPx()))),
+                    style = Stroke(
+                        1.5f,
+                        pathEffect = PathEffect.dashPathEffect(floatArrayOf(6.dp.toPx(), 4.dp.toPx())),
+                    ),
                 )
             }
             val cx = sx(group.centroidY)

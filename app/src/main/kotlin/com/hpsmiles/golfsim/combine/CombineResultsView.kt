@@ -136,20 +136,32 @@ internal fun CombineResultsView(
 
                 // VS BANDS strip: the four diverging bars, overall per-band SG.
                 SectionCard("VS BANDS") {
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(GolfSpacing.Sm)) {
-                        for (band in SkillBand.entries) {
-                            val sg = results.overall.perBandSg.getValue(band)
-                            Column(
-                                modifier = Modifier.weight(1f),
-                                verticalArrangement = Arrangement.spacedBy(GolfSpacing.Xs),
-                            ) {
-                                Text(bandLabel(band), style = GolfTypography.MetricLabel, color = GolfColors.TextSecondary)
-                                Text(
-                                    String.format(Locale.US, "%+.2f", sg),
-                                    style = GolfTypography.BodySmall,
-                                    color = if (sg < 0) NegativeColor else GolfColors.Teal,
-                                )
-                                SgBar(sg)
+                    Column(verticalArrangement = Arrangement.spacedBy(GolfSpacing.Sm)) {
+                        Text(
+                            "AVG STROKES GAINED PER SHOT VS EACH BENCHMARK · TEAL = THIS SESSION'S",
+                            style = GolfTypography.Status,
+                            color = GolfColors.TextMuted,
+                        )
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(GolfSpacing.Sm)) {
+                            for (band in SkillBand.entries) {
+                                val sg = results.overall.perBandSg.getValue(band)
+                                val locked = band == results.lockedBand
+                                Column(
+                                    modifier = Modifier.weight(1f),
+                                    verticalArrangement = Arrangement.spacedBy(GolfSpacing.Xs),
+                                ) {
+                                    Text(
+                                        bandLabel(band),
+                                        style = GolfTypography.MetricLabel,
+                                        color = if (locked) GolfColors.Teal else GolfColors.TextSecondary,
+                                    )
+                                    Text(
+                                        String.format(Locale.US, "%+.2f", sg),
+                                        style = GolfTypography.BodySmall,
+                                        color = if (sg < 0) NegativeColor else GolfColors.Teal,
+                                    )
+                                    SgBar(sg)
+                                }
                             }
                         }
                     }
