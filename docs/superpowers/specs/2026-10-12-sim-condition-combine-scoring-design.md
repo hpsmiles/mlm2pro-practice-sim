@@ -36,7 +36,9 @@ JVM-pure, deterministic, metres throughout. Real-course tables remain the substr
   - `γ ≈ 1.05` — expected follow-up strokes after a missed first putt (tap-in range on a flat green).
   - Relief shape: vanishes at tap-in distance, grows with distance (long-range 3-putt removal); no upper bound is guarded — the honest-zone constraint is relief ≥ 0 for d ≥ 3.0 m. The real scratch table prices an 18 ft putt at 1.89; flat-sim says ≈ 1.75.
 - **FAIRWAY** (missed green): `E_sim = (1 − κ_fairway) · E_real`, seed `κ_fairway ≈ 0.10` (range 0.05–0.15). Flat, predictable surrounds make chips slightly cheaper.
-- **ROUGH**: `E_sim = (1 − κ_rough) · E_real`. Seed range 0.12–0.20; the calibration scan settles at the 0.12 boundary and the driver anchor is absorbed by CONVERSION_DRIVER instead.
+- **ROUGH**: `E_sim = (1 − κ_fairway) · F + (1 − κ_rough) · (R − F)`, where `F = E_real(FAIRWAY, m)` and `R = E_real(ROUGH, m)` — a relieved-penalty form that removes a bounded share of rough's excess over fairway rather than discounting rough's absolute cost. Seed range 0.12–0.20; the calibration scan settles at the 0.12 boundary and the driver anchor is absorbed by CONVERSION_DRIVER instead.
+
+  **Finding — the multiplicative rough form inverted rough below fairway.** The real-course tables keep rough ≥ fairway everywhere (minimum gap ≈ +0.11 strokes for all bands), so the original multiplicative form `(1 − κ_rough) · E_rough` prices rough *cheaper* than fairway at long approach distances — e.g. TOUR from 220 m — breaking the model's own rough-punishes-worse invariant for every seed in the §8 ranges (0.12–0.20). The relieved-penalty form above preserves ordering by construction across the entire fitting grid: rough is always fairway plus a nonnegative, damped excess `(1 − κ_rough)·(R − F)`. The shed removes some of rough's sting, never all of it, never flips it.
 
 ### 3.2 Start values — `simStartValue(band, lie, m)`
 

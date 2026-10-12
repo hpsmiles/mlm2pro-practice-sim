@@ -121,4 +121,35 @@ class SimExpectedStrokesTest {
             }
         }
     }
+
+    @Test
+    fun `drive sg is zero at the scratch typical-drive reference`() {
+        // DRIVER_HOLE_M 340 − SCRATCH typicalDriveM 239.6 = 100.4 (reuses public const from ExpectedStrokes.kt)
+        assertEquals(
+            0.0,
+            SimExpectedStrokes.simDrivingStrokesGained(SkillBand.SCRATCH, Lie.FAIRWAY, 100.4),
+            1e-9,
+        )
+    }
+
+    @Test
+    fun `drive sg punishes rough more than fairway and decreases with distance`() {
+        for (band in bands) {
+            var d = 50.0
+            while (d <= 300.0 + 1e-9) {
+                val fair = SimExpectedStrokes.simDrivingStrokesGained(band, Lie.FAIRWAY, d)
+                val rough = SimExpectedStrokes.simDrivingStrokesGained(band, Lie.ROUGH, d)
+                assertTrue("rough not punished at $d band=$band", rough <= fair + 1e-9)
+                d += 10.0
+            }
+            var prev = Double.MAX_VALUE
+            d = 50.0
+            while (d <= 300.0 + 1e-9) {
+                val sg = SimExpectedStrokes.simDrivingStrokesGained(band, Lie.FAIRWAY, d)
+                assertTrue("drive sg not decreasing at $d", sg <= prev + 1e-9)
+                prev = sg
+                d += 10.0
+            }
+        }
+    }
 }

@@ -31,7 +31,15 @@ object SimExpectedStrokes {
     fun simEndValue(band: SkillBand, lie: Lie, metres: Double): Double = when (lie) {
         Lie.GREEN -> greenEndValue(band, metres)
         Lie.FAIRWAY -> max(1.0, (1.0 - K_FAIRWAY) * expectedStrokes(band, Lie.FAIRWAY, metres))
-        Lie.ROUGH -> max(1.0, (1.0 - K_ROUGH) * expectedStrokes(band, Lie.ROUGH, metres))
+        // Relieved-penalty form: damp rough's EXCESS over fairway, never its absolute cost —
+        // the multiplicative form (1−K_ROUGH)·R inverts rough below fairway at long distances
+        // (real tables keep rough ≥ fairway everywhere), breaking rough-punishes-worse. Spec §3.1.
+        Lie.ROUGH -> max(
+            1.0,
+            (1.0 - K_FAIRWAY) * expectedStrokes(band, Lie.FAIRWAY, metres) +
+                (1.0 - K_ROUGH) *
+                (expectedStrokes(band, Lie.ROUGH, metres) - expectedStrokes(band, Lie.FAIRWAY, metres)),
+        )
         Lie.TEE -> error("TEE is not priced by the sim model")
     }
 
@@ -104,6 +112,30 @@ object SimExpectedStrokes {
 
     fun simStartValue(band: SkillBand, startM: Double): Double =
         1.0 + outcomeGrid(band, startM).sumOf { it.probability * simEndValue(band, it.lie, it.metres) }
+
+    /**
+     * Position-to-position SG for an approach: sim-priced start (FAIRWAY only — the app's
+     * approach stations always start from the fairway) minus sim-priced finish, minus 1.
+     */
+    fun simStrokesGained(
+        band: SkillBand,
+        startLie: Lie,
+        startM: Double,
+        endLie: Lie,
+        endM: Double,
+    ): Double {
+        require(startLie == Lie.FAIRWAY) { "sim approach model prices FAIRWAY starts only" }
+        return simStartValue(band, startM) - simEndValue(band, endLie, endM) - 1.0
+    }
+
+    /**
+     * Baseline-relative drive SG: sim cost where the band's typical drive leaves them vs
+     * sim cost of this drive's rest position. Same shape as real-course drivingStrokesGained;
+     * no −1 (baseline-relative). Rough relief on rests is the material term.
+     */
+    fun simDrivingStrokesGained(band: SkillBand, restLie: Lie, restDistanceM: Double): Double =
+        simEndValue(band, Lie.FAIRWAY, DRIVER_HOLE_M - band.typicalDriveM) -
+            simEndValue(band, restLie, restDistanceM)
 
     /**
      * Two-state flat-green putt model: E = 1 + (1 - p)·γ with p the one-putt probability
