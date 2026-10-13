@@ -13,6 +13,10 @@ live shots straight off the monitor over Bluetooth LE.
 - Project setup & tech decisions: [AGENTS.md](AGENTS.md)
 - Development roadmap: [ROADMAP.md](ROADMAP.md)
 
+> **v0.1.0 released** — grab the latest signed APK and install steps from the
+> [Releases](https://github.com/hpsmiles/mlm2pro-practice-sim/releases) page,
+> then see [Connecting the monitor](#connecting-the-monitor) below.
+
 ## What it does
 
 - **Live range** — hit a ball and watch it fly in ~2 s: POV range with ball

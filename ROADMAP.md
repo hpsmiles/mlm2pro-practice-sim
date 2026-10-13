@@ -122,6 +122,10 @@ Catalog 18-shot combines — WEDGES (50/70/90 m) and APPROACH (100/150 m + drive
 
 Four-tab history sidebar (SESSIONS | GAMES | COMBINES | FITTINGS) with per-game switcher and push-down drill-ins; fitting results rebuilt as a horizontal top-down pane (tee left, fairway/rough shading, distance/lateral scale references) stacked under the metrics table, per-shot columns in the PDF export (design: `docs/superpowers/specs/2026-10-12-history-nav-and-fitting-results-design.md`). Merged from `history-nav-fit-results`.
 
+## v0.1.0 — first public release (shipped 2026-10-13)
+
+GitHub release `v0.1.0` with a **signed** release APK (verified with `apksigner`, tag `v0.1.0`). README rewritten as user-facing docs: what the app does, install, an ordered 5-step monitor-connect flow (turn on → connect/align in the Rapsodo app → authorize → disconnect there → connect this app), per-tab usage, and build/release notes. Release signing stays local-only: a gitignored `keystore.properties` + `golfsim-release.jks` at the repo root sign `:app:assembleRelease` (falls back to unsigned when absent, so CI/fresh clones stay green). Back up the keystore — upgrades must use the same key. Commits: `0058204`, `e9ee1e2`.
+
 ## M9 — Hardening
 
 BLE disconnect/reconnect recovery, error states, settings, local CSV export, tablet performance.
