@@ -106,7 +106,7 @@ Confirmed operational facts (GSPro KB + Awesome Golf docs — primary sources):
 
 - Rapsodo added club metrics in May 2025 **without** changing the BLE frame — if they ever open it, springbok Discussion #225 / Issue #228 is the canary to watch. Re-verify raw frames per AGENTS.md protocol-drift policy.
 - Offsets 12–15 meaning is single-source speculation; treat as distance-*candidates* only until verified against live captures.
-- The Local-mode video link (topology, ports, protocol, auth) is undocumented territory; anything we build on it must come from our own empirical discovery (§4). Rapsodo Terms §6 prohibit reverse engineering — weigh that consciously before investing.
+- The Local-mode video link (topology, ports, protocol, auth) is undocumented territory; anything we build on it must come from our own empirical discovery (§4). Rapsodo Terms §6 prohibit reverse engineering — weigh that consciously before investing. **Update 2026-10-13:** statically reverse-engineered from the Rapsodo app v2.25.6 — see `2026-10-13-mlm2pro-local-mode-wifi-protocol.md` (monitor-pushed AP credentials over BLE, key derives from advertised device name, RTSP via monitor RHost; live confirmation still pending).
 - Third-party token/Premium gating is enforced server-side (`mlm.rapsodo.com`): if the monitor ever stays red and rejects connections, check token age (24 h) and Premium status before suspecting our decoder.
 - E6's transport is *inferred* (TruGolf's MLM2PRO guide wasn't publicly retrievable); GSPro/Awesome-Golf BLE facts are primary-source confirmed.
 

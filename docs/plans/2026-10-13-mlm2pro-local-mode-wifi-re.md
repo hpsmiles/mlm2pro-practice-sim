@@ -53,29 +53,29 @@
 
 ### Task 0: Create staging workspace
 Model: GLM 5.3 Flash
-- [ ] `New-Item -ItemType Directory -Force -Path C:\Users\smiles\mlm2pro-re\apk, C:\Users\smiles\mlm2pro-re\decompiled, C:\Users\smiles\mlm2pro-re\findings`
+- [x] `New-Item -ItemType Directory -Force -Path C:\Users\smiles\mlm2pro-re\apk, C:\Users\smiles\mlm2pro-re\decompiled, C:\Users\smiles\mlm2pro-re\findings`
 - Verify: all three directories exist.
 
 ### Task 1: Install and verify REA
 Model: GLM 5.3 Flash
-- [ ] `npx rea-agents@latest setup` — approve the setup plan when prompted.
-- [ ] `npx -y rea-agents@latest --help` — record the exact subcommand names for APK analysis and Android-device work in `C:\Users\smiles\mlm2pro-re\findings\notes.md`.
-- [ ] Verify headless JADX availability per the help output (install if REA does not bundle it).
+- [x] `npx rea-agents@latest setup` — approve the setup plan when prompted.
+- [x] `npx -y rea-agents@latest --help` — record the exact subcommand names for APK analysis and Android-device work in `C:\Users\smiles\mlm2pro-re\findings\notes.md`.
+- [x] Verify headless JADX availability per the help output (install if REA does not bundle it).
 - Verify: help output captured; you know the exact APK-analysis command name.
 
 ### Task 2: Pull the Rapsodo APK (REQUIRES: tablet on USB, Developer Options > USB debugging enabled)
 Model: GLM 5.3 Flash
-- [ ] `& "C:\Users\smiles\AppData\Local\Android\Sdk\platform-tools\adb.exe" devices` — expect one device, state `device`. If `unauthorized`: accept the prompt on the tablet. If empty: check cable/debugging.
-- [ ] Find the package: `adb shell pm list packages | findstr /i rapsodo` — record the exact package name (expected `com.rapsodo.…`).
-- [ ] `adb shell pm path <package>` — often returns several split APKs (`base.apk`, `split_config.*.apk`).
-- [ ] `adb pull` every listed path into `C:\Users\smiles\mlm2pro-re\apk\`.
-- [ ] `adb shell dumpsys package <package> | findstr /i version` — record `versionName`/`versionCode` in notes (protocol-drift pin).
+- [x] `& "C:\Users\smiles\AppData\Local\Android\Sdk\platform-tools\adb.exe" devices` — expect one device, state `device`. If `unauthorized`: accept the prompt on the tablet. If empty: check cable/debugging.
+- [x] Find the package: `adb shell pm list packages | findstr /i rapsodo` — record the exact package name (expected `com.rapsodo.…`).
+- [x] `adb shell pm path <package>` — often returns several split APKs (`base.apk`, `split_config.*.apk`).
+- [x] `adb pull` every listed path into `C:\Users\smiles\mlm2pro-re\apk\`.
+- [x] `adb shell dumpsys package <package> | findstr /i version` — record `versionName`/`versionCode` in notes (protocol-drift pin).
 - Verify: at least one APK on disk with plausible size (tens-hundreds of MB); package + version recorded.
 
 ### Task 3A: Decompile + anchor sweep
 Model: GLM 5.3 Flash (medium reasoning)
-- [ ] Decompile `base.apk` with REA's APK-analysis command (name discovered in Task 1) into `C:\Users\smiles\mlm2pro-re\decompiled\`. Config splits are resources-only; base is what matters.
-- [ ] Run these sweeps over the decompiled tree (case-insensitive; rg or grep) and record every hit (file:line + ~3-line snippet) in `C:\Users\smiles\mlm2pro-re\findings\anchor-hits.md`:
+- [x] Decompile `base.apk` with REA's APK-analysis command (name discovered in Task 1) into `C:\Users\smiles\mlm2pro-re\decompiled\`. Config splits are resources-only; base is what matters.
+- [x] Run these sweeps over the decompiled tree (case-insensitive; rg or grep) and record every hit (file:line + ~3-line snippet) in `C:\Users\smiles\mlm2pro-re\findings\anchor-hits.md`:
 
 | Sweep | Pattern | What it tells us |
 |---|---|---|
@@ -90,11 +90,11 @@ Model: GLM 5.3 Flash (medium reasoning)
 
 ### Task 3B: Deep reading + protocol reconstruction (THE core task)
 Model: GLM 5.3 Flex (high). Escalations per Model Strategy.
-- [ ] From the BLE anchor hits, trace the app-to-monitor GATT writes (characteristics, message formats). Cross-reference against our decoder in `core/ble` (`Mlm2proDecoder`) and the community spec `mlm2pro.md` (referenced from docs/research/2026-09-26…, §2). We decode notifications; the app's WRITES are the unmapped half — provisioning payloads are the prize.
-- [ ] From the WiFi-join hits, determine the Local-mode topology and how credentials reach the tablet (BLE-provisioned? hardcoded? QR? cloud-fetched?).
-- [ ] From discovery/video hits, determine the stream/clip endpoints (scheme, IP or hostname, port, auth headers/tokens).
-- [ ] Bonus: locate the "3rd Party Apps" token-exchange code and confirm it matches our implementation.
-- [ ] Record everything with file:line evidence in `findings\protocol-reconstruction.md`.
+- [x] From the BLE anchor hits, trace the app-to-monitor GATT writes (characteristics, message formats). Cross-reference against our decoder in `core/ble` (`Mlm2proDecoder`) and the community spec `mlm2pro.md` (referenced from docs/research/2026-09-26…, §2). We decode notifications; the app's WRITES are the unmapped half — provisioning payloads are the prize.
+- [x] From the WiFi-join hits, determine the Local-mode topology and how credentials reach the tablet (BLE-provisioned? hardcoded? QR? cloud-fetched?).
+- [x] From discovery/video hits, determine the stream/clip endpoints (scheme, IP or hostname, port, auth headers/tokens).
+- [x] Bonus: locate the "3rd Party Apps" token-exchange code and confirm it matches our implementation.
+- [x] Record everything with file:line evidence in `findings\protocol-reconstruction.md`.
 - STOP CONDITION: if evidence shows the video endpoint requires an app-initiated session/token that cannot be reproduced from the monitor alone — record as DEAD END with evidence, skip Task 4, go to Task 5.
 - Verify: protocol-reconstruction.md answers topology / credentials / endpoint / auth-gating, each with file:line evidence; conclusions marked CONFIRMED vs INFERRED.
 
