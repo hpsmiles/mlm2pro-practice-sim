@@ -43,10 +43,24 @@
 
 ## Open items (live session needed — see plan Task 4)
 
-1. Exact KDF/cipher (or behavioral clone from logcat key + samples).
-2. RTSP URL/port/auth (logcat + Wireshark during live stream).
-3. RHost port/protocol (ZeroMQ? CoAP?) and whether clips need auth.
+~~1. Exact KDF/cipher (or behavioral clone from logcat key + samples).~~ → moot for LAN mode; see addendum.
+~~2. RTSP URL/port/auth (logcat + Wireshark during live stream).~~ → confirmed, addendum.
+~~3. RHost port/protocol (ZeroMQ? CoAP?) and whether clips need auth.~~ → RTSP confirmed no-auth; RHost not needed for video.
 4. Do our `mlm.rapsodo.com` partner credentials authenticate over the AUTHENTICATION characteristic?
+5. BLE GATT byte exchange (AP credentials + session key) via HCI snoop — needed only for pure-AP (no-router) mode.
+
+## Addendum — empirical confirmation (2026-10-13, desk + shed session)
+
+All confirmed against live monitor (FW-era app v2.25.6), evidence in local staging `findings\empirical.md` + 72 MB logcat:
+
+1. **Third-party RTSP access PROVEN, zero auth:** a bare `DESCRIBE rtsp://10.0.0.228:554/rapsodo/live` from a PC on the same LAN (not the tablet, not the Rapsodo app) returned `200 OK` from ZLMediaKit (`rtsp_demo`, build Feb 23 2026) with an H265 SDP. Any LAN client that knows the monitor's IP can watch the Impact Vision alignment stream.
+2. **The monitor tells the app its LAN IP over BLE** (CLIENT_IP_ADDRESS characteristic) — that's the whole "discovery" mechanism. In station (router) mode no AP-credential exchange is needed at all.
+3. **AP join confirmed:** SSID = `MLM2_` + last 6 BSSID octets (`MLM2_488F4CF089FA` for BSSID `48:8f:4c:f0:89:fa`), WPA_PSK, joined via `WifiNetworkSpecifier` with no user dialog; monitor is the DHCP server (gateway `192.168.35.1`).
+4. **Replay delivery model:** a new shot (auto-replay on) triggers a single ~1 s RTSP session on `rtsp://<ip>:1554/rapsodo/impact` (SETUP/PLAY/TEARDOWN) that pushes the clip; the app saves it and every later replay is **local playback** (no network). Port 1554 is closed at all other times (poller: connection refused during manual replays).
+5. **Live stream keepalives:** while the alignment view is open, the app sends RTSP OPTIONS every ~10 s on 554.
+6. The app's own debug crypto logs (session key, encrypt/decrypt pairs) are R8-stripped from the release build — the logcat shortcut for the native KDF does not work; would need HCI snoop if pure-AP mode is ever needed.
+
+**Net verdict for our app:** for the common case (monitor on the home LAN) the whole feature is: BLE connect → auth handshake → read CLIENT_IP_ADDRESS → open `rtsp://<ip>:554/rapsodo/live` (H265, no auth). Replays: listen on 1554 at shot time to catch the ~1 s push, save app-side, replay locally — exactly the Rapsodo model.
 
 ## Drift-watch
 

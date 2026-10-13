@@ -100,8 +100,8 @@ Model: GLM 5.3 Flex (high). Escalations per Model Strategy.
 
 ### Task 4: Empirical confirmation (REQUIRES: user + shed; schedule with user)
 Models: Flash for capture, Flex to interpret.
-- [ ] During a live Rapsodo Local-mode session: `adb shell dumpsys wifi | findstr /i "SSID BSSID gateway"`; `adb shell dumpsys netstats`; mDNS browse from a laptop joined to the same network (`dns-sd -B _services._udp.local.` or avahi-browse); Wireshark on that laptop during a shot + replay.
-- [ ] Compare each observation against Task 3B predictions; record matches/deltas (firmware-drift check per AGENTS.md).
+- [x] During a live Rapsodo Local-mode session: `adb shell dumpsys wifi | findstr /i "SSID BSSID gateway"`; `adb shell dumpsys netstats`; mDNS browse from a laptop joined to the same network (`dns-sd -B _services._udp.local.` or avahi-browse); Wireshark on that laptop during a shot + replay.
+- [x] Compare each observation against Task 3B predictions; record matches/deltas (firmware-drift check per AGENTS.md).
 - Verify: `findings\empirical.md` written; every 3B conclusion confirmed or corrected.
 
 ### Task 5: Findings doc in the repo
