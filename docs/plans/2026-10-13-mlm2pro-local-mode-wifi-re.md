@@ -106,14 +106,14 @@ Models: Flash for capture, Flex to interpret.
 
 ### Task 5: Findings doc in the repo
 Model: GLM 5.3 Flex
-- [ ] Create `docs/research/<today's date>-mlm2pro-local-mode-wifi-protocol.md`: TL;DR verdict (viable / dead end), topology, credentials mechanism, endpoints/protocol, auth gating, evidence table (file:line + live-capture refs), implications for our app, drift-watch entries.
-- [ ] Add a pointer in the existing 2026-09-26 research doc §4 + drift-watch; update the transport bullet in `AGENTS.md` if the Local-mode picture is now concrete.
-- [ ] Commit: `git add docs/research AGENTS.md && git commit -m "docs: MLM2PRO Local-mode WiFi link reverse-engineering findings"`
+- [x] Create `docs/research/<today's date>-mlm2pro-local-mode-wifi-protocol.md`: TL;DR verdict (viable / dead end), topology, credentials mechanism, endpoints/protocol, auth gating, evidence table (file:line + live-capture refs), implications for our app, drift-watch entries.
+- [x] Add a pointer in the existing 2026-09-26 research doc §4 + drift-watch; update the transport bullet in `AGENTS.md` if the Local-mode picture is now concrete.
+- [x] Commit: `git add docs/research AGENTS.md && git commit -m "docs: MLM2PRO Local-mode WiFi link reverse-engineering findings"`
 - Verify: doc exists, follows repo research-doc conventions (see the 2026-09-26 doc), committed.
 
 ### Task 6: Report + next step
 Model: GLM 5.3 Flash (or finish the Task 5 Flex session)
-- [ ] Summarize the verdict to the user. If VIABLE: propose a brainstorming session for the in-app feature (M9 candidate "Local-mode camera link") — a separate plan, NOT this effort. If DEAD END: done.
+- [x] Summarize the verdict to the user. If VIABLE: propose a brainstorming session for the in-app feature (M9 candidate "Local-mode camera link") — a separate plan, NOT this effort. If DEAD END: done.
 
 ---
 
