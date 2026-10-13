@@ -62,6 +62,18 @@ All confirmed against live monitor (FW-era app v2.25.6), evidence in local stagi
 
 **Net verdict for our app:** for the common case (monitor on the home LAN) the whole feature is: BLE connect → auth handshake → read CLIENT_IP_ADDRESS → open `rtsp://<ip>:554/rapsodo/live` (H265, no auth). Replays: listen on 1554 at shot time to catch the ~1 s push, save app-side, replay locally — exactly the Rapsodo model.
 
+## Addendum 2 — club data DOES ride the WiFi event channel (2026-10-13, session 2)
+
+The 2026-09-26 conclusion ("AOA/club path not obtainable by third parties") holds **for BLE only**. Static RE + live capture show the monitor's RHost event channel carries them:
+
+- **`ShotParameters` event (JSON)**: `AttackAngle`, `ClubPath`, `ClubAoA`, `ClubSpeed`, `ClubType` — plus `Carry`, `CarryTotal`, `SideCarry`, `Apex`, `DecentAngle`, `Rolling`, full ball metrics, and complete trajectory polynomials (`TracePolyCoeffsXYZ/UV/BackSpin`).
+- **`ClubDataParameters` event (2021)**: `{AttackAngle, ClubPath, ClubDataEstType}`. Live proof from the app's own logs (2 shed shots): `{"AttackAngle":-2.996,"ClubPath":-0.180,"ClubDataEstType":0}` / `{"AttackAngle":-3.473,"ClubPath":1.711}`.
+- **Transport**: persistent ZeroMQ TCP connection to **monitor port 32501**, secured with **CurveZMQ** (server greeting advertises CURVE mechanism). The CURVE keys are almost certainly derived from the BLE session-key exchange — the deliberate gate binding WiFi event access to a completed BLE handshake. Our BLE stack already speaks the metrics side; recovering the native KDF (`libv2api-jni.so`) or capturing key material via BLE HCI snoop is the remaining RE task.
+- Also on this channel: command JSON (monitor-joins-router with per-session-encrypted WiFi password, PartnerId = `240aef22-3672-482c-a608-fde9624467e9`), `SwingVideoFileReady`, `BallAlignmentData`, battery/temp, dry-swing summaries.
+- RTSP video (554/1554) stays separate and unauthenticated.
+
+**Implication:** club path + attack angle are recoverable in-app once the CURVE handshake is replicated — no Rapsodo Premium dependency in the data path (the monitor computes and transmits them locally; premium gating is an app/cloud-side convention).
+
 ## Drift-watch
 
 - 2026-10-13: app v2.25.6 (vc600), FW 3.8.61 references. BLE char map + key-from-device-name derivation recorded in staging findings. Re-verify characteristic UUIDs and credential payload layout on any app/firmware update.
