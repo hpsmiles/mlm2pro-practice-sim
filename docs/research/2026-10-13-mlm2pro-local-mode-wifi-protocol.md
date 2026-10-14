@@ -74,6 +74,28 @@ The 2026-09-26 conclusion ("AOA/club path not obtainable by third parties") hold
 
 **Implication:** club path + attack angle are recoverable in-app once the CURVE handshake is replicated — no Rapsodo Premium dependency in the data path (the monitor computes and transmits them locally; premium gating is an app/cloud-side convention).
 
+## Addendum 3 — CurveZMQ handshake replicated; key lifecycle + client recipe (2026-10-13/14)
+
+Working CurveZMQ access to the RHost event channel is now protocol-complete from a plain Java client; event capture during a live range session is the last unvalidated step (see open items below). Full evidence trail lives in the private RE staging (`mlm2pro-re\findings\protocol-reconstruction.md`).
+
+1. **Greeting "anomaly" resolved.** The monitor's ZMTP preamble `FF 00×7 01 7F` is a valid ZMTP 1.0/2.0-style signature (uint64BE length 1) — JeroMQ 0.6.0 emits the byte-identical preamble itself. The monitor accepts both strict (`FF 00×8 7F`) and JeroMQ-style client greetings. Net: **stock, unpatched JeroMQ completes the full CurveZMQ handshake** (HELLO/WELCOME/INITIATE/READY) against the RHost ROUTER — the earlier "greeting abort" diagnosis was wrong, and no parser patch is needed.
+2. **ZMQ plane map (armed monitor on LAN).** RHost CURVE ROUTER `tcp://<ip>:32501` (the app's event DEALER), a second CURVE ROUTER `:64646`, and two plaintext NULL REQ/REP **key services** `:53560` + `:64660`. Key-service protocol (from static RE of `libRDCLib.so` `ZMQKeyManager`, corroborated live): send a 100-byte random `[a-zA-Z0-9]` mask on a plain REQ socket; the reply's first 41 bytes are the server key z85-XOR-masked (`server_key[i] = reply[i] ^ mask[i]`); z85-decode → 32-byte CurveZMQ server key. The Rapsodo app's own DEALER fetches its session key this way at every connect (decompiled `launchConnection<false>` → `getServerKey(ip, key_port)`).
+3. **Key lifecycle (live-measured, multiple rounds):**
+   - BLE dance → monitor joins LAN, ROUTER armed with a per-dance session key; key services serve it.
+   - App live → the app's single DEALER connection holds the 32501 slot; **every other CurveZMQ client — right or wrong key — is closed in <50 ms** (decompiled log string: "ROUTER listening at {} (first client used; further connections ignored)").
+   - App disconnect → router re-arms to a fresh unknown key within ~90 s (12 known keys all rejected); key services keep serving the stale dance key (they do not track re-arms).
+   - Teardown 6–11 min post-disconnect → the ROUTER re-arms with the persistent **BOOT key** for a ~40 s–2 min "static window" — an outside CURVE client handshakes and holds (proven 3×).
+   - No app reconnect → monitor powers off; inactivity sleep preserves keys. Fresh boot → monitor off-LAN until the next BLE dance.
+4. **Boot key source.** BLE characteristic `E7BFA27A-EDCC-40E9-B9F3-0DA9B0BD2638` (communication-key char, handle 0x0034) — plain READ returns the 32-byte boot key at every connect cycle (unit-persistent across power cycles; value in private RE staging, not reproduced here). This is the validated static-window key. Its NOTIFY pushes carry additional 32-byte values (session-phase ≠ connect-phase), but those raw pushed values are NOT usable as CurveZMQ keys directly (all tested → rejected; likely encrypted or derived).
+5. **Validated client recipe (static window):** JeroMQ SUB, fresh `Curve().keypair()`, `setCurveServerKey(bootKey)` → handshake accepted vs the ROUTER. Fetch-then-connect with the live session key **while the Rapsodo app holds the slot** was rejected in 3/3 connect-phase attempts (single-client policy the leading explanation; the session-phase variant is untested — see open items).
+6. **Open items (next validation steps):**
+   - (a) Key-fetch + CURVE connect **during an active range session** (session-phase): BLE 0x0034 pushes show a re-key when a session starts; a mid-session fetch from 53560 may serve the then-armed key.
+   - (b) Eviction test: hold a static-window connection while the Rapsodo app reconnects — does the dance drop held clients?
+   - (c) Offline crack of the encrypted BLE 0x0028 blobs (AES-256-CBC, fixed IV, plusaes) — needed only if the full replace-the-app BLE dance must be replicated byte-for-byte.
+7. **Production implication** (single-device constraint intact — `ZMQKeyManager` is a local `zmq_curve_keypair`, no cloud anywhere in the key path): our app can **replace the Rapsodo app as the monitor's client**: BLE dance (HCI-captured writes) → key fetch from 53560 (or boot-key read from 0x0034) → CURVE connect 32501 as first client → receive JSON events (ShotParameters id 2005 with ClubPath/AttackAngle/Carry/Total/Apex/TracePolyCoeffs*; ClubDataParameters id 2021). Coexistence with a live Rapsodo app on the same ROUTER appears architecturally impossible (single-client design).
+8. **Tooling note:** the original four BLE "key candidates" were misparsed snoop fragments — ATT push opcodes are NOTIFICATION=0x1a / INDICATION=0x1b (the earlier 0x1d/0x1e assumption was wrong); two of those candidates were prefixes of 144 B / 48 B encrypted blobs on 0x0028. Probe framework (fetch/hunt/capture), fixed snoop parsers, and the analyzed Ghidra project are staged privately for follow-up sessions.
+
 ## Drift-watch
 
 - 2026-10-13: app v2.25.6 (vc600), FW 3.8.61 references. BLE char map + key-from-device-name derivation recorded in staging findings. Re-verify characteristic UUIDs and credential payload layout on any app/firmware update.
+- 2026-10-14: ZMQ plane (32501/64646 ROUTERs, 53560/64660 key services), key lifecycle timings, and the boot-key characteristic pinned against app v2.25.6 / FW 3.8.61. Re-verify port map + handshake on any monitor firmware update.
