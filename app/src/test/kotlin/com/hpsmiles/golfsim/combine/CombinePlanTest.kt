@@ -48,10 +48,11 @@ class CombinePlanTest {
     }
 
     @Test
-    fun `pins follow the visit for approach stations and are absent for the driver`() {
-        assertEquals(CombineCatalog.visitPins[0], CombinePlan.pinFor(approach, 0))
-        assertEquals(CombineCatalog.visitPins[1], CombinePlan.pinFor(approach, 6))
-        assertEquals(CombineCatalog.visitPins[2], CombinePlan.pinFor(approach, 12))
+    fun `approach pins are always centred and absent for the driver`() {
+        // Every visit must target the centre line so shots can be aimed straight.
+        assertEquals(PinOffset(0.0, 0.0), CombinePlan.pinFor(approach, 0))
+        assertEquals(PinOffset(0.0, 0.0), CombinePlan.pinFor(approach, 6))
+        assertEquals(PinOffset(0.0, 0.0), CombinePlan.pinFor(approach, 12))
         assertNull(CombinePlan.pinFor(approach, 4))
     }
 

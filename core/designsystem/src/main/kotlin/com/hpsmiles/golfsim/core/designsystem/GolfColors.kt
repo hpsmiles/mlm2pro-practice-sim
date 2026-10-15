@@ -25,6 +25,12 @@ object GolfColors {
     val RangeStripeLight = Color(0xFF47A04C)
     val RangeStripeDark = Color(0xFF3A8440)
 
+    // Concentric-ring green tones (user request 2026-10-15): greens render
+    // as alternating very-light / light green rings (see range.GreenRings).
+    // Both read against the dark rough AND the mown fairway of the top-down.
+    val GreenRingVeryLight = Color(0xFFC8E4B2)
+    val GreenRingLight = Color(0xFFABDB9C)
+
     val TextPrimary = Color(0xFFE7EBEE)
     val TextSecondary = Color(0xFF8FA0AC)
     val TextMuted = Color(0xFF5C6873)

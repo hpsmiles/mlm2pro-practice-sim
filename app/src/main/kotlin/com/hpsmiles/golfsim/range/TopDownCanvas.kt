@@ -18,12 +18,25 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.hpsmiles.golfsim.core.designsystem.GolfColors
 
+// Fringe boundary for the top-down custom green — same tone as the POV
+// fringe ring (PovRangeCanvas keeps its own private copy).
+private val GREEN_FRINGE = Color(0xFF2F6E35)
+
+// Pin glyph ink for the top-down custom green — same red/outline as the POV
+// pin (PinPainter) so every view's pin reads the same.
+private val FLAG_RED = Color(0xFFE0322F)
+private val PIN_OUTLINE = Color(0xFF101417)
+
 /**
  * Top-down analytics view: range grid every 50 m, teal dispersion history
  * (55% alpha) and the amber last-shot landing.
  */
 @Composable
-fun TopDownCanvas(shots: List<DisplayShot>, modifier: Modifier = Modifier) {
+fun TopDownCanvas(
+    shots: List<DisplayShot>,
+    modifier: Modifier = Modifier,
+    customGreen: RangeScene.Green? = null,
+) {
     // Allocated once; only per-frame properties are set in the draw lambda.
     val labelPaint = remember { android.graphics.Paint() }
     Canvas(modifier = modifier.fillMaxSize()) {
@@ -125,6 +138,55 @@ fun TopDownCanvas(shots: List<DisplayShot>, modifier: Modifier = Modifier) {
         )
         // Ball dot at the origin (same world point as the POV tee ball).
         drawCircle(Color.White, radius = 2.sp.toPx(), center = Offset(originX, originY))
+
+        // Session custom green (parity with the POV view): fringe disc first,
+        // then the shared concentric-ring styling — alternating very-light /
+        // light green 2 m bands out to the green radius, centred at the
+        // green's (lateral, distance) offset. Off-screen greens simply draw
+        // outside the canvas and clip naturally.
+        customGreen?.let { green ->
+            val gx = originX + green.lateralM.toFloat() * pxPerM
+            val gy = originY - green.distanceM.toFloat() * pxPerM
+            drawCircle(
+                GREEN_FRINGE,
+                radius = (green.fringeRadiusM * pxPerM).toFloat(),
+                center = Offset(gx, gy),
+            )
+            for ((index, radiusM) in GreenRings.boundaryRadii(green.radiusM).withIndex()) {
+                val color = if (GreenRings.isVeryLightRing(index)) {
+                    GolfColors.GreenRingVeryLight
+                } else {
+                    GolfColors.GreenRingLight
+                }
+                drawCircle(
+                    color,
+                    radius = (radiusM * pxPerM).toFloat(),
+                    center = Offset(gx, gy),
+                )
+            }
+            // Pin at the green centre: small flag glyph — short pole up from a
+            // dot, red pennant, dark outline (same red/outline as the POV pin
+            // so all views match). Screen-sized, not world-scaled, so it reads
+            // at full-range zoom.
+            val poleH = 12.5.dp.toPx() // 10 dp x 1.25 (2026-10-15 size bump)
+            // Banded flagstick, matching the POV pin: dark outline, then a
+            // white top half and black bottom half (two bands read cleanly at
+            // this small size; more would merge into grey).
+            drawLine(PIN_OUTLINE, Offset(gx, gy), Offset(gx, gy - poleH), 5.625f)
+            drawLine(Color.White, Offset(gx, gy - poleH / 2f), Offset(gx, gy - poleH), 1.875f)
+            drawLine(PIN_OUTLINE, Offset(gx, gy), Offset(gx, gy - poleH / 2f), 1.875f)
+            val flagL = 10.dp.toPx() // 8 dp x 1.25
+            val pennant = Path().apply {
+                moveTo(gx, gy - poleH)
+                lineTo(gx + flagL, gy - poleH + flagL * 0.3f)
+                lineTo(gx, gy - poleH + flagL * 0.65f)
+                close()
+            }
+            drawPath(pennant, FLAG_RED)
+            drawPath(pennant, PIN_OUTLINE, style = Stroke(1.25f))
+            drawCircle(PIN_OUTLINE, radius = 3.125.dp.toPx(), center = Offset(gx, gy))
+            drawCircle(Color.White, radius = 1.875.dp.toPx(), center = Offset(gx, gy))
+        }
 
         val history = shots.dropLast(1)
         for (shot in history) {

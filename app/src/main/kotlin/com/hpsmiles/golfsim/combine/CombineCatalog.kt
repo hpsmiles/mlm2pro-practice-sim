@@ -15,7 +15,10 @@ data class CombineStation(
     val pins: List<PinOffset> = emptyList(),
 ) {
     companion object {
-        const val DEFAULT_GREEN_RADIUS_M = 15.0
+        // ~26 m diameter so the green sits inside the 28 m fairway
+        // (HALF_WIDTH_M = 14). This is BOTH the visual and the scoring/lie
+        // radius — the app's "what you see is what you score" rule.
+        const val DEFAULT_GREEN_RADIUS_M = 13.0
     }
 }
 
@@ -29,11 +32,9 @@ data class CombineCatalogEntry(
 
 object CombineCatalog {
 
-    val visitPins = listOf(
-        PinOffset(0.0, 0.0),
-        PinOffset(2.2, -1.4),
-        PinOffset(-1.8, 1.9),
-    )
+    // Pins are always centred so shots can be aimed straight down the line on the
+    // sim (an off-centre pin made the target impossible to aim at).
+    val visitPins = listOf(PinOffset(0.0, 0.0))
 
     val entries: List<CombineCatalogEntry> = listOf(
         CombineCatalogEntry(

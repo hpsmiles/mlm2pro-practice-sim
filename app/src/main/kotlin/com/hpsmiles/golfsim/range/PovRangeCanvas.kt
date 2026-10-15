@@ -18,7 +18,6 @@ import kotlin.math.max
 
 // Painted-ground palette A — "Tour Broadcast" (approved spec palette).
 // Sky switched to a white background at user request (2026-09-24).
-private val GREEN_SURFACE = Color(0xFF5FBF63)
 private val FRINGE = Color(0xFF2F6E35)
 
 // Previous-shot tracer lines: faded teal per the M3 design language
@@ -97,18 +96,28 @@ fun PovRangeCanvas(
             return path to PovProjector.nearFadeFactor(nearest).toFloat()
         }
 
-        // User-defined green (item 3): fringe ring first, putting surface on
-        // top. No green set -> plain fairway, nothing drawn.
+        // User-defined green (item 3): fringe ring first, then the putting
+        // surface painted as alternating very-light / light green concentric
+        // rings (user request 2026-10-15) via the shared GreenRings banding.
+        // No green set -> plain fairway, nothing drawn.
         customGreen?.let { green ->
             if (green.distanceM >= 8.0) { // near edge would sit at/behind the camera
                 val fringe = localGroundPath(
                     RangeScene.circleOutline(green.lateralM, green.distanceM, green.fringeRadiusM),
                 )
                 if (fringe != null) drawPath(fringe.first, FRINGE.copy(alpha = fringe.second))
-                val surface = localGroundPath(
-                    RangeScene.circleOutline(green.lateralM, green.distanceM, green.radiusM),
-                )
-                if (surface != null) drawPath(surface.first, GREEN_SURFACE.copy(alpha = surface.second))
+                val radii = GreenRings.boundaryRadii(green.radiusM)
+                for ((index, r) in radii.withIndex()) {
+                    val ring = localGroundPath(
+                        RangeScene.circleOutline(green.lateralM, green.distanceM, r),
+                    ) ?: continue
+                    val color = if (GreenRings.isVeryLightRing(index)) {
+                        GolfColors.GreenRingVeryLight
+                    } else {
+                        GolfColors.GreenRingLight
+                    }
+                    drawPath(ring.first, color.copy(alpha = ring.second))
+                }
             }
         }
 
@@ -147,6 +156,19 @@ fun PovRangeCanvas(
                     dash.first,
                     Color.White.copy(alpha = RangeScene.GUIDE_LINE_ALPHA * dash.second),
                 )
+            }
+        }
+
+        // Pin at the green centre (shared painter, games + combine POV use
+        // the same one): drawn AFTER the practice grid so the flagstick sits
+        // IN FRONT of the centre line, but before the signs/mat/tracers so
+        // the live ball and tracer still render over it. Same guard as the
+        // green itself.
+        customGreen?.let { green ->
+            if (green.distanceM >= 8.0) {
+                with(PinPainter) {
+                    drawPin(camera, w, h, green.lateralM, green.distanceM)
+                }
             }
         }
 

@@ -2,13 +2,14 @@ package com.hpsmiles.golfsim.games
 
 import android.graphics.Paint
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import com.hpsmiles.golfsim.core.designsystem.GolfColors
 import com.hpsmiles.golfsim.core.physics.ShotResult
 import com.hpsmiles.golfsim.range.FollowCam
+import com.hpsmiles.golfsim.range.GreenRings
+import com.hpsmiles.golfsim.range.PinPainter
 import com.hpsmiles.golfsim.range.PovProjector
 import com.hpsmiles.golfsim.range.RangeCamera
 import com.hpsmiles.golfsim.range.RangeDecorations
@@ -66,9 +67,6 @@ object GameScene {
         return if (first) null else path
     }
 
-    private val GreenTurf = Color(0xFF1C3A30)
-    private val FringeTurf = Color(0xFF16291F)
-
     /**
      * Game ground: same sky, fairway, mow stripes, distance boards, hitting
      * mat, and horizon haze as the range, but no practice grid or target
@@ -83,30 +81,34 @@ object GameScene {
     }
 
     /**
-     * Game green: putting surface only. The range keeps its fringe ring; games
-     * do not, because the fringe looked like a scoring ring the user thought
-     * should count.
+     * Game green: putting surface only, painted as alternating very-light /
+     * light green concentric rings (user request 2026-10-15) via the shared
+     * [GreenRings] banding — 2 m rings, thinner outermost when the radius
+     * isn't a multiple of 2 m. The range keeps its fringe ring; games do not,
+     * because the fringe looked like a scoring ring the user thought should
+     * count.
      */
     fun DrawScope.drawGreen(cam: RangeCamera, w: Float, h: Float, cx: Double, cy: Double, radiusM: Double) {
-        groundPath(cam, w, h, RangeScene.circleOutline(cx, cy, radiusM))?.let { drawPath(it, GreenTurf) }
+        val radii = GreenRings.boundaryRadii(radiusM)
+        for ((index, r) in radii.withIndex()) {
+            groundPath(cam, w, h, RangeScene.circleOutline(cx, cy, r))?.let { path ->
+                val color = if (GreenRings.isVeryLightRing(index)) {
+                    GolfColors.GreenRingVeryLight
+                } else {
+                    GolfColors.GreenRingLight
+                }
+                drawPath(path, color)
+            }
+        }
     }
 
-    /** Graphic pin: flagstick + pennant, flat style, scaled up for visibility. */
-    fun DrawScope.drawPin(cam: RangeCamera, w: Float, h: Float, cx: Double, cy: Double, heightM: Double = 4.2) {
-        val base = PovProjector.project(cam, cx, cy, 0.0) ?: return
-        val top = PovProjector.project(cam, cx, cy, heightM) ?: return
-        val b = toScreen(w, h, base)
-        val t = toScreen(w, h, top)
-        // Thicker pole and larger pennant so the pin reads clearly from tee.
-        drawLine(GolfColors.TextPrimary, b, t, strokeWidth = 3f)
-        val px = 1.05 * focalPx(w) * top.scale
-        val pennant = Path().apply {
-            moveTo(t.x, t.y)
-            lineTo(t.x + px.toFloat(), t.y + (px * 0.35).toFloat())
-            lineTo(t.x, t.y + (px * 0.7).toFloat())
-            close()
-        }
-        drawPath(pennant, GolfColors.TextPrimary)
+    /**
+     * Graphic pin, shared across all POV views — the painting lives in
+     * [PinPainter] (range/) so the range POV uses it without depending on
+     * games. Kept here as a shim for the existing `with(GameScene)` callers.
+     */
+    fun DrawScope.drawPin(cam: RangeCamera, w: Float, h: Float, cx: Double, cy: Double, heightM: Double = 5.25) {
+        with(PinPainter) { drawPin(cam, w, h, cx, cy, heightM) }
     }
 
     /**

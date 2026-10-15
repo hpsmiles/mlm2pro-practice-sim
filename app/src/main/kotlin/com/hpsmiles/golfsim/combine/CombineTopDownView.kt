@@ -34,6 +34,7 @@ import com.hpsmiles.golfsim.core.designsystem.GolfSpacing
 import com.hpsmiles.golfsim.core.designsystem.GolfTypography
 import com.hpsmiles.golfsim.fitting.DispersionEllipse
 import com.hpsmiles.golfsim.fitting.FittingColors
+import com.hpsmiles.golfsim.range.GreenRings
 import com.hpsmiles.golfsim.range.RangeScene
 import kotlin.math.PI
 import kotlin.math.abs
@@ -317,34 +318,40 @@ private fun CombineTopDownCanvas(
         }
 
         // Approach greens + pins (each station's visit-1 pin) — true circles now
-        // that both axes share one scale. Teal boundary gets fitting's white
-        // keyline (α0.55, +1.5 dp total width) beneath the outline bumped to
-        // α0.7 — the colour-on-green remedy — so the circle separates from the
-        // mown fairway; the fill tint stays subtle.
+        // that both axes share one scale. The fill is the shared concentric-ring
+        // green styling (user request 2026-10-15): alternating very-light /
+        // light green 2 m bands out to the green radius. The teal boundary keeps
+        // fitting's white keyline (α0.55, +1.5 dp total width) beneath the
+        // outline bumped to α0.7 so the circle separates from the mown fairway.
         for (station in entry.stations) {
             if (station.kind != StationKind.APPROACH) continue
             val pin = station.pins.firstOrNull() ?: PinOffset(0.0, 0.0)
-            val gx = sx(station.startDistanceM + pin.dy)
-            val gy = sy(pin.dx)
-            val r = (station.greenRadiusM * pxPerM).toFloat()
-            drawCircle(
-                color = GolfColors.Teal.copy(alpha = 0.18f),
-                radius = r,
-                center = Offset(gx, gy),
-            )
+            val centre = Offset(sx(station.startDistanceM + pin.dy), sy(pin.dx))
+            for ((index, radiusM) in GreenRings.boundaryRadii(station.greenRadiusM).withIndex()) {
+                val color = if (GreenRings.isVeryLightRing(index)) {
+                    GolfColors.GreenRingVeryLight
+                } else {
+                    GolfColors.GreenRingLight
+                }
+                drawCircle(
+                    color = color,
+                    radius = (radiusM * pxPerM).toFloat(),
+                    center = centre,
+                )
+            }
             drawCircle(
                 color = Color.White.copy(alpha = 0.55f),
-                radius = r,
-                center = Offset(gx, gy),
+                radius = (station.greenRadiusM * pxPerM).toFloat(),
+                center = centre,
                 style = Stroke(1.5f + 1.5.dp.toPx()),
             )
             drawCircle(
                 color = GolfColors.Teal.copy(alpha = 0.7f),
-                radius = r,
-                center = Offset(gx, gy),
+                radius = (station.greenRadiusM * pxPerM).toFloat(),
+                center = centre,
                 style = Stroke(1.5f),
             )
-            drawCircle(GolfColors.TextPrimary, radius = 3.dp.toPx(), center = Offset(gx, gy))
+            drawCircle(GolfColors.TextPrimary, radius = 3.dp.toPx(), center = centre)
         }
 
         // One colour-coded group per station: finish dots, one enclosing ring,

@@ -111,7 +111,11 @@ fun RangeScreen(
                     customGreen = session.customGreen.value,
                 )
             } else {
-                TopDownCanvas(session.shots, Modifier.fillMaxSize())
+                TopDownCanvas(
+                    session.shots,
+                    Modifier.fillMaxSize(),
+                    customGreen = session.customGreen.value,
+                )
             }
             // M4d no-read pill: live misreads coalesced in RangeSession.
             if (session.misreadCount.intValue > 0) {
