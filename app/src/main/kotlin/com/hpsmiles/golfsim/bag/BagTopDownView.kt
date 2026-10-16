@@ -40,7 +40,6 @@ import java.util.Locale
 import kotlin.math.PI
 import kotlin.math.ceil
 import kotlin.math.cos
-import kotlin.math.max
 import kotlin.math.sin
 
 private const val RING_STEPS = 72
@@ -96,14 +95,27 @@ fun BagTopDownView(
         BoxWithConstraints(Modifier.fillMaxWidth().weight(1f)) {
             val widthPx = constraints.maxWidth.toFloat()
             val heightPx = constraints.maxHeight.toFloat()
-            val fit = remember(widthPx, heightPx, withData) {
-                computeBagTopDownFit(widthPx, heightPx, withData)
+            // Pads in dp→px so the margins match the sibling top-downs
+            // (CombineTopDownView / FittingTopDown use 26.dp/12.dp too) at any
+            // density; the geom stays a pure pixel function.
+            val leftPadPx = with(LocalDensity.current) { 26.dp.toPx() }
+            val rightPadPx = with(LocalDensity.current) { 12.dp.toPx() }
+            val fit = remember(widthPx, heightPx, withData, leftPadPx, rightPadPx) {
+                computeBagTopDownFit(widthPx, heightPx, withData, leftPadPx, rightPadPx)
             }
             val tolerance = with(LocalDensity.current) { TapTolerance.toPx() }
+            // Invariant: a dot must never be drawn where it cannot be tapped.
+            // The canvas redraws every recomposition but pointerInput only
+            // restarts when its KEYS change, so the key list must stay
+            // complete — every value the handler reads is keyed here (fit,
+            // withData, tolerance, onClubTap). Keying on `fit` alone is not
+            // enough: fit is value-equal across changes to withData that leave
+            // the snapped window and lateral half unchanged, and the handler
+            // would then keep hit-testing a stale point list.
             Canvas(
                 Modifier
                     .fillMaxSize()
-                    .pointerInput(fit) {
+                    .pointerInput(fit, withData, tolerance, onClubTap) {
                         detectTapGestures { offset ->
                             val current = fit ?: return@detectTapGestures
                             val hit = withData

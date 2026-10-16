@@ -30,6 +30,10 @@ class BagTopDownGeomTest {
         val tight = listOf(ClubDots("PW", listOf(0.0 to 121.0, 1.0 to 122.0, -1.0 to 121.5)))
         val fit = computeBagTopDownFit(1000f, 400f, tight)!!
         assertTrue(fit.windowMaxM - fit.windowMinM >= TOP_DOWN_MIN_WINDOW_M - 1e-9)
+        // Re-centred on the content (100..125 snapped window is too thin):
+        // centre 112.5 ± 25 m, then the guard re-derives min from max.
+        assertEquals(87.5, fit.windowMinM, 1e-9)
+        assertEquals(137.5, fit.windowMaxM, 1e-9)
     }
 
     @Test

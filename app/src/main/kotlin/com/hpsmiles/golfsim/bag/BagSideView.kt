@@ -1,6 +1,7 @@
 package com.hpsmiles.golfsim.bag
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
@@ -9,6 +10,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -36,6 +38,12 @@ import kotlin.math.roundToInt
 
 private val LabelStripHeight = 36.dp
 private val LabelRowGap = 2.dp
+// Leader lines (spec §6.5): a quiet 1 dp connector from the axis down to each
+// label. Row 0 sits LeaderStub below the canvas; row 1 sits one full row band
+// lower, so its leader is longer by exactly that band. Deliberately not
+// hit-testable — the label text stays the tap target.
+private val LeaderStub = 6.dp
+private val LeaderRowBand = (LabelStripHeight - LabelRowGap) / 2
 private val ArcWidth = 2.dp
 private val LandingDotRadius = 4.dp
 private val LandingDotRim = 1.dp
@@ -68,7 +76,6 @@ fun BagSideView(
         val density = LocalDensity.current
         val boxWidth = constraints.maxWidth
         val stripPx = with(density) { LabelStripHeight.toPx() }
-        val rowGapPx = with(density) { LabelRowGap.toPx() }.roundToInt()
         val plotHeightPx = (constraints.maxHeight - stripPx).coerceAtLeast(1f)
         val fit = remember(boxWidth, plotHeightPx, maxDistance, maxApex) {
             computeSideFit(
@@ -83,7 +90,9 @@ fun BagSideView(
                 Modifier
                     .fillMaxWidth()
                     .height(with(density) { plotHeightPx.toDp() })
-                    .pointerInput(fit, traces) {
+                    // Keys are complete: fit + traces for the geometry, and
+                    // onClubTap so the handler can never hold a stale callback.
+                    .pointerInput(fit, traces, onClubTap) {
                         detectTapGestures { offset ->
                             val hit = traces.minByOrNull { trace ->
                                 val dx = fit.x(trace.distanceM) - offset.x
@@ -101,28 +110,42 @@ fun BagSideView(
             }
             Layout(
                 content = {
-                    traces.forEach { trace ->
-                        Text(
-                            text = "${trace.clubName} ${trace.distanceM.roundToInt()}",
-                            style = GolfTypography.Status,
-                            color = colors[trace.clubName] ?: GolfColors.TextSecondary,
-                            maxLines = 1,
-                            modifier = Modifier.clickable { onClubTap(trace.clubName) },
-                        )
+                    traces.forEachIndexed { index, trace ->
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            // Short leader from the axis to this label's row;
+                            // a connector, not a gridline (1 dp, Line colour).
+                            Box(
+                                Modifier
+                                    .width(1.dp)
+                                    .height(if (labelRow(index) == 0) LeaderStub else LeaderStub + LeaderRowBand)
+                                    .background(GolfColors.Line),
+                            )
+                            Text(
+                                text = "${trace.clubName} ${trace.distanceM.roundToInt()}",
+                                style = GolfTypography.Status,
+                                color = colors[trace.clubName] ?: GolfColors.TextSecondary,
+                                maxLines = 1,
+                                modifier = Modifier.clickable { onClubTap(trace.clubName) },
+                            )
+                        }
                     }
                 },
                 modifier = Modifier.fillMaxWidth(),
             ) { measurables, layoutConstraints ->
                 val placeables = measurables.map { it.measure(Constraints()) }
-                val rowHeight = placeables.maxOfOrNull { it.height } ?: 0
-                layout(layoutConstraints.maxWidth, rowHeight * 2 + rowGapPx) {
-                    placeables.forEachIndexed { index, placeable ->
-                        val centreX = fit.x(traces[index].distanceM).roundToInt()
-                        val x = (centreX - placeable.width / 2)
-                            .coerceIn(0, (layoutConstraints.maxWidth - placeable.width).coerceAtLeast(0))
-                        val y = labelRow(index) * (rowHeight + rowGapPx)
-                        placeable.place(x, y)
-                    }
+                val height = placeables.maxOfOrNull { it.height } ?: 0
+                layout(layoutConstraints.maxWidth, height) {
+                    // Row-1 cells first, so where a row-1 leader crosses a
+                    // row-0 label's band the label's text draws on top.
+                    placeables.indices
+                        .sortedByDescending { labelRow(it) }
+                        .forEach { index ->
+                            val placeable = placeables[index]
+                            val centreX = fit.x(traces[index].distanceM).roundToInt()
+                            val x = (centreX - placeable.width / 2)
+                                .coerceIn(0, (layoutConstraints.maxWidth - placeable.width).coerceAtLeast(0))
+                            placeable.place(x, 0)
+                        }
                 }
             }
         }
@@ -136,6 +159,11 @@ private fun DrawScope.drawSideChart(fit: SideFit, traces: List<ClubTrace>, color
         textSize = AxisTickLabelSp.toPx()
         isAntiAlias = true
         textAlign = android.graphics.Paint.Align.CENTER
+    }
+    // Separate paint so the note's alignment never mutates the tick labels'
+    // paint after they were drawn (no mutation-order dependence).
+    val notePaint = android.graphics.Paint(tickPaint).apply {
+        textAlign = android.graphics.Paint.Align.LEFT
     }
     // Ground line, then ticks and their labels in the reserved bottom pad.
     drawLine(
@@ -187,7 +215,7 @@ private fun DrawScope.drawSideChart(fit: SideFit, traces: List<ClubTrace>, color
     drawContext.canvas.nativeCanvas.drawText(
         "height, not to scale",
         fit.x(0.0),
-        tickPaint.textSize,
-        tickPaint.apply { textAlign = android.graphics.Paint.Align.LEFT },
+        notePaint.textSize,
+        notePaint,
     )
 }
