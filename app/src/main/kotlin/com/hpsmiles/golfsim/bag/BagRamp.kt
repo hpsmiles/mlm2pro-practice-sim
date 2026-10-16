@@ -17,23 +17,31 @@ import com.hpsmiles.golfsim.core.designsystem.GolfColors
  * GolfColors.Teal — the "good" gap verdict colour. The ramp appears in the
  * chart and the top-down legend; the verdict colours appear in the summary
  * strip and the panel's gap block, so they never sit in the same region.
+ *
+ * Local hues 7–13 (2026-10-16 review): the previous set had near-duplicates
+ * against the pinned six — aqua ~172° vs A teal ~178°, dull olive ~83° vs
+ * F green ~120°, apricot ~28° vs C yellow ~51° — and sky ~215° crowded D
+ * indigo ~233°. The current seven occupy the six hue gaps between the pinned
+ * colours (one each, chartreuse + spring splitting the yellow→green span,
+ * slate staying neutral), so the minimum chromatic separation across all 13
+ * is ~23° and every hue reads on Base #0E1114.
  */
 object BagRamp {
 
     val hues: List<Color> = listOf(
-        GolfColors.Comparison.A, // teal
-        GolfColors.Comparison.B, // rose
-        GolfColors.Comparison.C, // yellow
-        GolfColors.Comparison.D, // indigo
-        GolfColors.Comparison.E, // magenta
-        GolfColors.Comparison.F, // green
-        Color(0xFFE4572E),       // orange
-        Color(0xFF5B9DF9),       // sky
-        Color(0xFF8FBF4A),       // olive
-        Color(0xFFC77DFF),       // violet
-        Color(0xFF57D6C4),       // aqua
-        Color(0xFFFFB86B),       // apricot
-        Color(0xFFB0BEC5),       // slate
+        GolfColors.Comparison.A, // teal      ~178°
+        GolfColors.Comparison.B, // rose      ~348°
+        GolfColors.Comparison.C, // yellow    ~51°
+        GolfColors.Comparison.D, // indigo    ~233°
+        GolfColors.Comparison.E, // magenta   ~300°
+        GolfColors.Comparison.F, // green     ~120°
+        Color(0xFFE4572E),       // orange    ~14°
+        Color(0xFF3D9BE9),       // azure     ~206°
+        Color(0xFF9BE01E),       // chartreuse ~81°
+        Color(0xFF17D979),       // spring    ~150°
+        Color(0xFF9B6FF3),       // violet    ~260°
+        Color(0xFFF25CB8),       // pink      ~323°
+        Color(0xFFB0BEC5),       // slate     (neutral)
     )
 
     val hueCount: Int get() = hues.size

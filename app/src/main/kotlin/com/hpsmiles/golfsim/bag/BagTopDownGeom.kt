@@ -1,7 +1,6 @@
 package com.hpsmiles.golfsim.bag
 
 import com.hpsmiles.golfsim.range.RangeScene
-import kotlin.math.abs
 import kotlin.math.ceil
 import kotlin.math.floor
 import kotlin.math.max
@@ -14,9 +13,6 @@ const val TOP_DOWN_MIN_WINDOW_M = 50.0
 
 /** Corridor visibility scale — the fitting top-down's constant. */
 const val TOP_DOWN_CORRIDOR_VISIBILITY_SCALE = 1.15
-
-/** Lateral breathing room past the widest shot, metres. */
-const val TOP_DOWN_LATERAL_MARGIN_M = 2.0
 
 /**
  * The TOP-DOWN view's fit. One instance drives both the canvas and the tap
@@ -55,7 +51,6 @@ fun computeBagTopDownFit(
     if (points.isEmpty()) return null
     val minDistance = points.minOf { it.second }
     val maxDistance = points.maxOf { it.second }
-    val maxAbsSide = points.maxOf { abs(it.first) }
 
     var windowMinM = (floor(minDistance / TOP_DOWN_SNAP_M) * TOP_DOWN_SNAP_M).coerceAtLeast(0.0)
     var windowMaxM = (ceil(maxDistance / TOP_DOWN_SNAP_M) * TOP_DOWN_SNAP_M)
@@ -68,16 +63,20 @@ fun computeBagTopDownFit(
     }
 
     val span = max(windowMaxM - windowMinM, 1.0)
-    val lateralHalfM = max(
-        RangeScene.fairwayHalfWidth(0.0) * TOP_DOWN_CORRIDOR_VISIBILITY_SCALE,
-        maxAbsSide + TOP_DOWN_LATERAL_MARGIN_M,
-    )
     return BagTopDownFit(
         windowMinM = windowMinM,
         windowMaxM = windowMaxM,
         pxPerMM = (widthPx - leftPadPx - rightPadPx) / span.toFloat(),
         leftPadPx = leftPadPx,
-        pxPerMSide = (heightPx / 2f) / lateralHalfM.toFloat(),
+        // TRUE SCALE (spec, 2026-10-16 review): one px per metre on BOTH
+        // axes — the vertical scale is the horizontal one, never an
+        // independent fit. The previous per-axis fit ((heightPx/2)/lateralHalf)
+        // made rings read as tall, narrow ellipses that contradicted the
+        // tick spacing (≈7.7 px/m across vs ≈14+ px/m up). Parity means a
+        // very wide lateral spread can now overflow the pane's height on a
+        // short window; that trade is accepted — an honest scale beats a
+        // fitted one that misrepresents dispersion shape.
+        pxPerMSide = ((widthPx - leftPadPx - rightPadPx) / span).toFloat(),
         midY = heightPx / 2f,
     )
 }

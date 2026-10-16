@@ -52,10 +52,27 @@ class BagTopDownGeomTest {
     }
 
     @Test
-    fun `the widest lateral content fits inside the pane`() {
-        val wide = listOf(ClubDots("D", listOf(-40.0 to 200.0, 40.0 to 210.0, 0.0 to 205.0)))
-        val fit = computeBagTopDownFit(1000f, 400f, wide)!!
-        assertTrue(fit.sy(-40.0) <= 400f)
-        assertTrue(fit.sy(40.0) >= 0f)
+    fun `true scale - one px per metre on both axes`() {
+        // 2026-10-16 review: the vertical scale must equal the horizontal one,
+        // otherwise rings read as tall, narrow ellipses that contradict the
+        // tick spacing. (Previously (heightPx/2)/lateralHalf — an independent
+        // per-axis fit.)
+        val fit = computeBagTopDownFit(1000f, 400f, clubs)!!
+        assertEquals(fit.pxPerMM, fit.pxPerMSide, 1e-6f)
+        // Lateral zero stays on the mid line and metres map symmetrically.
+        assertEquals(200f, fit.sy(0.0), 1e-3f)
+        assertEquals(200f + fit.pxPerMSide * 5f, fit.sy(-5.0), 1e-3f)
+    }
+
+    @Test
+    fun `realistic lateral spread fits inside the pane at true scale`() {
+        // At parity the vertical reach is (heightPx/2)/pxPerMM metres; on a
+        // 50 m minimum window at 1000 px that is ~±10 m, so ±8 m must fit.
+        val spread = listOf(
+            ClubDots("D", listOf(-8.0 to 200.0, 8.0 to 210.0, 0.0 to 205.0)),
+        )
+        val fit = computeBagTopDownFit(1000f, 400f, spread)!!
+        assertTrue(fit.sy(-8.0) <= 400f)
+        assertTrue(fit.sy(8.0) >= 0f)
     }
 }

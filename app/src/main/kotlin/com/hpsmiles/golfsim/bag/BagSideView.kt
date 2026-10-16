@@ -49,6 +49,8 @@ private val LandingDotRadius = 4.dp
 private val LandingDotRim = 1.dp
 private val AxisTickLabelSp = 10.sp
 private val AxisTickLength = 4.dp
+/** Canvas pad below the baseline that holds the tick-digit row (see fit). */
+private val TickLabelPad = 28.dp
 
 /**
  * SIDE view (spec §6): every club's real simulated median flight on one shared
@@ -77,12 +79,20 @@ fun BagSideView(
         val boxWidth = constraints.maxWidth
         val stripPx = with(density) { LabelStripHeight.toPx() }
         val plotHeightPx = (constraints.maxHeight - stripPx).coerceAtLeast(1f)
-        val fit = remember(boxWidth, plotHeightPx, maxDistance, maxApex) {
+        // Bottom pad sized for the tick-digit row (2026-10-16 review): the
+        // digits are drawn BELOW the axis baseline, in the pad the fit
+        // reserves — previously the 18 px default put the 10 sp digits in the
+        // same band as the landing dots and each dot covered a digit. 28 dp
+        // clears dot radius + rim, the tick line, and the digit ascent with
+        // margin, at any density.
+        val bottomPadPx = with(density) { TickLabelPad.toPx() }
+        val fit = remember(boxWidth, plotHeightPx, maxDistance, maxApex, bottomPadPx) {
             computeSideFit(
                 widthPx = boxWidth.toDouble(),
                 heightPx = plotHeightPx.toDouble(),
                 maxDistanceM = maxDistance,
                 maxApexM = maxApex,
+                bottomPadPx = bottomPadPx.toDouble(),
             )
         }
         Column(Modifier.fillMaxSize()) {
@@ -173,7 +183,10 @@ private fun DrawScope.drawSideChart(fit: SideFit, traces: List<ClubTrace>, color
         strokeWidth = 1f,
     )
     val tickLength = AxisTickLength.toPx()
-    val labelBaseline = size.height - tickLength
+    // Digits anchored to the canvas floor, fully inside the pad the fit
+    // reserved below the baseline (2026-10-16 review) — they can no longer
+    // share a band with the landing dots on the baseline.
+    val labelBaseline = size.height - 2f
     BoxPlotGeom.niceTicks(0.0, fit.maxDistanceM).forEach { tick ->
         val x = fit.x(tick)
         drawLine(

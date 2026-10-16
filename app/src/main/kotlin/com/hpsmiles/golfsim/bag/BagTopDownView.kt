@@ -25,6 +25,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
@@ -140,33 +141,45 @@ fun BagTopDownView(
 private fun DrawScope.drawTopDown(fit: BagTopDownFit, clubs: List<ClubDots>, colors: Map<String, Color>) {
     // Ground: rough base, mown fairway corridor, 10 m stripes clipped to the
     // window — the same treatment as the fitting top-down (FittingTopDown.kt
-    // 172-198), with the distance axis on x instead of y.
-    drawRect(GolfColors.RangeRough, size = size)
-    val corridorHalfM = RangeScene.fairwayHalfWidth(0.0)
-    val corridorTop = fit.sy(corridorHalfM)
-    val corridorBottom = fit.sy(-corridorHalfM)
-    drawRect(
-        color = GolfColors.RangeFairway,
-        topLeft = Offset(fit.sx(RangeScene.FAIRWAY_TEE_Y), corridorTop),
-        size = Size(
-            fit.sx(RangeScene.FAIRWAY_END_Y) - fit.sx(RangeScene.FAIRWAY_TEE_Y),
-            corridorBottom - corridorTop,
-        ),
-    )
-    for (band in 0 until RangeScene.stripeBandCount()) {
-        val (fromM, toM) = RangeScene.stripeBand(band)
-        val lo = maxOf(fromM, fit.windowMinM)
-        val hi = minOf(toM, fit.windowMaxM)
-        if (hi <= lo) continue
+    // 172-198), with the distance axis on x instead of y. Everything is
+    // clipped to the plot's own rect (2026-10-16 review): the corridor rect's
+    // x start is sx(FAIRWAY_TEE_Y), which sits LEFT of the window when the
+    // window is snapped past the tee, so unclipped the mown band painted
+    // edge-to-edge across the screen, over the nav rail. The plot rect is the
+    // window's own span — the same bounds the gridlines respect.
+    clipRect(
+        left = fit.sx(fit.windowMinM),
+        top = 0f,
+        right = fit.sx(fit.windowMaxM),
+        bottom = size.height,
+    ) {
+        drawRect(GolfColors.RangeRough, size = size)
+        val corridorHalfM = RangeScene.fairwayHalfWidth(0.0)
+        val corridorTop = fit.sy(corridorHalfM)
+        val corridorBottom = fit.sy(-corridorHalfM)
         drawRect(
-            color = if (RangeScene.stripeIsLight(0.0, fromM)) {
-                GolfColors.RangeStripeLight
-            } else {
-                GolfColors.RangeStripeDark
-            },
-            topLeft = Offset(fit.sx(lo), corridorTop),
-            size = Size(fit.sx(hi) - fit.sx(lo), corridorBottom - corridorTop),
+            color = GolfColors.RangeFairway,
+            topLeft = Offset(fit.sx(RangeScene.FAIRWAY_TEE_Y), corridorTop),
+            size = Size(
+                fit.sx(RangeScene.FAIRWAY_END_Y) - fit.sx(RangeScene.FAIRWAY_TEE_Y),
+                corridorBottom - corridorTop,
+            ),
         )
+        for (band in 0 until RangeScene.stripeBandCount()) {
+            val (fromM, toM) = RangeScene.stripeBand(band)
+            val lo = maxOf(fromM, fit.windowMinM)
+            val hi = minOf(toM, fit.windowMaxM)
+            if (hi <= lo) continue
+            drawRect(
+                color = if (RangeScene.stripeIsLight(0.0, fromM)) {
+                    GolfColors.RangeStripeLight
+                } else {
+                    GolfColors.RangeStripeDark
+                },
+                topLeft = Offset(fit.sx(lo), corridorTop),
+                size = Size(fit.sx(hi) - fit.sx(lo), corridorBottom - corridorTop),
+            )
+        }
     }
     // Distance gridlines with labels, inside the window only.
     val gridPaint = android.graphics.Paint().apply {
