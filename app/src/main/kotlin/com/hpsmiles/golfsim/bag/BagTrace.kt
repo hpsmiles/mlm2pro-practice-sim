@@ -109,7 +109,28 @@ object BagTrace {
         return ClubTrace(clubName, scaled, distance, scaled.maxOf { it.heightM })
     }
 
-    /** Task 5 implements this. */
-    fun dots(clubName: String, shots: List<BagMappingShotEntity>, basis: DistanceBasis): ClubDots =
-        ClubDots(clubName, emptyList())
+    /**
+     * Landing points for the top-down view, one per kept shot.
+     *
+     * The entity stores no lateral column, so the lateral offset comes from a
+     * per-shot simulation: for CARRY the `px` of the last flight sample (the
+     * carry landing), for TOTAL `ShotResult.sideM` (the rest position's lateral
+     * offset). The **distance** always comes from the persisted cache via
+     * [distanceFor], never from the simulation — the roll law is the part that
+     * gets recalibrated, and it moves distance but never lateral deviation, so
+     * this keeps every dot's distance identical to every other number on the
+     * page.
+     */
+    fun dots(clubName: String, shots: List<BagMappingShotEntity>, basis: DistanceBasis): ClubDots {
+        val points = shots.filter { it.effectiveIncluded() }.mapNotNull { shot ->
+            val launch = launchFor(shot) ?: return@mapNotNull null
+            val simulated = BallFlightEngine.simulate(launch)
+            val lateral = when (basis) {
+                DistanceBasis.CARRY -> simulated.samples.lastOrNull()?.px ?: return@mapNotNull null
+                DistanceBasis.TOTAL -> simulated.sideM
+            }
+            lateral to shot.distanceFor(basis)
+        }
+        return ClubDots(clubName, points)
+    }
 }

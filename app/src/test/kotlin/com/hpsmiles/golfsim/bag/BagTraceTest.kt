@@ -122,4 +122,35 @@ class BagTraceTest {
         assertNull(BagTrace.trace("7i", listOf(shot(included = false)), DistanceBasis.CARRY))
         assertNull(BagTrace.trace("7i", listOf(shot(launchAngleDeg = 90.0)), DistanceBasis.CARRY))
     }
+
+    @Test
+    fun `dots returns one point per kept shot`() {
+        val shots = listOf(shot(), shot(), shot(carryM = 150.0), shot(included = false))
+        val dots = BagTrace.dots("7i", shots, DistanceBasis.CARRY)
+        assertEquals(3, dots.points.size)
+        assertEquals("7i", dots.clubName)
+    }
+
+    @Test
+    fun `dots distance comes from the persisted cache, not the simulation`() {
+        val shots = listOf(shot(carryM = 137.5, totalM = 149.25))
+        assertEquals(137.5, BagTrace.dots("7i", shots, DistanceBasis.CARRY).points.single().second, 1e-9)
+        assertEquals(149.25, BagTrace.dots("7i", shots, DistanceBasis.TOTAL).points.single().second, 1e-9)
+    }
+
+    @Test
+    fun `dots skips shots whose launch block cannot be built`() {
+        val shots = listOf(shot(), shot(launchAngleDeg = 90.0))
+        assertEquals(1, BagTrace.dots("7i", shots, DistanceBasis.CARRY).points.size)
+    }
+
+    @Test
+    fun `dots lateral is a finite offset and a straight shot sits near zero`() {
+        val straight = BagTrace.dots("7i", listOf(shot(launchDirDeg = 0.0, spinAxisDeg = 0.0)), DistanceBasis.CARRY)
+        assertTrue(straight.points.single().first.isFinite())
+        assertTrue(kotlin.math.abs(straight.points.single().first) < 1.0)
+
+        val pushed = BagTrace.dots("7i", listOf(shot(launchDirDeg = 10.0, spinAxisDeg = 0.0)), DistanceBasis.CARRY)
+        assertTrue(pushed.points.single().first > 1.0)
+    }
 }
