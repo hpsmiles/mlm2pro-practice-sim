@@ -134,6 +134,26 @@ BLE disconnect/reconnect recovery, error states, settings, local CSV export, tab
 
 ---
 
+## M10 — Carry Accuracy Calibration (NEXT — for review, requested 2026-10-17)
+
+The ball-flight engine's **carry** is our most user-visible number: every distance the app reports (range, bag mapping, combines, fitting) comes from it. A benchmark of our engine against **1,325 real monitor-reported shots** (816 usable Trackman rows of 832, 485 Mevo rows, 24 published Foresight reference rows) found it systematically short — full analysis and per-class tables in `docs/research/2026-10-16-benchmark-ours-vs-fuse-vs-monitors.md`:
+
+- **Sea level: ~6–8 % short** (MAPE 8.8 % on the Trackman sea-level subset; −6.3 % bias on Mevo).
+- **Wedges are the worst class: ~12 % short** in both environment modes (independently corroborated by Foresight's published lob-wedge table, where we are 11.3 % short). Fairway metals and drivers are much closer (4–6 %).
+- **Total distance MAPE 15–16 %** — our rollout runs shorter than measured almost everywhere, which partially masks the carry error. Decompose measured `total − carry` per class *before* touching `BounceRollModel`.
+
+**Plan:** (1) golden fixtures first — ~10–15 Trackman rows across club classes as a committed regression net, so the calibration work has an honest net to steer by (started on branch `physics-calibration`); (2) fix the sea-level carry shortfall; (3) fix the wedge/high-spin case; (4) reconcile rollout/total.
+
+**Constraints:** the existing pin set (`TourAveragesTest`, `pgaDriver`, the reference trajectories) must stay green or be consciously re-pinned with dated notes; rollout re-tuning must be steered with `RolloutSweepDiagnostic`; the benchmark is reference-only — no code may be copied from it (fuse is PolyForm Noncommercial).
+
+**Exit:** carry MAPE materially reduced against the benchmark's Trackman and Mevo sets, wedge class no longer the outlier, and the golden fixtures pinning the result.
+
+### Future enhancements (not scheduled)
+
+- **Altitude / air-density response (P1 in the benchmark).** Our engine's response is *wrong-signed*: given correct high-altitude air density, simulated carry gets **shorter**, while real measured carries at altitude get **longer** (lift and the Re-dependent drag both scale with density). It is a genuine physics bug but **low impact for this app** — the sim has no altitude setting and the shed is at one fixed location. Revisit if the app ever exposes altitude/air-density or is used away from home. Where to look: `AerodynamicModel` (lift ∝ ρ, Cl polynomials, Re-dependent Cd banding), `Environment.airDensity`, `FlightSolver` force assembly.
+
+---
+
 ## Cross-cutting Conventions
 
 - Pure modules (decoder, physics) stay unit-testable without hardware — given inputs → same outputs.
