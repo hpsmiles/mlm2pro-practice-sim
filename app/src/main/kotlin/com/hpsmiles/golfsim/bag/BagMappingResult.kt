@@ -165,7 +165,14 @@ fun BagMappingResult(
         BagDistPanel(
             open = panelOpen,
             onToggle = { panelOpen = !panelOpen },
-            modifier = if (panelOpen) Modifier.weight(1f) else Modifier,
+            // Open panel gets 1.5x the chart's share (2026-10-16 round 2):
+            // the gap block (~434 px) is taller than half the page, so at 1:1
+            // it could never fully clear the panel's sticky metre scale even
+            // with the trailing scroll spacer. 1.5x is the balance point —
+            // at 2f the chart pane gets so short that the top-down's
+            // true-scale window (max 330 m of range) can no longer cover the
+            // lateral spread, re-breaking Driver containment.
+            modifier = if (panelOpen) Modifier.weight(1.5f) else Modifier,
         ) {
             CarryMatrixSection(
                 rows = rows,
@@ -256,7 +263,32 @@ private fun CarryMatrixSection(
     // no cue that the cut-off rows below are reachable. A fade + "scroll for
     // more" caption appears exactly while `canScrollForward` — it never lies.
     val listState = rememberLazyListState()
-    Box(modifier.fillMaxWidth()) {
+    // The metre scale is PINNED ABOVE the list rather than a stickyHeader
+    // (2026-10-16 round 2, F1): a sticky overlay strikes through whatever
+    // scrolls beneath it, and on this tablet the gap block is taller than
+    // the viewport below the sticky even with a trailing spacer — the
+    // heading could never fully clear it. Pinned outside the list, the scale
+    // stays visible for the club rows and can never obscure a row or the
+    // gap block, at any scroll position.
+    Column(modifier.fillMaxWidth()) {
+        if (sharedAxis != null) {
+            Column(modifier = Modifier.fillMaxWidth().background(GolfColors.Base)) {
+                Row(
+                    modifier = Modifier.padding(horizontal = RowInset),
+                    verticalAlignment = Alignment.Bottom,
+                ) {
+                    Spacer(Modifier.width(ClubLabelWidth))
+                    CarryMatrixScaleCanvas(
+                        minM = sharedAxis.minM,
+                        maxM = sharedAxis.maxM,
+                        modifier = Modifier.weight(1f).height(ScaleHeight),
+                    )
+                    Spacer(Modifier.width(StatsColumnWidth))
+                }
+                Box(Modifier.fillMaxWidth().height(1.dp).background(GolfColors.Line))
+            }
+        }
+        Box(Modifier.weight(1f).fillMaxWidth()) {
         LazyColumn(
             state = listState,
             modifier = Modifier.fillMaxSize(),
@@ -270,30 +302,6 @@ private fun CarryMatrixSection(
             ) {
                 LegendSwatch(GolfColors.Teal, "CARRY")
                 LegendSwatch(TotalBoxColor, "TOTAL")
-            }
-        }
-        // Metre scale pinned to the top (stays visible while the rows scroll).
-        // Mirrors the row structure — same [RowInset] horizontal padding plus
-        // label spacer + plot area + stats spacer — so ticks sit exactly above
-        // the box-plot lanes. Opaque Base background so scrolling rows pass
-        // behind it. Only with data.
-        if (sharedAxis != null) {
-            stickyHeader {
-                Column(modifier = Modifier.fillMaxWidth().background(GolfColors.Base)) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = RowInset),
-                        verticalAlignment = Alignment.Bottom,
-                    ) {
-                        Spacer(Modifier.width(ClubLabelWidth))
-                        CarryMatrixScaleCanvas(
-                            minM = sharedAxis.minM,
-                            maxM = sharedAxis.maxM,
-                            modifier = Modifier.weight(1f).height(ScaleHeight),
-                        )
-                        Spacer(Modifier.width(StatsColumnWidth))
-                    }
-                    Box(Modifier.fillMaxWidth().height(1.dp).background(GolfColors.Line))
-                }
             }
         }
         items(clubRows, key = { it.first }) { (name, type, clubShots) ->
@@ -358,6 +366,7 @@ private fun CarryMatrixSection(
                     .align(Alignment.BottomCenter)
                     .padding(bottom = GolfSpacing.Xs),
             )
+        }
         }
     }
 }

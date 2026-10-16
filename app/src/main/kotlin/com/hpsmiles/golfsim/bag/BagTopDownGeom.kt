@@ -1,6 +1,7 @@
 package com.hpsmiles.golfsim.bag
 
 import com.hpsmiles.golfsim.range.RangeScene
+import kotlin.math.abs
 import kotlin.math.ceil
 import kotlin.math.floor
 import kotlin.math.max
@@ -13,6 +14,9 @@ const val TOP_DOWN_MIN_WINDOW_M = 50.0
 
 /** Corridor visibility scale — the fitting top-down's constant. */
 const val TOP_DOWN_CORRIDOR_VISIBILITY_SCALE = 1.15
+
+/** Lateral breathing room the true-scale window must cover past the widest dot, metres. */
+const val TOP_DOWN_LATERAL_MARGIN_M = 2.0
 
 /**
  * The TOP-DOWN view's fit. One instance drives both the canvas and the tap
@@ -37,8 +41,9 @@ data class BagTopDownFit(
  * Fits the session's content: the distance window is cropped to the actual
  * points and snapped outward to [TOP_DOWN_SNAP_M] (floor
  * [TOP_DOWN_MIN_WINDOW_M]) so empty range either side of the action is trimmed
- * away; the lateral half-window fits the widest content. Null when there is
- * nothing to draw.
+ * away. The window then grows (zoom out only, re-snapped to the grid) until
+ * the true-scale vertical reach covers the widest lateral content. Null when
+ * there is nothing to draw.
  */
 fun computeBagTopDownFit(
     widthPx: Float,
@@ -51,6 +56,7 @@ fun computeBagTopDownFit(
     if (points.isEmpty()) return null
     val minDistance = points.minOf { it.second }
     val maxDistance = points.maxOf { it.second }
+    val maxAbsSide = points.maxOf { abs(it.first) }
 
     var windowMinM = (floor(minDistance / TOP_DOWN_SNAP_M) * TOP_DOWN_SNAP_M).coerceAtLeast(0.0)
     var windowMaxM = (ceil(maxDistance / TOP_DOWN_SNAP_M) * TOP_DOWN_SNAP_M)
@@ -62,21 +68,32 @@ fun computeBagTopDownFit(
         windowMinM = windowMaxM - TOP_DOWN_MIN_WINDOW_M
     }
 
-    val span = max(windowMaxM - windowMinM, 1.0)
+    // TRUE SCALE with a containment guarantee (2026-10-16 review round 2).
+    // The vertical scale equals the horizontal one (pxPerMSide = pxPerMM) —
+    // an independent per-axis fit made rings read as tall, narrow ellipses
+    // that contradicted the tick spacing. At parity the vertical reach is
+    //     (heightPx / 2) / pxPerMM  =  span * heightPx / (2 * plotWidth)
+    // metres, so on a short pane (panel open) a wide lateral spread overflows
+    // the bottom. Fix: grow the span — pure zoom-out, parity untouched —
+    // until reach >= maxAbsSide + margin, re-snapping outward to the grid
+    // (and shifting the window's start down if the range end clamps it):
+    //     span >= (maxAbsSide + margin) * 2 * plotWidth / heightPx
+    val plotWidth = max(widthPx - leftPadPx - rightPadPx, 1f)
+    val requiredSpan =
+        (maxAbsSide + TOP_DOWN_LATERAL_MARGIN_M) * 2.0 * plotWidth / max(heightPx, 1f)
+    var span = max(windowMaxM - windowMinM, 1.0)
+    if (span < requiredSpan) {
+        val grown = ceil(requiredSpan / TOP_DOWN_SNAP_M) * TOP_DOWN_SNAP_M
+        windowMaxM = (windowMinM + grown).coerceAtMost(RangeScene.FAIRWAY_END_Y)
+        windowMinM = (windowMaxM - grown).coerceAtLeast(0.0)
+        span = max(windowMaxM - windowMinM, 1.0)
+    }
     return BagTopDownFit(
         windowMinM = windowMinM,
         windowMaxM = windowMaxM,
-        pxPerMM = (widthPx - leftPadPx - rightPadPx) / span.toFloat(),
+        pxPerMM = (plotWidth / span).toFloat(),
         leftPadPx = leftPadPx,
-        // TRUE SCALE (spec, 2026-10-16 review): one px per metre on BOTH
-        // axes — the vertical scale is the horizontal one, never an
-        // independent fit. The previous per-axis fit ((heightPx/2)/lateralHalf)
-        // made rings read as tall, narrow ellipses that contradicted the
-        // tick spacing (≈7.7 px/m across vs ≈14+ px/m up). Parity means a
-        // very wide lateral spread can now overflow the pane's height on a
-        // short window; that trade is accepted — an honest scale beats a
-        // fitted one that misrepresents dispersion shape.
-        pxPerMSide = ((widthPx - leftPadPx - rightPadPx) / span).toFloat(),
+        pxPerMSide = (plotWidth / span).toFloat(),
         midY = heightPx / 2f,
     )
 }

@@ -75,4 +75,23 @@ class BagTopDownGeomTest {
         assertTrue(fit.sy(-8.0) <= 400f)
         assertTrue(fit.sy(8.0) >= 0f)
     }
+
+    @Test
+    fun `a short pane grows the window until the true-scale reach covers the spread`() {
+        // 2026-10-16 round 2 (F2b): panel open = short pane. At strict parity
+        // a ±40 m spread on a 300 px pane would overflow; the span must grow
+        // (zoom out, re-snapped to the 25 m grid) until
+        //   span * heightPx / (2 * plotWidth) >= maxAbsSide + margin
+        // required = 42 * 2 * 962 / 300 = 269.4 → grown to 275 m.
+        val wide = listOf(
+            ClubDots("D", listOf(-40.0 to 200.0, 40.0 to 210.0, 0.0 to 205.0)),
+        )
+        val fit = computeBagTopDownFit(1000f, 300f, wide)!!
+        assertEquals(275.0, fit.windowMaxM - fit.windowMinM, 1e-9)
+        // Parity preserved…
+        assertEquals(fit.pxPerMM, fit.pxPerMSide, 1e-6f)
+        // …and the extreme dots stay inside the pane.
+        assertTrue(fit.sy(-40.0) <= 300f)
+        assertTrue(fit.sy(40.0) >= 0f)
+    }
 }

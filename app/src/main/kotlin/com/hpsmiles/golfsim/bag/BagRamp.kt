@@ -18,13 +18,18 @@ import com.hpsmiles.golfsim.core.designsystem.GolfColors
  * chart and the top-down legend; the verdict colours appear in the summary
  * strip and the panel's gap block, so they never sit in the same region.
  *
- * Local hues 7–13 (2026-10-16 review): the previous set had near-duplicates
+ * Local hues 7–13 (2026-10-16 reviews): the first set had near-duplicates
  * against the pinned six — aqua ~172° vs A teal ~178°, dull olive ~83° vs
  * F green ~120°, apricot ~28° vs C yellow ~51° — and sky ~215° crowded D
  * indigo ~233°. The current seven occupy the six hue gaps between the pinned
  * colours (one each, chartreuse + spring splitting the yellow→green span,
- * slate staying neutral), so the minimum chromatic separation across all 13
- * is ~23° and every hue reads on Base #0E1114.
+ * slate staying neutral). Round 2: the E→B gap (magenta 299° → rose 347°,
+ * 48.5° wide) caps any single hue at 24.25° from both neighbours — with the
+ * six pinned hues and 12 chromatic slots, 24.25° IS the global optimum, so
+ * 25–30° everywhere is unreachable without touching pinned colours. The slot
+ * therefore keeps its optimal ~322° hue but as a PALE pink (#FF99D9, much
+ * lighter than rose B and orchid E) so the three warm chips no longer read
+ * as shades of one colour. Minimum chromatic hue separation: ~23.6°.
  */
 object BagRamp {
 
@@ -40,7 +45,7 @@ object BagRamp {
         Color(0xFF9BE01E),       // chartreuse ~81°
         Color(0xFF17D979),       // spring    ~150°
         Color(0xFF9B6FF3),       // violet    ~260°
-        Color(0xFFF25CB8),       // pink      ~323°
+        Color(0xFFFF99D9),       // pale pink ~322°
         Color(0xFFB0BEC5),       // slate     (neutral)
     )
 
