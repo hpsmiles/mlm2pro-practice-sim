@@ -39,12 +39,11 @@ import com.hpsmiles.golfsim.fitting.DispersionEllipse
 import com.hpsmiles.golfsim.range.RangeScene
 import java.util.Locale
 import kotlin.math.PI
-import kotlin.math.ceil
+import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.sin
 
 private const val RING_STEPS = 72
-private const val GRID_STEP_M = 50.0
 private val RingKeylineWidth = 3.5.dp
 private val RingColorWidth = 2.dp
 private val DotRimRadius = 4.dp
@@ -62,11 +61,12 @@ private val TapTolerance = 16.dp
 fun BagTopDownView(
     clubs: List<ClubDots>,
     colors: Map<String, Color>,
+    axis: BagDistanceAxis?,
     onClubTap: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val withData = clubs.filter { it.points.isNotEmpty() }
-    if (withData.isEmpty()) {
+    if (withData.isEmpty() || axis == null) {
         Box(modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Text("No shots to plot.", style = GolfTypography.Body, color = GolfColors.TextSecondary)
         }
@@ -102,8 +102,9 @@ fun BagTopDownView(
             // FittingTopDown use 26.dp/12.dp too) at any density.
             val leftPadPx = with(LocalDensity.current) { TOP_DOWN_LEFT_PAD_DP.dp.toPx() }
             val rightPadPx = with(LocalDensity.current) { TOP_DOWN_RIGHT_PAD_DP.dp.toPx() }
-            val fit = remember(widthPx, heightPx, withData, leftPadPx, rightPadPx) {
-                computeBagTopDownFit(widthPx, heightPx, withData, leftPadPx, rightPadPx)
+            val maxAbsSideM = withData.flatMap { it.points }.maxOfOrNull { abs(it.first) } ?: 0.0
+            val fit = remember(widthPx, heightPx, maxAbsSideM, axis, leftPadPx, rightPadPx) {
+                computeBagTopDownFit(widthPx, heightPx, maxAbsSideM, axis, leftPadPx, rightPadPx)
             }
             val tolerance = with(LocalDensity.current) { TapTolerance.toPx() }
             // Invariant: a dot must never be drawn where it cannot be tapped.
@@ -119,27 +120,31 @@ fun BagTopDownView(
                     .fillMaxSize()
                     .pointerInput(fit, withData, tolerance, onClubTap) {
                         detectTapGestures { offset ->
-                            val current = fit ?: return@detectTapGestures
                             val hit = withData
                                 .flatMap { club -> club.points.map { club.clubName to it } }
                                 .minByOrNull { (_, point) ->
-                                    val dx = current.sx(point.second) - offset.x
-                                    val dy = current.sy(point.first) - offset.y
+                                    val dx = fit.sx(point.second) - offset.x
+                                    val dy = fit.sy(point.first) - offset.y
                                     dx * dx + dy * dy
                                 } ?: return@detectTapGestures
-                            val dx = current.sx(hit.second.second) - offset.x
-                            val dy = current.sy(hit.second.first) - offset.y
+                            val dx = fit.sx(hit.second.second) - offset.x
+                            val dy = fit.sy(hit.second.first) - offset.y
                             if (dx * dx + dy * dy <= tolerance * tolerance) onClubTap(hit.first)
                         }
                     },
             ) {
-                fit?.let { drawTopDown(it, withData, colors) }
+                drawTopDown(fit, withData, colors, axis.ticksM)
             }
         }
     }
 }
 
-private fun DrawScope.drawTopDown(fit: BagTopDownFit, clubs: List<ClubDots>, colors: Map<String, Color>) {
+private fun DrawScope.drawTopDown(
+    fit: BagTopDownFit,
+    clubs: List<ClubDots>,
+    colors: Map<String, Color>,
+    ticksM: List<Double>,
+) {
     // EVERYTHING is clipped to the plot's own rect — the window's span, the
     // same bounds the gridlines respect. Two reasons (2026-10-16): (1) the
     // corridor rect's x start is sx(FAIRWAY_TEE_Y), which sits LEFT of the
@@ -186,22 +191,22 @@ private fun DrawScope.drawTopDown(fit: BagTopDownFit, clubs: List<ClubDots>, col
         }
         // Distance gridlines (lines only; the tick labels draw LAST, over the
         // rings and dots, so a marker that legitimately reaches the bottom of
-        // the pane can never obscure a label — 2026-10-16 round 3).
+        // the pane can never obscure a label). Ticks come from the page's
+        // SHARED axis (2026-10-16) — the same step the SIDE chart and the
+        // matrix use — not a fixed 50 m.
         val gridPaint = android.graphics.Paint().apply {
             color = GolfColors.TextMuted.toArgb()
             textSize = 10.sp.toPx()
             isAntiAlias = true
             textAlign = android.graphics.Paint.Align.CENTER
         }
-        var gridM = ceil(fit.windowMinM / GRID_STEP_M) * GRID_STEP_M
-        while (gridM <= fit.windowMaxM) {
+        ticksM.filter { it >= fit.windowMinM && it <= fit.windowMaxM }.forEach { gridM ->
             drawLine(
                 GolfColors.Line,
                 Offset(fit.sx(gridM), 0f),
                 Offset(fit.sx(gridM), size.height),
                 1f,
             )
-            gridM += GRID_STEP_M
         }
 
         // Rings under dots: minimum-enclosing ellipse per club, buffered 5 %.
@@ -235,15 +240,13 @@ private fun DrawScope.drawTopDown(fit: BagTopDownFit, clubs: List<ClubDots>, col
         // Tick labels last, above everything (2026-10-16 round 3): a marker
         // that legitimately reaches the bottom of the pane must never hide a
         // metre label.
-        var labelM = ceil(fit.windowMinM / GRID_STEP_M) * GRID_STEP_M
-        while (labelM <= fit.windowMaxM) {
+        ticksM.filter { it >= fit.windowMinM && it <= fit.windowMaxM }.forEach { labelM ->
             drawContext.canvas.nativeCanvas.drawText(
                 String.format(Locale.US, "%.0f", labelM),
                 fit.sx(labelM),
                 size.height - 4f,
                 gridPaint,
             )
-            labelM += GRID_STEP_M
         }
     }
 }

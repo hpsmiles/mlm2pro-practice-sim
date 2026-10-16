@@ -1,58 +1,43 @@
 package com.hpsmiles.golfsim.bag
 
-import com.hpsmiles.golfsim.range.RangeScene
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class BagTopDownGeomTest {
 
-    private val clubs = listOf(
-        ClubDots("LW", listOf(-2.0 to 76.5, 1.0 to 77.0, 0.0 to 76.0)),
-        ClubDots("D", listOf(-8.0 to 237.0, 5.0 to 240.0, 0.0 to 238.0)),
-    )
+    // Distances mirroring the live session's LW/D span; largest = 240 →
+    // rawSpan 254.4 → ladder step 20 → axis max 260 (whole multiple of 20).
+    private val axis = BagDistanceAxis.fromDistances(listOf(76.5, 77.0, 76.0, 237.0, 240.0, 238.0))!!
+    private val maxAbsSide = 8.0
+
+    private fun fit(heightPx: Float, widthPx: Float = 1000f) =
+        computeBagTopDownFit(widthPx, heightPx, maxAbsSide, axis)
 
     @Test
-    fun `no points yields no fit`() {
-        assertNull(computeBagTopDownFit(1000f, 400f, listOf(ClubDots("LW", emptyList()))))
-        assertNull(computeBagTopDownFit(1000f, 400f, emptyList()))
-    }
-
-    @Test
-    fun `distance window snaps outward to 25 m`() {
-        val fit = computeBagTopDownFit(1000f, 400f, clubs)!!
-        assertEquals(75.0, fit.windowMinM, 1e-9)
-        assertEquals(250.0, fit.windowMaxM, 1e-9)
-    }
-
-    @Test
-    fun `a narrow session keeps the 50 m floor`() {
-        val tight = listOf(ClubDots("PW", listOf(0.0 to 121.0, 1.0 to 122.0, -1.0 to 121.5)))
-        val fit = computeBagTopDownFit(1000f, 400f, tight)!!
-        assertTrue(fit.windowMaxM - fit.windowMinM >= TOP_DOWN_MIN_WINDOW_M - 1e-9)
-        // Re-centred on the content (100..125 snapped window is too thin):
-        // centre 112.5 ± 25 m, then the guard re-derives min from max.
-        assertEquals(87.5, fit.windowMinM, 1e-9)
-        assertEquals(137.5, fit.windowMaxM, 1e-9)
+    fun `window IS the shared axis - zero origin to the axis max`() {
+        val f = fit(400f)
+        assertEquals(0.0, f.windowMinM, 1e-9)
+        assertEquals(axis.maxM, f.windowMaxM, 1e-9)
+        assertTrue(axis.maxM >= 1.06 * 240.0 - 1e-9)
     }
 
     @Test
     fun `sx maps the window edges to the pads and is monotonic`() {
-        val fit = computeBagTopDownFit(1000f, 400f, clubs)!!
-        assertEquals(26f, fit.sx(fit.windowMinM), 1e-3f)
-        assertEquals(1000f - 12f, fit.sx(fit.windowMaxM), 1e-3f)
-        assertTrue(fit.sx(100.0) < fit.sx(200.0))
+        val f = fit(400f)
+        assertEquals(26f, f.sx(f.windowMinM), 1e-3f)
+        assertEquals(1000f - 12f, f.sx(f.windowMaxM), 1e-3f)
+        assertTrue(f.sx(100.0) < f.sx(200.0))
     }
 
     @Test
     fun `sy puts lateral zero at the mid line and positive side below it`() {
         // Sign convention (verified 2026-10-16): +side is RIGHT of the target
         // looking down-range, which draws DOWN the screen with the tee left.
-        val fit = computeBagTopDownFit(1000f, 400f, clubs)!!
-        assertEquals(200f, fit.sy(0.0), 1e-3f)
-        assertTrue(fit.sy(10.0) > fit.sy(0.0))
-        assertTrue(fit.sy(-10.0) < fit.sy(0.0))
+        val f = fit(400f)
+        assertEquals(200f, f.sy(0.0), 1e-3f)
+        assertTrue(f.sy(10.0) > f.sy(0.0))
+        assertTrue(f.sy(-10.0) < f.sy(0.0))
     }
 
     @Test
@@ -61,99 +46,67 @@ class BagTopDownGeomTest {
         // otherwise rings read as tall, narrow ellipses that contradict the
         // tick spacing. (Previously (heightPx/2)/lateralHalf — an independent
         // per-axis fit.)
-        val fit = computeBagTopDownFit(1000f, 400f, clubs)!!
-        assertEquals(fit.pxPerMM, fit.pxPerMSide, 1e-6f)
+        val f = fit(400f)
+        assertEquals(f.pxPerMM, f.pxPerMSide, 1e-6f)
         // Lateral zero stays on the mid line and metres map symmetrically.
-        assertEquals(200f, fit.sy(0.0), 1e-3f)
-        assertEquals(200f - fit.pxPerMSide * 5f, fit.sy(-5.0), 1e-3f)
+        assertEquals(200f, f.sy(0.0), 1e-3f)
+        assertEquals(200f - f.pxPerMSide * 5f, f.sy(-5.0), 1e-3f)
     }
 
     @Test
     fun `realistic lateral spread fits inside the pane at true scale`() {
-        // At parity the vertical reach is (heightPx/2)/pxPerMM metres; on a
-        // 50 m minimum window at 1000 px that is ~±10 m, so ±8 m must fit.
-        val spread = listOf(
-            ClubDots("D", listOf(-8.0 to 200.0, 8.0 to 210.0, 0.0 to 205.0)),
-        )
-        val fit = computeBagTopDownFit(1000f, 400f, spread)!!
-        assertTrue(fit.sy(-8.0) <= 400f)
-        assertTrue(fit.sy(8.0) >= 0f)
+        // At parity the vertical reach is span * heightPx / (2 * plotWidth);
+        // on the shared 260 m axis at 1000 px × 400 px that is ~50 m, so
+        // ±8 m must fit without any fallback.
+        val f = fit(400f)
+        assertTrue(f.sy(-8.0) <= 400f)
+        assertTrue(f.sy(8.0) >= 0f)
+        assertEquals(f.pxPerMM, f.pxPerMSide, 1e-6f)
     }
 
     @Test
-    fun `a short pane grows the window until the true-scale reach covers the spread`() {
-        // 2026-10-16 round 2 (F2b): panel open = short pane. At strict parity
-        // a ±40 m spread on a 300 px pane would overflow; the span must grow
-        // (zoom out, re-snapped to the 25 m grid) until
-        //   span * heightPx / (2 * plotWidth) >= maxAbsSide + margin
-        // required = 42 * 2 * 962 / 300 = 269.4 → grown to 275 m.
-        val wide = listOf(
-            ClubDots("D", listOf(-40.0 to 200.0, 40.0 to 210.0, 0.0 to 205.0)),
-        )
-        val fit = computeBagTopDownFit(1000f, 300f, wide)!!
-        assertEquals(275.0, fit.windowMaxM - fit.windowMinM, 1e-9)
-        // Parity preserved…
-        assertEquals(fit.pxPerMM, fit.pxPerMSide, 1e-6f)
-        // …and the extreme dots stay inside the pane.
-        assertTrue(fit.sy(-40.0) <= 300f)
-        assertTrue(fit.sy(40.0) >= 0f)
+    fun `a pane too short for the shared span falls back to a squashed vertical scale`() {
+        // 2026-10-16 round 3, recomputed against the SHARED span: on a 100 px
+        // pane the true-scale reach is 260 * 100 / (2 * 962) ≈ 13.5 m — far
+        // short of ±40 m + margin — so the fallback squashes pxPerMSide to
+        // (heightPx / 2) / (maxAbsSide + margin): the one deviation from
+        // strict 1:1. Containment always wins over parity.
+        val wideSide = 40.0
+        val f = computeBagTopDownFit(1000f, 100f, wideSide, axis)
+        assertTrue("fallback must squash the vertical scale", f.pxPerMSide < f.pxPerMM)
+        assertEquals(100f / 2f / (wideSide + TOP_DOWN_LATERAL_MARGIN_M).toFloat(), f.pxPerMSide, 1e-4f)
+        assertTrue(f.sy(-40.0) <= 100f)
+        assertTrue(f.sy(40.0) >= 0f)
     }
 
     @Test
-    fun `a pane too short even for the full range falls back to a squashed vertical scale`() {
-        // 2026-10-16 round 3: the 330 m range cap limits the span, so 1:1
-        // cannot contain the data. required = 42 * 2 * 962 / 100 = 808 m —
-        // the window grows to the full 0..330 m, and the fallback squashes
-        // pxPerMSide to (heightPx / 2) / (maxAbsSide + margin): the one
-        // deviation from strict 1:1. Containment always wins over parity.
-        val wide = listOf(
-            ClubDots("D", listOf(-40.0 to 200.0, 40.0 to 210.0, 0.0 to 205.0)),
-        )
-        val fit = computeBagTopDownFit(1000f, 100f, wide)!!
-        assertEquals(0.0, fit.windowMinM, 1e-9)
-        assertEquals(RangeScene.FAIRWAY_END_Y, fit.windowMaxM, 1e-9)
-        assertTrue("fallback must squash the vertical scale", fit.pxPerMSide < fit.pxPerMM)
-        assertEquals(100f / 2f / 42f, fit.pxPerMSide, 1e-4f)
-        assertTrue(fit.sy(-40.0) <= 100f)
-        assertTrue(fit.sy(40.0) >= 0f)
-    }
-
-    @Test
-    fun `minPaneHeightPx matches the tablet measurements and drives the fit`() {
-        // 2026-10-16 round 4 (finding D): the page-level floor and the fit's
-        // requiredSpan share this one function. Pinned against the numbers
-        // measured on the tablet: maxAbsSide ~23.5 m, plotWidth ~2761 px
-        // → (23.5 + 2) * 2 * 2761 / 330 = 426.7 px.
-        assertEquals(426.7f, minPaneHeightPx(23.5, 2761f), 0.5f)
-        // And it is exactly the pane height at which the 330 m window
-        // contains the data: a fit with that pane height needs no fallback.
-        val fit = computeBagTopDownFit(
+    fun `minPaneHeightPx matches the shared-span arithmetic and drives the fit`() {
+        // 2026-10-16 round 4 (finding D), shared-axis decision: the page-level
+        // floor and the fit's squash threshold share this one function, now
+        // over the shared span. Pinned: maxAbsSide 23.5 m, plotWidth 2761 px,
+        // span 260 m → (23.5 + 2) * 2 * 2761 / 260 = 541.7 px.
+        assertEquals(541.7f, minPaneHeightPx(23.5, 2761f, 260.0), 0.5f)
+        // A pane exactly at the floor contains the data at strict parity —
+        // the fallback must NOT trigger there.
+        val f = computeBagTopDownFit(
             widthPx = 2761f + 26f + 12f,
-            heightPx = minPaneHeightPx(23.5, 2761f),
-            clubs = listOf(
-                ClubDots(
-                    "D",
-                    listOf(-20.0 to 240.0, 23.5 to 237.0, 0.0 to 238.0, 5.0 to 239.0),
-                ),
-            ),
+            heightPx = minPaneHeightPx(23.5, 2761f, axis.maxM),
+            maxAbsSideM = 23.5,
+            axis = axis,
             leftPadPx = 26f,
             rightPadPx = 12f,
-        )!!
-        assertEquals(RangeScene.FAIRWAY_END_Y, fit.windowMaxM, 1e-9)
-        assertTrue(fit.sy(-23.5f.toDouble()) <= 426.7f)
-        assertTrue(fit.sy(23.5f.toDouble()) >= 0f)
+        )
+        assertEquals(f.pxPerMM, f.pxPerMSide, 1e-4f)
+        assertTrue(f.sy(-23.5f.toDouble()) <= minPaneHeightPx(23.5, 2761f, axis.maxM))
+        assertTrue(f.sy(23.5f.toDouble()) >= 0f)
     }
 
     @Test
     fun `a zero-height pane never collapses every dot onto y zero`() {
         // 2026-10-16 round 4 (finding H): the height floor must apply to the
         // fallback and mid line too, not just requiredSpan.
-        val fit = computeBagTopDownFit(
-            1000f,
-            0f,
-            listOf(ClubDots("D", listOf(-5.0 to 200.0, 5.0 to 210.0, 0.0 to 205.0))),
-        )!!
-        assertTrue(fit.pxPerMSide > 0f)
-        assertTrue(fit.midY > 0f)
+        val f = fit(0f)
+        assertTrue(f.pxPerMSide > 0f)
+        assertTrue(f.midY > 0f)
     }
 }

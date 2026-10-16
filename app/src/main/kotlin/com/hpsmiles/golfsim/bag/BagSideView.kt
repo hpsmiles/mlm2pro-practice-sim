@@ -64,6 +64,7 @@ private val TickLabelPad = 28.dp
 fun BagSideView(
     traces: List<ClubTrace>,
     colors: Map<String, Color>,
+    axis: BagDistanceAxis?,
     onClubTap: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -73,7 +74,11 @@ fun BagSideView(
         }
         return
     }
-    val maxDistance = traces.maxOf { it.distanceM }
+    // ONE shared page axis (2026-10-16, user decision): the distance span and
+    // the tick step come from [axis], identical to the TOP-DOWN and the
+    // matrix. (Non-null whenever traces exist — the axis covers every shot.)
+    val axisMaxM = axis?.maxM ?: traces.maxOf { it.distanceM }
+    val ticksM = axis?.ticksM ?: BoxPlotGeom.niceTicks(0.0, axisMaxM)
     val maxApex = traces.maxOf { it.apexM }
     BoxWithConstraints(modifier.fillMaxSize()) {
         val density = LocalDensity.current
@@ -96,11 +101,11 @@ fun BagSideView(
         // clears dot radius + rim, the tick line, and the digit ascent with
         // margin, at any density.
         val bottomPadPx = with(density) { TickLabelPad.toPx() }
-        val fit = remember(boxWidth, plotHeightPx, maxDistance, maxApex, bottomPadPx) {
+        val fit = remember(boxWidth, plotHeightPx, axisMaxM, maxApex, bottomPadPx) {
             computeSideFit(
                 widthPx = boxWidth.toDouble(),
                 heightPx = plotHeightPx.toDouble(),
-                maxDistanceM = maxDistance,
+                sharedAxisMaxM = axisMaxM,
                 maxApexM = maxApex,
                 bottomPadPx = bottomPadPx.toDouble(),
             )
@@ -126,7 +131,7 @@ fun BagSideView(
                         }
                     },
             ) {
-                drawSideChart(fit, traces, colors)
+                drawSideChart(fit, traces, colors, ticksM)
             }
             Layout(
                 content = {
@@ -183,7 +188,12 @@ fun BagSideView(
     }
 }
 
-private fun DrawScope.drawSideChart(fit: SideFit, traces: List<ClubTrace>, colors: Map<String, Color>) {
+private fun DrawScope.drawSideChart(
+    fit: SideFit,
+    traces: List<ClubTrace>,
+    colors: Map<String, Color>,
+    ticksM: List<Double>,
+) {
     val baseline = fit.y(0.0)
     val tickPaint = android.graphics.Paint().apply {
         color = GolfColors.TextSecondary.toArgb()
@@ -208,7 +218,7 @@ private fun DrawScope.drawSideChart(fit: SideFit, traces: List<ClubTrace>, color
     // reserved below the baseline (2026-10-16 review) — they can no longer
     // share a band with the landing dots on the baseline.
     val labelBaseline = size.height - 2f
-    BoxPlotGeom.niceTicks(0.0, fit.maxDistanceM).forEach { tick ->
+    ticksM.forEach { tick ->
         val x = fit.x(tick)
         drawLine(
             color = GolfColors.Line,

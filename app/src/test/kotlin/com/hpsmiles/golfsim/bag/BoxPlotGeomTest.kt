@@ -93,4 +93,33 @@ class BoxPlotGeomTest {
         assertTrue(ticks.isNotEmpty())
         assertEquals(0.1, ticks[1] - ticks[0], 1e-9)
     }
+
+    // --- niceStep (the ONE ladder; shared with BagDistanceAxis) -------------
+
+    @Test
+    fun `niceStep follows the 1-2-5 ladder`() {
+        assertEquals(10.0, BoxPlotGeom.niceStep(145.0), 1e-9)   // raw 14.5 → 10
+        assertEquals(20.0, BoxPlotGeom.niceStep(200.0), 1e-9)   // raw 20 → 20
+        assertEquals(50.0, BoxPlotGeom.niceStep(350.0), 1e-9)   // raw 35 → 50
+        assertEquals(100.0, BoxPlotGeom.niceStep(700.0), 1e-9)  // raw 70 → 100
+        assertEquals(0.1, BoxPlotGeom.niceStep(1.0), 1e-9)      // raw 0.1
+    }
+
+    @Test
+    fun `niceStep is what niceTicks uses`() {
+        // The step from the ladder must reproduce the ticks' spacing exactly.
+        val min = 56.0
+        val max = 256.0
+        val step = BoxPlotGeom.niceStep(max - min)
+        val ticks = BoxPlotGeom.niceTicks(min, max)
+        assertTrue(ticks.size >= 2)
+        assertEquals(step, ticks[1] - ticks[0], 1e-9)
+    }
+
+    @Test
+    fun `niceStep degenerate input yields 1 m`() {
+        assertEquals(1.0, BoxPlotGeom.niceStep(0.0), 1e-9)
+        assertEquals(1.0, BoxPlotGeom.niceStep(-5.0), 1e-9)
+        assertEquals(1.0, BoxPlotGeom.niceStep(Double.NaN), 1e-9)
+    }
 }

@@ -120,6 +120,15 @@ fun BagMappingResult(
     val maxAbsSideM = remember(dots) {
         dots.flatMap { it.points }.maxOfOrNull { abs(it.first) } ?: 0.0
     }
+    // ONE shared distance axis for the whole page (2026-10-16, user decision):
+    // min 0, step from the BoxPlotGeom ladder, max = whole multiple of the
+    // step ≥ 1.06 × the largest plotted distance — over ALL carries AND
+    // totals, kept AND filtered (the matrix plots filtered carries too).
+    // SIDE, TOP-DOWN and the matrix all consume it, so their ticks land at
+    // identical metre values.
+    val axis = remember(shots) {
+        BagDistanceAxis.fromDistances(shots.flatMap { listOf(it.carryM, it.totalM) })
+    }
     BoxWithConstraints(
         modifier = modifier.fillMaxSize().background(GolfColors.Base).padding(GolfSpacing.Xl),
     ) {
@@ -131,14 +140,15 @@ fun BagMappingResult(
         // panel takes the remainder (harmless: the panel scrolls under its
         // pinned scale). The plot canvas spans the content width; the pads
         // come from the same constants the view insets by.
-        val minChartDp = if (view == BagResultsView.TOP_DOWN && panelOpen) {
+        val minChartDp = if (view == BagResultsView.TOP_DOWN && panelOpen && axis != null) {
             with(density) {
                 val plotWidthPx = constraints.maxWidth -
                     (TOP_DOWN_LEFT_PAD_DP + TOP_DOWN_RIGHT_PAD_DP).dp.toPx()
                 // Guard: an absurd lateral spread must never swallow the
                 // page — such a session falls through to the geom's squash
-                // fallback instead.
-                minPaneHeightPx(maxAbsSideM, plotWidthPx)
+                // fallback instead. The floor is computed against the SHARED
+                // axis span (2026-10-16 shared-axis decision).
+                minPaneHeightPx(maxAbsSideM, plotWidthPx, axis.maxM)
                     .coerceAtMost(constraints.maxHeight * 0.5f)
                     .coerceAtLeast(0f)
                     .toDp()
@@ -182,12 +192,14 @@ fun BagMappingResult(
             BagResultsView.SIDE -> BagSideView(
                 traces = traces,
                 colors = colorByClub,
+                axis = axis,
                 onClubTap = { drillClub = it },
                 modifier = Modifier.weight(1f),
             )
             BagResultsView.TOP_DOWN -> BagTopDownView(
                 clubs = dots,
                 colors = colorByClub,
+                axis = axis,
                 onClubTap = { drillClub = it },
                 // With the panel open the chart gets its data-derived
                 // containment floor and the panel the remainder; otherwise
@@ -212,6 +224,7 @@ fun BagMappingResult(
                 rows = rows,
                 shots = shots,
                 basis = basis,
+                axis = axis,
                 gaps = gaps,
                 onDrillDown = { drillClub = it },
                 modifier = Modifier.fillMaxSize(),
@@ -270,6 +283,7 @@ private fun CarryMatrixSection(
     rows: List<Pair<String, ClubType>>,
     shots: List<BagMappingShotEntity>,
     basis: DistanceBasis,
+    axis: BagDistanceAxis?,
     gaps: List<GapEntry>,
     onDrillDown: (String) -> Unit,
     modifier: Modifier = Modifier,
@@ -283,16 +297,14 @@ private fun CarryMatrixSection(
         val clubShots = shots.filter { it.clubName == name }
         Triple(name, type, clubShots)
     }
-    // ONE shared value axis over every club's kept+filtered carries AND kept
-    // totals (spec §6 + item 4): the matrix's whole point is cross-club
-    // comparison, so carry and total boxes render on the same metre scale.
-    // The pixel fields are per-canvas (rebuilt inside the painter from each
-    // canvas width); only the value bounds are shared here.
-    val sharedAxis = BoxPlotGeom.axis(
-        clubRows.flatMap { (_, _, clubShots) -> clubShots.flatMap { listOf(it.carryM, it.totalM) } },
-        leftPadPx = 0f,
-        plotWidthPx = 1f, // nominal — pixels are per-canvas; minM/maxM are width-independent
-    )
+    // ONE SHARED value axis over every club's kept+filtered carries AND kept
+    // totals (spec §6 + item 4) — now the PAGE's shared [BagDistanceAxis]
+    // (2026-10-16, user decision), replacing the matrix's old tight 8 % fit:
+    // accepted cost, boxes compress toward the right of the 0-based axis and
+    // the wedges sit well left of the driver. The win: a metre value sits at
+    // the same place on the SIDE, TOP-DOWN and matrix scales. Only the value
+    // bounds are shared here; the pixel fields are per-canvas.
+    val sharedAxis = axis
     // Scroll affordance (2026-10-16 review): the open panel holds far more
     // content than fits (13 rows + the gap block), and a bare LazyColumn gave
     // no cue that the cut-off rows below are reachable. A fade + "scroll for
@@ -316,6 +328,7 @@ private fun CarryMatrixSection(
                     CarryMatrixScaleCanvas(
                         minM = sharedAxis.minM,
                         maxM = sharedAxis.maxM,
+                        ticksM = sharedAxis.ticksM,
                         modifier = Modifier.weight(1f).height(ScaleHeight),
                     )
                     Spacer(Modifier.width(StatsColumnWidth))
@@ -417,7 +430,7 @@ private fun ClubRow(
     clubName: String,
     typeLabel: String,
     clubShots: List<BagMappingShotEntity>,
-    sharedAxis: BoxPlotGeom.Axis?,
+    sharedAxis: BagDistanceAxis?,
     onDrillDown: (String) -> Unit,
 ) {
     val kept = clubShots.filter { it.effectiveIncluded() }.map { it.carryM }

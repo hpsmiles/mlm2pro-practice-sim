@@ -65,16 +65,19 @@ fun CarryMatrixCanvas(
 }
 
 /**
- * Metre scale for the sticky header above the matrix: tick marks + metre
+ * Metre scale for the pinned header above the matrix: tick marks + metre
  * labels on the SAME axis the boxes use, so they line up with the plot area
  * (the caller mirrors the row's label/stats column widths and inset around
- * it). Layout top-to-bottom: tick rules in the upper part ending just above
+ * it). Ticks come from the page's SHARED [BagDistanceAxis] (2026-10-16) — the
+ * same step the SIDE chart and the TOP-DOWN use — not a re-derived ladder.
+ * Layout top-to-bottom: tick rules in the upper part ending just above
  * the text top, labels underneath — nothing overlaps.
  */
 @Composable
 fun CarryMatrixScaleCanvas(
     minM: Double,
     maxM: Double,
+    ticksM: List<Double>,
     modifier: Modifier = Modifier,
 ) {
     Canvas(modifier = modifier) {
@@ -91,7 +94,7 @@ fun CarryMatrixScaleCanvas(
             isAntiAlias = true
             textAlign = android.graphics.Paint.Align.CENTER
         }
-        BoxPlotGeom.niceTicks(minM, maxM).forEach { tick ->
+        ticksM.filter { it >= minM && it <= maxM }.forEach { tick ->
             val x = BoxPlotGeom.x(tick, axis)
             drawLine(
                 color = GolfColors.Line,

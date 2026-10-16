@@ -38,26 +38,39 @@ object BoxPlotGeom {
     private fun abs(v: Double): Double = if (v < 0.0) -v else v
 
     /**
-     * Round tick values for the metre scale above the matrix: 1/2/5×10^k
-     * steps aimed at roughly [targetCount] labels across [minM, maxM].
-     * Default 10 (2026-10-16, user: "finer ticks, 25 m" — the 1/2/5 ladder
-     * can't hit 25; a ~200 m bag span gives 20 m steps, so the wedge region
-     * 60–120 m carries 4 labelled ticks). Ticks are whole metres (or one
-     * decimal for sub-metre steps) so labels stay short. Empty for
-     * degenerate spans (empty axis, minM == maxM).
+     * Step of the 1/2/5×10^k nice-step ladder for a span of [spanM] at
+     * [targetCount] labels. The single source of step choice — [niceTicks]
+     * derives its step from here and the shared page axis
+     * ([BagDistanceAxis.fromDistances]) uses it directly, so every view's
+     * ticks come from ONE ladder. Degenerate input yields 1 m (callers guard).
      */
-    fun niceTicks(minM: Double, maxM: Double, targetCount: Int = 10): List<Double> {
-        val span = maxM - minM
-        if (targetCount <= 0 || span <= 0.0 || !span.isFinite()) return emptyList()
-        val rawStep = span / targetCount
+    fun niceStep(spanM: Double, targetCount: Int = 10): Double {
+        if (targetCount <= 0 || spanM <= 0.0 || !spanM.isFinite()) return 1.0
+        val rawStep = spanM / targetCount
         val mag = 10.0.pow(floor(log10(rawStep)))
         val norm = rawStep / mag
-        val step = mag * when {
+        return mag * when {
             norm < 1.5 -> 1.0
             norm < 3.0 -> 2.0
             norm < 7.0 -> 5.0
             else -> 10.0
         }
+    }
+
+    /**
+     * Round tick values for the metre scale above the matrix: 1/2/5×10^k
+     * steps aimed at roughly [targetCount] labels across [minM, maxM] — the
+     * step comes from [niceStep], the ONE ladder the shared page axis uses
+     * too. Default 10 (2026-10-16, user: "finer ticks, 25 m" — the 1/2/5
+     * ladder can't hit 25; a ~200 m bag span gives 20 m steps, so the wedge
+     * region 60–120 m carries 4 labelled ticks). Ticks are whole metres (or
+     * one decimal for sub-metre steps) so labels stay short. Empty for
+     * degenerate spans (empty axis, minM == maxM).
+     */
+    fun niceTicks(minM: Double, maxM: Double, targetCount: Int = 10): List<Double> {
+        val span = maxM - minM
+        if (targetCount <= 0 || span <= 0.0 || !span.isFinite()) return emptyList()
+        val step = niceStep(span, targetCount)
         val ticks = mutableListOf<Double>()
         var v = ceil(minM / step) * step
         while (v <= maxM + 1e-9) {

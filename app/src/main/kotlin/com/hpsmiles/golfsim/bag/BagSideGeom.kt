@@ -30,19 +30,24 @@ data class SideFit(
  */
 const val SIDE_HEIGHT_FRACTION = 0.85
 
-/** Distance headroom past the longest club, so its marker is not on the edge. */
-private const val SIDE_DISTANCE_HEADROOM = 1.06
-
+/**
+ * Fits the SIDE chart onto the page's SHARED distance axis (2026-10-16, user
+ * decision): the span IS the axis max — zero origin, ticks at the axis's step
+ * — so the metre values on this chart's scale match the TOP-DOWN and the
+ * distribution matrix exactly. The old private 1.06 headroom moved into
+ * [BagDistanceAxis.HEADROOM], where it is applied once over all plotted
+ * distances (carries AND totals, kept AND filtered).
+ */
 fun computeSideFit(
     widthPx: Double,
     heightPx: Double,
-    maxDistanceM: Double,
+    sharedAxisMaxM: Double,
     maxApexM: Double,
     leftPadPx: Double = 44.0,
     rightPadPx: Double = 16.0,
     bottomPadPx: Double = 18.0,
 ): SideFit {
-    val span = maxOf(maxDistanceM * SIDE_DISTANCE_HEADROOM, 1.0)
+    val span = maxOf(sharedAxisMaxM, 1.0)
     val plotWidth = maxOf(widthPx - leftPadPx - rightPadPx, 1.0)
     val usableHeight = maxOf(heightPx - bottomPadPx, 1.0)
     val apex = maxOf(maxApexM, 1e-6)

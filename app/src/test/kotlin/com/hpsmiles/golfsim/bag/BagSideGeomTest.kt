@@ -9,16 +9,18 @@ class BagSideGeomTest {
     private val fit = computeSideFit(
         widthPx = 1000.0,
         heightPx = 500.0,
-        maxDistanceM = 237.0,
+        sharedAxisMaxM = 237.0,
         maxApexM = 30.0,
     )
 
     @Test
-    fun `origin sits at the left pad and the max distance near the right edge`() {
+    fun `origin sits at the left pad and the max distance lands on the right pad edge`() {
+        // The span IS the shared axis max (2026-10-16 shared-axis decision) —
+        // no per-view headroom anymore — so the largest plotted distance
+        // reaches exactly the right pad edge; the 1.06 headroom lives in
+        // BagDistanceAxis, applied over ALL plotted distances.
         assertEquals(44.0f, fit.x(0.0), 1e-3f)
-        // 6 % headroom on the span, so the longest club stops short of the edge.
-        assertTrue(fit.x(237.0) < 1000f - 16f)
-        assertTrue(fit.x(237.0) > 1000f - 100f)
+        assertEquals(1000f - 16f, fit.x(237.0), 1e-3f)
     }
 
     @Test
@@ -42,7 +44,7 @@ class BagSideGeomTest {
 
     @Test
     fun `a flat bag does not divide by zero`() {
-        val flat = computeSideFit(1000.0, 500.0, maxDistanceM = 0.0, maxApexM = 0.0)
+        val flat = computeSideFit(1000.0, 500.0, sharedAxisMaxM = 0.0, maxApexM = 0.0)
         assertTrue(flat.pxPerMM.isFinite())
         assertTrue(flat.pxPerMHeight.isFinite())
         assertTrue(flat.pxPerMHeight > 0.0)
