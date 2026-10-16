@@ -164,8 +164,11 @@ private fun DrawScope.drawTopDown(
         // the distance axis on x instead of y.
         drawRect(GolfColors.RangeRough, size = size)
         val corridorHalfM = RangeScene.fairwayHalfWidth(0.0)
-        val corridorTop = fit.sy(corridorHalfM)
-        val corridorBottom = fit.sy(-corridorHalfM)
+        // The corridor rect spans ±corridorHalfM; its top/bottom are computed
+        // min/max because the lateral mapping's sign was flipped once already
+        // (2026-10-16) — the ordering must never depend on the sign again.
+        val corridorTop = minOf(fit.sy(corridorHalfM), fit.sy(-corridorHalfM))
+        val corridorBottom = maxOf(fit.sy(corridorHalfM), fit.sy(-corridorHalfM))
         drawRect(
             color = GolfColors.RangeFairway,
             topLeft = Offset(fit.sx(RangeScene.FAIRWAY_TEE_Y), corridorTop),

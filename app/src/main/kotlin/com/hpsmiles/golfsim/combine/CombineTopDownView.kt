@@ -235,8 +235,11 @@ private fun CombineTopDownCanvas(
         // (fitting parity): RangeFairway base + the same 10 m mown stripes the
         // range and fitting show, intersected with the window so the crop stays
         // clean; the base rect stays as a safety floor under the stripes.
-        val corridorTop = sy(corridorHalfM)
-        val corridorBottom = sy(-corridorHalfM)
+        // The rect spans ±corridorHalfM; its top/bottom are computed min/max
+        // because the lateral mapping's sign was flipped once already
+        // (2026-10-16) — the ordering must never depend on the sign again.
+        val corridorTop = minOf(sy(corridorHalfM), sy(-corridorHalfM))
+        val corridorBottom = maxOf(sy(corridorHalfM), sy(-corridorHalfM))
         drawRect(
             color = GolfColors.RangeFairway,
             topLeft = Offset(sx(windowMinM), corridorTop),
@@ -265,9 +268,11 @@ private fun CombineTopDownCanvas(
         )
 
         // Vertical extent of the lateral window (content band); gridlines and labels
-        // stay inside it so the spare space above/below remains quiet.
-        val bandTop = sy(lateralHalfM).coerceAtLeast(0f)
-        val bandBottom = sy(-lateralHalfM).coerceAtMost(size.height)
+        // stay inside it so the spare space above/below remains quiet. Also
+        // min/max: the band spans ±lateralHalfM and the lateral mapping's sign
+        // was flipped once already (2026-10-16) — ordering must not depend on it.
+        val bandTop = minOf(sy(lateralHalfM), sy(-lateralHalfM)).coerceAtLeast(0f)
+        val bandBottom = maxOf(sy(lateralHalfM), sy(-lateralHalfM)).coerceAtMost(size.height)
 
         // 50 m gridlines + labels, only inside the window (window edges snap to 25 m
         // but get no gridline/label of their own). Label ink = TextSecondary —

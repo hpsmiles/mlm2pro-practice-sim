@@ -180,12 +180,18 @@ internal fun FittingTopDownPane(
                 // base rect stays as a safety floor under the 32 stripe bands
                 // (they tile 10–330 m exactly — this guards any future gap).
                 val corridorHalfM = RangeScene.fairwayHalfWidth(0.0)
+                // The corridor rect spans ±corridorHalfM; its top/bottom are
+                // computed min/max because the lateral mapping's sign was
+                // flipped once already (2026-10-16) — the ordering must never
+                // depend on the sign again.
+                val corridorTop = minOf(sy(corridorHalfM), sy(-corridorHalfM))
+                val corridorBottom = maxOf(sy(corridorHalfM), sy(-corridorHalfM))
                 drawRect(
                     color = GolfColors.RangeFairway,
-                    topLeft = Offset(sx(RangeScene.FAIRWAY_TEE_Y), sy(corridorHalfM)),
+                    topLeft = Offset(sx(RangeScene.FAIRWAY_TEE_Y), corridorTop),
                     size = Size(
                         sx(RangeScene.FAIRWAY_END_Y) - sx(RangeScene.FAIRWAY_TEE_Y),
-                        sy(-corridorHalfM) - sy(corridorHalfM),
+                        corridorBottom - corridorTop,
                     ),
                 )
                 for (band in 0 until RangeScene.stripeBandCount()) {
@@ -196,8 +202,8 @@ internal fun FittingTopDownPane(
                         } else {
                             GolfColors.RangeStripeDark
                         },
-                        topLeft = Offset(sx(yFrom), sy(corridorHalfM)),
-                        size = Size(sx(yTo) - sx(yFrom), sy(-corridorHalfM) - sy(corridorHalfM)),
+                        topLeft = Offset(sx(yFrom), corridorTop),
+                        size = Size(sx(yTo) - sx(yFrom), corridorBottom - corridorTop),
                     )
                 }
 
