@@ -114,6 +114,27 @@ fun BagMappingResult(
     }
 }
 
+// --- Carry/total box-plot matrix -----------------------------------------
+
+/** Leading club-name column width — shared by rows and the sticky scale header. */
+private val ClubLabelWidth = 72.dp
+
+/**
+ * Horizontal inset inside each bordered row (and mirrored by the sticky scale
+ * header) so the scale ticks line up exactly above the box-plot lanes.
+ */
+private val RowInset = GolfSpacing.Sm
+
+/**
+ * Trailing stats-column width — shared by rows and the sticky scale header so
+ * the metre scale ticks line up exactly above the box-plot lanes. Sized for
+ * the 12 sp range line (2026-10-16: bumped from 10 sp after tablet review —
+ * the widest observed line "C 236–239 · T 249–254 m" measured ~132 dp at
+ * 10 sp; a 4-digit case "C 1000–1024 · T 1005–1031 m" needs ~172 dp at 12 sp,
+ * so 184 dp leaves margin) plus the bold 17 sp C/T values.
+ */
+private val StatsColumnWidth = 184.dp
+
 @Composable
 private fun ColumnScope.CarryMatrixSection(
     session: BagMappingSessionEntity,
@@ -121,10 +142,11 @@ private fun ColumnScope.CarryMatrixSection(
     onDrillDown: (String) -> Unit,
 ) {
     // Bag order comes from the session snapshot (spec §4); clubs without
-    // shots render as "no data" rows (spec §9).
+    // shots render as "no data" rows (spec §9). The ClubType is kept (not
+    // just the label) — the gap analysis needs it for canonical ordering.
     val rows = session.clubSnapshot().map { (name, type) ->
         val clubShots = shots.filter { it.clubName == name }
-        Triple(name, type.label, clubShots)
+        Triple(name, type, clubShots)
     }
     // ONE shared value axis over every club's kept+filtered carries AND kept
     // totals (spec §6 + item 4): the matrix's whole point is cross-club
@@ -136,12 +158,16 @@ private fun ColumnScope.CarryMatrixSection(
         leftPadPx = 0f,
         plotWidthPx = 1f, // nominal — pixels are per-canvas; minM/maxM are width-independent
     )
-    val mappedMedians = rows.mapNotNull { (name, _, clubShots) ->
+    // Gap flags over medians in CANONICAL long→short order derived from
+    // club identity (type, then carry) — NOT the persisted test order,
+    // which is short→long for WEDGE_FIRST and shuffled for RANDOM. Feeding
+    // the test order made every gap negative → all INVERTED (2026-10-16).
+    val mappedMedians = rows.mapNotNull { (name, type, clubShots) ->
         val kept = clubShots.filter { it.effectiveIncluded() }.map { it.carryM }
         val dist = BagMappingStats.distribution(kept) ?: return@mapNotNull null
-        name to dist.median
+        Triple(name, type, dist.median)
     }
-    val gaps = GapAnalysis.analyze(mappedMedians)
+    val gaps = GapAnalysis.analyzeByClubIdentity(mappedMedians)
     LazyColumn(
         modifier = Modifier.fillMaxWidth().weight(1f),
         verticalArrangement = Arrangement.spacedBy(GolfSpacing.Sm),
@@ -156,15 +182,55 @@ private fun ColumnScope.CarryMatrixSection(
                 LegendSwatch(TotalBoxColor, "TOTAL")
             }
         }
-        items(rows, key = { it.first }) { (name, typeLabel, clubShots) ->
-            ClubRow(name, typeLabel, clubShots, sharedAxis, onDrillDown)
+        // Metre scale pinned to the top (stays visible while the rows scroll).
+        // Mirrors the row structure — same [RowInset] horizontal padding plus
+        // label spacer + plot area + stats spacer — so ticks sit exactly above
+        // the box-plot lanes. Opaque Base background so scrolling rows pass
+        // behind it. Only with data.
+        if (sharedAxis != null) {
+            stickyHeader {
+                Column(modifier = Modifier.fillMaxWidth().background(GolfColors.Base)) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = RowInset),
+                        verticalAlignment = Alignment.Bottom,
+                    ) {
+                        Spacer(Modifier.width(ClubLabelWidth))
+                        CarryMatrixScaleCanvas(
+                            minM = sharedAxis.minM,
+                            maxM = sharedAxis.maxM,
+                            modifier = Modifier.weight(1f).height(ScaleHeight),
+                        )
+                        Spacer(Modifier.width(StatsColumnWidth))
+                    }
+                    Box(Modifier.fillMaxWidth().height(1.dp).background(GolfColors.Line))
+                }
+            }
+        }
+        items(rows, key = { it.first }) { (name, type, clubShots) ->
+            ClubRow(name, type.label, clubShots, sharedAxis, onDrillDown)
         }
         if (gaps.isNotEmpty()) {
             item {
                 Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    gaps.forEach { gap ->
+                    Text("DISTANCE GAPS", style = GolfTypography.MetricLabel, color = GolfColors.TextMuted)
+                    Text(
+                        // Band is per-pair now, so the hint states the rule.
+                        // ~93 chars at BodySmall ≈ 670 dp on the ~1015 dp
+                        // content width — fits on one line, so the driver
+                        // note is included.
+                        "Gap between each club and the next longer club — target " +
+                            String.format(Locale.US, "%.0f", GapAnalysis.BAND_LOW_FRACTION * 100) + "–" +
+                            String.format(Locale.US, "%.0f", GapAnalysis.BAND_HIGH_FRACTION * 100) +
+                            "% of that club's distance (driver excluded).",
+                        style = GolfTypography.BodySmall,
+                        color = GolfColors.TextSecondary,
+                    )
+                    // analyze returns canonical long→short order; card order
+                    // above is shortest first, so reverse and name the shorter
+                    // club first ("LW – SW  14 m · good").
+                    gaps.asReversed().forEach { gap ->
                         Text(
-                            text = "${gap.longerClub} → ${gap.shorterClub}: ${BagMappingFormats.carry(gap.gapM)} · ${gap.flag.name}",
+                            text = gapLine(gap),
                             style = GolfTypography.BodySmall,
                             color = when (gap.flag) {
                                 GapFlag.TIGHT -> GolfColors.TextSecondary
@@ -179,6 +245,9 @@ private fun ColumnScope.CarryMatrixSection(
         }
     }
 }
+
+/** Range line at 12 sp (2026-10-16 bump from 10 sp — too small on tablet). */
+private val RangeTextStyle = GolfTypography.Status.copy(fontSize = 12.sp)
 
 @Composable
 private fun ClubRow(
@@ -198,10 +267,10 @@ private fun ClubRow(
             .fillMaxWidth()
             .border(1.dp, GolfColors.Line, RoundedCornerShape(GolfSpacing.Sm))
             .clickable { onDrillDown(clubName) }
-            .padding(GolfSpacing.Sm),
+            .padding(RowInset),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Column(modifier = Modifier.width(72.dp)) {
+            Column(modifier = Modifier.width(ClubLabelWidth)) {
                 Text(clubName, style = GolfTypography.MetricValue, color = GolfColors.TextPrimary)
                 Text(typeLabel, style = GolfTypography.BodySmall, color = GolfColors.TextSecondary)
             }
@@ -216,17 +285,26 @@ private fun ClubRow(
                     maxM = sharedAxis.maxM,
                     modifier = Modifier.weight(1f).height(44.dp),
                 )
-                Column(horizontalAlignment = Alignment.End) {
+                Column(
+                    modifier = Modifier.width(StatsColumnWidth),
+                    horizontalAlignment = Alignment.End,
+                    verticalArrangement = Arrangement.spacedBy(2.dp),
+                ) {
+                    // Big carry/total values — the dominant content; kept/-
+                    // excluded count and the min–max range stay small below.
+                    MetricValueLine("C", dist, BagMappingFormats::carry, GolfColors.Teal)
+                    MetricValueLine("T", totalDist, BagMappingFormats::total, TotalBoxColor)
                     Text(
-                        "C ${BagMappingFormats.carry(dist?.median ?: 0.0)} · T ${BagMappingFormats.total(totalDist?.median ?: 0.0)}",
-                        style = GolfTypography.MetricLabel,
-                        color = GolfColors.TextPrimary,
+                        rangeText(dist, totalDist),
+                        style = RangeTextStyle,
+                        color = GolfColors.TextSecondary,
+                        textAlign = TextAlign.End,
                     )
                     Text(
-                        "σ ${sigmaText(dist)} / ${sigmaText(totalDist)} · ${dist?.count ?: 0} kept" +
-                            if (filtered.isNotEmpty()) " (+${filtered.size} excluded)" else "",
-                        style = GolfTypography.BodySmall,
-                        color = GolfColors.TextSecondary,
+                        keptText(dist, filtered),
+                        style = GolfTypography.Status,
+                        color = GolfColors.TextMuted,
+                        textAlign = TextAlign.End,
                     )
                 }
             }
@@ -234,9 +312,116 @@ private fun ClubRow(
     }
 }
 
-/** One-line σ label ("σ 4.1 m", "—" without data). */
-private fun sigmaText(dist: BagMappingStats.Distribution?): String =
-    if (dist == null) "—" else "σ ${BagMappingFormats.carry(dist.sigma)}"
+/**
+ * One big metric line: small muted letter label + bold number ("C 172.1").
+ * The number is coloured to match the chart lane (carry teal / total blue —
+ * same colours as the legend swatches, 2026-10-16); the letter label stays
+ * muted so the bold coloured value dominates.
+ */
+@Composable
+private fun MetricValueLine(
+    label: String,
+    dist: BagMappingStats.Distribution?,
+    format: (Double) -> String,
+    valueColor: Color,
+) {
+    Row(horizontalArrangement = Arrangement.spacedBy(GolfSpacing.Xs), verticalAlignment = Alignment.Bottom) {
+        Text(label, style = GolfTypography.MetricLabel, color = GolfColors.TextSecondary)
+        Text(
+            if (dist == null) "—" else format(dist.median),
+            style = GolfTypography.MetricValue,
+            color = valueColor,
+        )
+    }
+}
+
+/** Min–max range for both carry and total ("C 168–184 · T 178–196 m"). */
+private fun rangeText(
+    dist: BagMappingStats.Distribution?,
+    totalDist: BagMappingStats.Distribution?,
+): String {
+    val carryRange = rangeSpan(dist)
+    val totalRange = rangeSpan(totalDist)
+    if (carryRange == null && totalRange == null) return "no range"
+    val parts = buildList {
+        if (carryRange != null) add("C $carryRange")
+        if (totalRange != null) add("T $totalRange")
+    }
+    return parts.joinToString(" · ") + " m"
+}
+
+/**
+ * Unit-less "168–184" (single shot collapses to "168"); null without data.
+ * Uses unit-less [fmt0] — the single trailing " m" comes from [rangeText],
+ * never per bound (BagMappingFormats.carry would double-print the unit).
+ */
+private fun rangeSpan(dist: BagMappingStats.Distribution?): String? {
+    dist ?: return null
+    val lo = fmt0(dist.min)
+    val hi = fmt0(dist.max)
+    return if (lo == hi) lo else "$lo–$hi"
+}
+
+/**
+ * Verdict-aware rounding (2026-10-16 round 6): whole metres unless rounding
+ * would change the flag verdict, then one decimal. Plain 0 dp produced
+ * self-contradictions ("8 m · too tight" against an 8 m floor); the round-5
+ * near-integer rule put a decimal on almost every line because medians
+ * rarely land on integers. This gives 13.8 → "14 m", 21.7 → "22 m", and a
+ * decimal only where the band boundary genuinely falls inside the rounded
+ * value. The verdict is recomputed from the entry's own band — the band
+ * fully determines the flag once the gap is known (monotonic in gap).
+ */
+private fun flagFromBand(gapM: Double, bandLowM: Double, bandHighM: Double): GapFlag = when {
+    gapM <= 0.0 -> GapFlag.INVERTED
+    gapM < bandLowM -> GapFlag.TIGHT
+    gapM > bandHighM -> GapFlag.WIDE
+    else -> GapFlag.HEALTHY
+}
+
+private fun gapMetres(entry: GapEntry): String {
+    val rounded = kotlin.math.round(entry.gapM)
+    val verdictSurvives =
+        flagFromBand(rounded, entry.bandLowM, entry.bandHighM) == entry.flag
+    return if (verdictSurvives) String.format(Locale.US, "%.0f m", entry.gapM)
+    else String.format(Locale.US, "%.1f m", entry.gapM)
+}
+
+/** Band bounds in whole metres for the "(aim 4–9 m)" suffix. */
+private fun bandMetres(m: Double): String = String.format(Locale.US, "%.0f", m)
+
+/**
+ * Plain-words gap line, shortest club first (card order): "LW – SW  14 m ·
+ * good". Flagged lines print their own band ("big gap (aim 4–9 m)"); good
+ * lines stay terse. INVERTED names the anomaly: the shorter club carrying
+ * as far as — or further than — the longer one (mislabeled club or a real
+ * problem); the band doesn't apply there, so it stays off.
+ */
+internal fun gapLine(gap: GapEntry): String {
+    val flagWord = when (gap.flag) {
+        GapFlag.TIGHT -> "too tight"
+        GapFlag.HEALTHY -> "good"
+        GapFlag.WIDE -> "big gap"
+        GapFlag.INVERTED ->
+            if (gap.gapM < 0.5) {
+                "inverted — ${gap.shorterClub} carries as far as ${gap.longerClub}"
+            } else {
+                "inverted — ${gap.shorterClub} carries further than ${gap.longerClub}"
+            }
+    }
+    val bandNote = when (gap.flag) {
+        GapFlag.TIGHT, GapFlag.WIDE -> " (aim ${bandMetres(gap.bandLowM)}–${bandMetres(gap.bandHighM)} m)"
+        else -> ""
+    }
+    return "${gap.shorterClub} – ${gap.longerClub}  ${gapMetres(gap)} · $flagWord$bandNote"
+}
+
+/** Kept/excluded count — useful, not a statistical symbol. */
+private fun keptText(dist: BagMappingStats.Distribution?, filtered: List<Double>): String =
+    "${dist?.count ?: 0} kept" + if (filtered.isNotEmpty()) " (+${filtered.size} excluded)" else ""
+
+/** Height of the sticky metre-scale header: rule zone + 10 sp text + gap. */
+private val ScaleHeight = 30.dp
 
 /** Legend entry: colour square + label (CARRY / TOTAL above the matrix). */
 @Composable

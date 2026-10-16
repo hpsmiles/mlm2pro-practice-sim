@@ -1,5 +1,11 @@
 package com.hpsmiles.golfsim.bag
 
+import kotlin.math.ceil
+import kotlin.math.floor
+import kotlin.math.log10
+import kotlin.math.pow
+import kotlin.math.round
+
 /**
  * Pure value→pixel mapping for the box-plot carry matrix painter (spec §6).
  * Plain Float pixels — no Compose types — so it stays JVM-testable.
@@ -30,4 +36,35 @@ object BoxPlotGeom {
     }
 
     private fun abs(v: Double): Double = if (v < 0.0) -v else v
+
+    /**
+     * Round tick values for the metre scale above the matrix: 1/2/5×10^k
+     * steps aimed at roughly [targetCount] labels across [minM, maxM].
+     * Default 10 (2026-10-16, user: "finer ticks, 25 m" — the 1/2/5 ladder
+     * can't hit 25; a ~200 m bag span gives 20 m steps, so the wedge region
+     * 60–120 m carries 4 labelled ticks). Ticks are whole metres (or one
+     * decimal for sub-metre steps) so labels stay short. Empty for
+     * degenerate spans (empty axis, minM == maxM).
+     */
+    fun niceTicks(minM: Double, maxM: Double, targetCount: Int = 10): List<Double> {
+        val span = maxM - minM
+        if (targetCount <= 0 || span <= 0.0 || !span.isFinite()) return emptyList()
+        val rawStep = span / targetCount
+        val mag = 10.0.pow(floor(log10(rawStep)))
+        val norm = rawStep / mag
+        val step = mag * when {
+            norm < 1.5 -> 1.0
+            norm < 3.0 -> 2.0
+            norm < 7.0 -> 5.0
+            else -> 10.0
+        }
+        val ticks = mutableListOf<Double>()
+        var v = ceil(minM / step) * step
+        while (v <= maxM + 1e-9) {
+            // Snap away float fuzz so tick labels compare cleanly.
+            ticks += round(v * 1e6) / 1e6
+            v += step
+        }
+        return ticks
+    }
 }
