@@ -31,6 +31,24 @@ data class ClubDots(
 object BagTrace {
 
     /**
+     * The launch-metric ranges [LaunchConditions] enforces in its own `init`.
+     * Checked explicitly rather than by catching, so an out-of-range club is
+     * skipped, never thrown.
+     */
+    private fun inRange(
+        ballSpeedMps: Double,
+        spinRpm: Int,
+        launchAngleDeg: Double,
+        launchDirDeg: Double,
+        spinAxisDeg: Double,
+    ): Boolean =
+        ballSpeedMps in 0.5..100.0 &&
+            spinRpm in 0..12000 &&
+            launchAngleDeg in 0.0..85.0 &&
+            launchDirDeg in -90.0..90.0 &&
+            spinAxisDeg in -90.0..90.0
+
+    /**
      * Launch conditions for a single stored shot, or null when its raw block
      * cannot build valid conditions (legacy or tampered rows). Mirrors the
      * range-checked construction the engine requires; validated explicitly
@@ -38,11 +56,9 @@ object BagTrace {
      */
     fun launchFor(shot: BagMappingShotEntity): LaunchConditions? {
         val spinRpm = shot.totalSpinRpm
-        if (shot.ballSpeedMps !in 0.5..100.0) return null
-        if (spinRpm !in 0..12000) return null
-        if (shot.launchAngleDeg !in 0.0..85.0) return null
-        if (shot.launchDirDeg !in -90.0..90.0) return null
-        if (shot.spinAxisDeg !in -90.0..90.0) return null
+        if (!inRange(shot.ballSpeedMps, spinRpm, shot.launchAngleDeg, shot.launchDirDeg, shot.spinAxisDeg)) {
+            return null
+        }
         return LaunchConditions(
             ballSpeedMps = shot.ballSpeedMps,
             launchAngleDeg = shot.launchAngleDeg,
@@ -62,12 +78,14 @@ object BagTrace {
         val launchDir = BagMappingStats.median(kept.map { it.launchDirDeg }) ?: return null
         val spinAxis = BagMappingStats.median(kept.map { it.spinAxisDeg }) ?: return null
         val spinRpm = spin.roundToInt()
-        if (ballSpeed !in 0.5..100.0) return null
-        if (spinRpm !in 0..12000) return null
-        if (launchAngle !in 0.0..85.0) return null
-        if (launchDir !in -90.0..90.0) return null
-        if (spinAxis !in -90.0..90.0) return null
-        return LaunchConditions(ballSpeed, launchAngle, spinRpm, launchDir, spinAxis)
+        if (!inRange(ballSpeed, spinRpm, launchAngle, launchDir, spinAxis)) return null
+        return LaunchConditions(
+            ballSpeedMps = ballSpeed,
+            launchAngleDeg = launchAngle,
+            spinRpm = spinRpm,
+            launchDirDeg = launchDir,
+            spinAxisDeg = spinAxis,
+        )
     }
 
     /** The median of the basis distance over a club's kept shots, or null. */

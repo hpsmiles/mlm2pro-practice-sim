@@ -55,4 +55,22 @@ class BagSideGeomTest {
         assertEquals(0, labelRow(2))
         assertEquals(1, labelRow(13))
     }
+
+    @Test
+    fun `label rows follow ascending landing order even when clubs arrive out of order`() {
+        // Rows are assigned by a club's position in ASCENDING landing order
+        // (bag order is descending distance, so the caller sorts ascending by
+        // landing before indexing), so clubs that land closest together never
+        // share a row. Here the clubs arrive in an arbitrary order.
+        val clubs = listOf(
+            "7i" to 160.0,
+            "D" to 237.0,
+            "8i" to 140.0,
+            "5i" to 176.0,
+        )
+        val ascending = clubs.sortedBy { it.second }
+        val rows = ascending.mapIndexed { index, _ -> labelRow(index) }
+        assertEquals(listOf(0, 1, 0, 1), rows)
+        rows.zipWithNext().forEach { (a, b) -> assertTrue(a != b) }
+    }
 }

@@ -2214,3 +2214,11 @@ with:
             GolfColors.TextPrimary,
         )
 ```
+
+## Correction 4 — Task 7: `summarizeGaps` must exclude INVERTED gaps from the aggregates
+
+`summarizeGaps` in `BagSummary.kt` originally computed `averageGapM`, `closest` and `farthest` over every `GapEntry`, but an inverted pair's `gapM` is `abs(shorter − longer)` — a small positive number for a club that carries *further* than the one above it — so a mislabelled club could win `CLOSEST` and print as a healthy tight gap while the DISTANCE GAPS block colours the same pair red.
+
+Fix (Task 7, applied): `averageGapM` / `closest` / `farthest` are computed over `gaps.filterNot { it.flag == GapFlag.INVERTED }` only; the three counts (`goodCount` / `wideCount` / `tightCount`) still cover the full list (INVERTED contributes to none of them by construction). `BagSummaryTest` gains cases: a smallest `gapM` that is an INVERTED entry is skipped for `closest`, a largest `gapM` that is an INVERTED entry is skipped for `farthest`, the average excludes the inverted entry's magnitude, and an all-INVERTED list yields null aggregates with all three counts zero.
+
+**Shared contract for the lanes that build the summary strip:** any consumer rendering `closest` / `farthest` must render the returned pair as given — it is the real smallest/largest non-inverted gap, so its `longerClub` / `shorterClub` / `gapM` / `bandLowM` / `bandHighM` are already authoritative — and must not re-derive or re-flag it.
