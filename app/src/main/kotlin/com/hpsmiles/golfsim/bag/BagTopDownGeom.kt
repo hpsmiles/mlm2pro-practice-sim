@@ -42,8 +42,10 @@ data class BagTopDownFit(
  * points and snapped outward to [TOP_DOWN_SNAP_M] (floor
  * [TOP_DOWN_MIN_WINDOW_M]) so empty range either side of the action is trimmed
  * away. The window then grows (zoom out only, re-snapped to the grid) until
- * the true-scale vertical reach covers the widest lateral content. Null when
- * there is nothing to draw.
+ * the true-scale vertical reach covers the widest lateral content; if the
+ * range cap makes that impossible, the vertical scale falls back to the
+ * largest value that contains the data (see the fallback in the body). Null
+ * when there is nothing to draw.
  */
 fun computeBagTopDownFit(
     widthPx: Float,
@@ -88,12 +90,26 @@ fun computeBagTopDownFit(
         windowMinM = (windowMaxM - grown).coerceAtLeast(0.0)
         span = max(windowMaxM - windowMinM, 1.0)
     }
+    var pxPerMSide = (plotWidth / span)
+    // FALLBACK — the ONE deviation from strict 1:1 (2026-10-16 round 3):
+    // when the 330 m range cap has already limited the span, the true-scale
+    // vertical reach (span * heightPx / (2 * plotWidth)) can still fall short
+    // of the widest dot — i.e. exactly when the pane is shorter than
+    //     (maxAbsSide + margin) * 2 * plotWidth / FAIRWAY_END_Y
+    // (an extreme lateral spread on a short pane). Squash the vertical scale
+    // to the largest value that still contains maxAbsSide + margin: the ring
+    // shapes read slightly flat in that degenerate case, which beats both
+    // clipping (hides data) and drawing outside the pane.
+    val reachM = span * heightPx / (2.0 * plotWidth)
+    if (reachM < maxAbsSide + TOP_DOWN_LATERAL_MARGIN_M) {
+        pxPerMSide = (heightPx / 2f) / (maxAbsSide + TOP_DOWN_LATERAL_MARGIN_M)
+    }
     return BagTopDownFit(
         windowMinM = windowMinM,
         windowMaxM = windowMaxM,
         pxPerMM = (plotWidth / span).toFloat(),
         leftPadPx = leftPadPx,
-        pxPerMSide = (plotWidth / span).toFloat(),
+        pxPerMSide = pxPerMSide.toFloat(),
         midY = heightPx / 2f,
     )
 }

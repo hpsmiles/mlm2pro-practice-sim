@@ -1,5 +1,6 @@
 package com.hpsmiles.golfsim.bag
 
+import com.hpsmiles.golfsim.range.RangeScene
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -92,6 +93,25 @@ class BagTopDownGeomTest {
         assertEquals(fit.pxPerMM, fit.pxPerMSide, 1e-6f)
         // …and the extreme dots stay inside the pane.
         assertTrue(fit.sy(-40.0) <= 300f)
+        assertTrue(fit.sy(40.0) >= 0f)
+    }
+
+    @Test
+    fun `a pane too short even for the full range falls back to a squashed vertical scale`() {
+        // 2026-10-16 round 3: the 330 m range cap limits the span, so 1:1
+        // cannot contain the data. required = 42 * 2 * 962 / 100 = 808 m —
+        // the window grows to the full 0..330 m, and the fallback squashes
+        // pxPerMSide to (heightPx / 2) / (maxAbsSide + margin): the one
+        // deviation from strict 1:1. Containment always wins over parity.
+        val wide = listOf(
+            ClubDots("D", listOf(-40.0 to 200.0, 40.0 to 210.0, 0.0 to 205.0)),
+        )
+        val fit = computeBagTopDownFit(1000f, 100f, wide)!!
+        assertEquals(0.0, fit.windowMinM, 1e-9)
+        assertEquals(RangeScene.FAIRWAY_END_Y, fit.windowMaxM, 1e-9)
+        assertTrue("fallback must squash the vertical scale", fit.pxPerMSide < fit.pxPerMM)
+        assertEquals(100f / 2f / 42f, fit.pxPerMSide, 1e-4f)
+        assertTrue(fit.sy(-40.0) <= 100f)
         assertTrue(fit.sy(40.0) >= 0f)
     }
 }

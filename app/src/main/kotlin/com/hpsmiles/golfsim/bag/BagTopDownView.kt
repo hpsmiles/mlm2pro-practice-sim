@@ -139,20 +139,23 @@ fun BagTopDownView(
 }
 
 private fun DrawScope.drawTopDown(fit: BagTopDownFit, clubs: List<ClubDots>, colors: Map<String, Color>) {
-    // Ground: rough base, mown fairway corridor, 10 m stripes clipped to the
-    // window — the same treatment as the fitting top-down (FittingTopDown.kt
-    // 172-198), with the distance axis on x instead of y. Everything is
-    // clipped to the plot's own rect (2026-10-16 review): the corridor rect's
-    // x start is sx(FAIRWAY_TEE_Y), which sits LEFT of the window when the
-    // window is snapped past the tee, so unclipped the mown band painted
-    // edge-to-edge across the screen, over the nav rail. The plot rect is the
-    // window's own span — the same bounds the gridlines respect.
+    // EVERYTHING is clipped to the plot's own rect — the window's span, the
+    // same bounds the gridlines respect. Two reasons (2026-10-16): (1) the
+    // corridor rect's x start is sx(FAIRWAY_TEE_Y), which sits LEFT of the
+    // window when the window is snapped past the tee, so unclipped the mown
+    // band painted edge-to-edge across the screen, over the nav rail;
+    // (2) belt-and-braces: the fit's containment guarantee keeps rings and
+    // dots inside the pane, so this clip never removes data in practice —
+    // it only ensures no future case can paint over the axis labels.
     clipRect(
         left = fit.sx(fit.windowMinM),
         top = 0f,
         right = fit.sx(fit.windowMaxM),
         bottom = size.height,
     ) {
+        // Ground: rough base, mown fairway corridor, 10 m stripes — the same
+        // treatment as the fitting top-down (FittingTopDown.kt 172-198), with
+        // the distance axis on x instead of y.
         drawRect(GolfColors.RangeRough, size = size)
         val corridorHalfM = RangeScene.fairwayHalfWidth(0.0)
         val corridorTop = fit.sy(corridorHalfM)
@@ -180,53 +183,66 @@ private fun DrawScope.drawTopDown(fit: BagTopDownFit, clubs: List<ClubDots>, col
                 size = Size(fit.sx(hi) - fit.sx(lo), corridorBottom - corridorTop),
             )
         }
-    }
-    // Distance gridlines with labels, inside the window only.
-    val gridPaint = android.graphics.Paint().apply {
-        color = GolfColors.TextMuted.toArgb()
-        textSize = 10.sp.toPx()
-        isAntiAlias = true
-        textAlign = android.graphics.Paint.Align.CENTER
-    }
-    var gridM = ceil(fit.windowMinM / GRID_STEP_M) * GRID_STEP_M
-    while (gridM <= fit.windowMaxM) {
-        val x = fit.sx(gridM)
-        drawLine(GolfColors.Line, Offset(x, 0f), Offset(x, size.height), 1f)
-        drawContext.canvas.nativeCanvas.drawText(
-            String.format(Locale.US, "%.0f", gridM),
-            x,
-            size.height - 4f,
-            gridPaint,
-        )
-        gridM += GRID_STEP_M
-    }
-
-    // Rings under dots: minimum-enclosing ellipse per club, buffered 5 %.
-    clubs.forEach { club ->
-        val color = colors[club.clubName] ?: GolfColors.TextSecondary
-        val ellipse = DispersionEllipse.fromKept(club.points) ?: return@forEach
-        val path = Path()
-        for (step in 0..RING_STEPS) {
-            val t = 2.0 * PI * step / RING_STEPS
-            val a = ellipse.semiAxisM * cos(t)
-            val b = ellipse.semiCrossM * sin(t)
-            val sideM = ellipse.centreSideM + a * cos(ellipse.angleRad) - b * sin(ellipse.angleRad)
-            val distanceM = ellipse.centreTotalM + a * sin(ellipse.angleRad) + b * cos(ellipse.angleRad)
-            val x = fit.sx(distanceM)
-            val y = fit.sy(sideM)
-            if (step == 0) path.moveTo(x, y) else path.lineTo(x, y)
+        // Distance gridlines (lines only; the tick labels draw LAST, over the
+        // rings and dots, so a marker that legitimately reaches the bottom of
+        // the pane can never obscure a label — 2026-10-16 round 3).
+        val gridPaint = android.graphics.Paint().apply {
+            color = GolfColors.TextMuted.toArgb()
+            textSize = 10.sp.toPx()
+            isAntiAlias = true
+            textAlign = android.graphics.Paint.Align.CENTER
         }
-        path.close()
-        drawPath(path, Color.White.copy(alpha = 0.55f), style = Stroke(width = RingKeylineWidth.toPx()))
-        drawPath(path, color.copy(alpha = 0.7f), style = Stroke(width = RingColorWidth.toPx()))
-    }
-    // Dots on top.
-    clubs.forEach { club ->
-        val color = colors[club.clubName] ?: GolfColors.TextSecondary
-        club.points.forEach { (lateralM, distanceM) ->
-            val centre = Offset(fit.sx(distanceM), fit.sy(lateralM))
-            drawCircle(Color.White.copy(alpha = 0.6f), DotRimRadius.toPx(), centre)
-            drawCircle(color.copy(alpha = 0.9f), DotRadius.toPx(), centre)
+        var gridM = ceil(fit.windowMinM / GRID_STEP_M) * GRID_STEP_M
+        while (gridM <= fit.windowMaxM) {
+            drawLine(
+                GolfColors.Line,
+                Offset(fit.sx(gridM), 0f),
+                Offset(fit.sx(gridM), size.height),
+                1f,
+            )
+            gridM += GRID_STEP_M
+        }
+
+        // Rings under dots: minimum-enclosing ellipse per club, buffered 5 %.
+        clubs.forEach { club ->
+            val color = colors[club.clubName] ?: GolfColors.TextSecondary
+            val ellipse = DispersionEllipse.fromKept(club.points) ?: return@forEach
+            val path = Path()
+            for (step in 0..RING_STEPS) {
+                val t = 2.0 * PI * step / RING_STEPS
+                val a = ellipse.semiAxisM * cos(t)
+                val b = ellipse.semiCrossM * sin(t)
+                val sideM = ellipse.centreSideM + a * cos(ellipse.angleRad) - b * sin(ellipse.angleRad)
+                val distanceM = ellipse.centreTotalM + a * sin(ellipse.angleRad) + b * cos(ellipse.angleRad)
+                val x = fit.sx(distanceM)
+                val y = fit.sy(sideM)
+                if (step == 0) path.moveTo(x, y) else path.lineTo(x, y)
+            }
+            path.close()
+            drawPath(path, Color.White.copy(alpha = 0.55f), style = Stroke(width = RingKeylineWidth.toPx()))
+            drawPath(path, color.copy(alpha = 0.7f), style = Stroke(width = RingColorWidth.toPx()))
+        }
+        // Dots on top.
+        clubs.forEach { club ->
+            val color = colors[club.clubName] ?: GolfColors.TextSecondary
+            club.points.forEach { (lateralM, distanceM) ->
+                val centre = Offset(fit.sx(distanceM), fit.sy(lateralM))
+                drawCircle(Color.White.copy(alpha = 0.6f), DotRimRadius.toPx(), centre)
+                drawCircle(color.copy(alpha = 0.9f), DotRadius.toPx(), centre)
+            }
+        }
+        // Tick labels last, above everything (2026-10-16 round 3): a marker
+        // that legitimately reaches the bottom of the pane must never hide a
+        // metre label.
+        var labelM = ceil(fit.windowMinM / GRID_STEP_M) * GRID_STEP_M
+        while (labelM <= fit.windowMaxM) {
+            drawContext.canvas.nativeCanvas.drawText(
+                String.format(Locale.US, "%.0f", labelM),
+                fit.sx(labelM),
+                size.height - 4f,
+                gridPaint,
+            )
+            labelM += GRID_STEP_M
         }
     }
 }

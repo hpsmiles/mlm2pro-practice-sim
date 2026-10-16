@@ -5,6 +5,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
@@ -36,6 +37,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -49,6 +51,7 @@ import com.hpsmiles.golfsim.core.data.record.ClubType
 import com.hpsmiles.golfsim.core.designsystem.GolfColors
 import com.hpsmiles.golfsim.core.designsystem.GolfSpacing
 import com.hpsmiles.golfsim.core.designsystem.GolfTypography
+import com.hpsmiles.golfsim.range.RangeScene
 import java.util.Locale
 import kotlin.math.abs
 
@@ -114,10 +117,37 @@ fun BagMappingResult(
         )
     }
     val summary = remember(gaps) { summarizeGaps(gaps) }
-    Column(
+    val density = LocalDensity.current
+    val maxAbsSideM = remember(dots) {
+        dots.flatMap { it.points }.maxOfOrNull { abs(it.first) } ?: 0.0
+    }
+    BoxWithConstraints(
         modifier = modifier.fillMaxSize().background(GolfColors.Base).padding(GolfSpacing.Xl),
-        verticalArrangement = Arrangement.spacedBy(GolfSpacing.Md),
     ) {
+        // TOP-DOWN true-scale containment floor (2026-10-16 round 3): at 1:1
+        // the chart pane must be at least
+        //     (maxAbsSide + margin) * 2 * plotWidth / FAIRWAY_END_Y
+        // tall for the vertical reach to cover the widest dot at the full
+        // range — a fixed chart/panel weight ratio cannot guarantee that on
+        // every session. With the panel open, the chart gets exactly this
+        // height and the panel takes the remainder (harmless: the panel
+        // scrolls under its pinned scale). The plot canvas spans the content
+        // width, and the pads mirror BagTopDownView's 26/12 dp.
+        val minChartDp = if (view == BagResultsView.TOP_DOWN && panelOpen) {
+            with(density) {
+                val plotWidthPx = constraints.maxWidth - (26.dp + 12.dp).toPx()
+                val minPanePx = ((maxAbsSideM + TOP_DOWN_LATERAL_MARGIN_M) * 2.0 *
+                    plotWidthPx / RangeScene.FAIRWAY_END_Y).toFloat()
+                // Guard: an absurd lateral spread must never swallow the
+                // page — such a session falls through to the geom's squash
+                // fallback instead.
+                minPanePx.coerceAtMost(constraints.maxHeight * 0.5f).coerceAtLeast(0f).toDp()
+            }
+        } else null
+        Column(
+            modifier = Modifier.fillMaxSize(),
+            verticalArrangement = Arrangement.spacedBy(GolfSpacing.Md),
+        ) {
         Text("BAG MAPPING", style = GolfTypography.ScreenTitle, color = GolfColors.TextPrimary)
         Text(
             BagMappingFormats.dateTime(session.completedAtMs ?: session.startedAtMs),
@@ -159,20 +189,24 @@ fun BagMappingResult(
                 clubs = dots,
                 colors = colorByClub,
                 onClubTap = { drillClub = it },
-                modifier = Modifier.weight(1f),
+                // With the panel open the chart gets its data-derived
+                // containment floor and the panel the remainder; otherwise
+                // the pane is tall enough for the fixed weight.
+                modifier = minChartDp?.let { Modifier.height(it) } ?: Modifier.weight(1f),
             )
         }
         BagDistPanel(
             open = panelOpen,
             onToggle = { panelOpen = !panelOpen },
-            // Open panel gets 1.5x the chart's share (2026-10-16 round 2):
-            // the gap block (~434 px) is taller than half the page, so at 1:1
-            // it could never fully clear the panel's sticky metre scale even
-            // with the trailing scroll spacer. 1.5x is the balance point —
-            // at 2f the chart pane gets so short that the top-down's
-            // true-scale window (max 330 m of range) can no longer cover the
-            // lateral spread, re-breaking Driver containment.
-            modifier = if (panelOpen) Modifier.weight(1.5f) else Modifier,
+            // Split rule (2026-10-16 rounds 2-3): SIDE keeps the 1.5x panel
+            // share (its chart has no containment floor to honour); with
+            // TOP-DOWN open the chart's height is fixed above and the panel
+            // simply takes the remainder.
+            modifier = when {
+                !panelOpen -> Modifier
+                view == BagResultsView.TOP_DOWN -> Modifier.weight(1f)
+                else -> Modifier.weight(1.5f)
+            },
         ) {
             CarryMatrixSection(
                 rows = rows,
@@ -190,6 +224,7 @@ fun BagMappingResult(
                 }
             }
             OutlinedButton(onClick = onOpenHistory) { Text("HISTORY") }
+        }
         }
     }
     drillClub?.let { clubName ->
