@@ -65,8 +65,8 @@ class TourOrderingTest {
         assertTrue(firm.totalM > normal.totalM)
         assertTrue(normal.totalM > soft.totalM)
 
-        val draw = BallFlightEngine.simulate(LaunchConditions(70.0, 12.0, 3000, spinAxisDeg = 5.0))
-        val fade = BallFlightEngine.simulate(LaunchConditions(70.0, 12.0, 3000, spinAxisDeg = -5.0))
+        val fade = BallFlightEngine.simulate(LaunchConditions(70.0, 12.0, 3000, spinAxisDeg = 5.0))
+        val draw = BallFlightEngine.simulate(LaunchConditions(70.0, 12.0, 3000, spinAxisDeg = -5.0))
         assertEquals(draw.sideM, -fade.sideM, 1e-9)
         assertEquals(draw.totalM, fade.totalM, 1e-9)
     }

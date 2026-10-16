@@ -21,8 +21,11 @@ class BallFlightEngineTest {
 
     @Test
     fun drawAndFadeMirrorExactly() {
-        val draw = BallFlightEngine.simulate(LaunchConditions(70.0, 12.0, 3000, spinAxisDeg = 5.0))
-        val fade = BallFlightEngine.simulate(LaunchConditions(70.0, 12.0, 3000, spinAxisDeg = -5.0))
+        // +spinAxis = fade (right curve), verified against the M4c on-device
+        // goldens — the variable names below must match the sign, the
+        // mirror-symmetry assertions must not change.
+        val fade = BallFlightEngine.simulate(LaunchConditions(70.0, 12.0, 3000, spinAxisDeg = 5.0))
+        val draw = BallFlightEngine.simulate(LaunchConditions(70.0, 12.0, 3000, spinAxisDeg = -5.0))
         assertEquals(draw.sideM, -fade.sideM, 1e-9)
         assertEquals(draw.totalM, fade.totalM, 1e-9)
     }

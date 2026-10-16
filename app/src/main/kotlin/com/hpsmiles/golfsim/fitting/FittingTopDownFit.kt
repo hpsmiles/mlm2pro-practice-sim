@@ -253,7 +253,10 @@ private const val CORRIDOR_VISIBILITY_SCALE = 2.5
 /**
  * Horizontal (tee-left) plan fit. Screen mapping:
  *   sx(d) = originX + d * pxPerMX   (d = distance metres from the tee)
- *   sy(s) = midY - s * pxPerMY      (s = lateral metres, positive up)
+ *   sy(s) = midY + s * pxPerMY     (s = lateral metres, +s = right of the
+ *                                   target looking down-range = DOWN the screen;
+ *                                   sign verified 2026-10-16 against the M4c
+ *                                   on-device goldens)
  * [originX] is the screen x of world distance 0 and may fall off-canvas when the
  * fitted distance window excludes the tee.
  */

@@ -5,8 +5,8 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
@@ -18,6 +18,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -33,7 +35,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -42,6 +47,7 @@ import androidx.compose.ui.unit.sp
 import com.hpsmiles.golfsim.core.data.bag.BagMappingStats
 import com.hpsmiles.golfsim.core.data.entity.BagMappingSessionEntity
 import com.hpsmiles.golfsim.core.data.entity.BagMappingShotEntity
+import com.hpsmiles.golfsim.core.data.record.ClubType
 import com.hpsmiles.golfsim.core.designsystem.GolfColors
 import com.hpsmiles.golfsim.core.designsystem.GolfSpacing
 import com.hpsmiles.golfsim.core.designsystem.GolfTypography
@@ -49,13 +55,17 @@ import java.util.Locale
 import kotlin.math.abs
 
 /**
- * RESULT state (spec §6): box-plot carry matrix in bag order, per-club stats
- * column, adjacent gap flags, RETEST + HISTORY, "test in progress" banner
- * while a retest runs, and per-club drill-down (all stored shots, kept vs
- * filtered). The drill-down's per-shot tick box (2026-10-16) layers a user
- * include/exclude override on the auto gate verdict; the effective state —
- * [BagMappingShotEntity.effectiveIncluded] — drives the aggregates, gaps and
- * kept-vs-filtered counts.
+ * RESULT state (spec §6, 2026-10-16 rework): a chart-led page. The top half is
+ * the SIDE / TOP-DOWN selector over a CARRY / TOTAL basis toggle — the basis
+ * drives the arcs, the axis, the summary strip and the gap basis. Below the
+ * chart: the summary strip, a collapsed-by-default DISTRIBUTION & GAPS panel
+ * (scrollable; the box-plot matrix and the DISTANCE GAPS block live in there)
+ * and the RETEST + HISTORY row. All gaps come from ONE computed list shared by
+ * the strip, the panel block and the charts, so they can never disagree.
+ * Per-club drill-down opens over the page (all stored shots, kept vs filtered);
+ * its per-shot tick box layers a user include/exclude override on the auto
+ * gate verdict — the effective state, [BagMappingShotEntity.effectiveIncluded],
+ * drives the aggregates, gaps and kept-vs-filtered counts everywhere.
  */
 @Composable
 fun BagMappingResult(
@@ -69,10 +79,85 @@ fun BagMappingResult(
     modifier: Modifier = Modifier,
 ) {
     var drillClub by remember { mutableStateOf<String?>(null) }
-    Column(
+    var view by remember { mutableStateOf(BagResultsView.SIDE) }
+    var basis by remember { mutableStateOf(DistanceBasis.CARRY) }
+    var panelOpen by remember { mutableStateOf(false) }
+
+    // One gaps source for the whole page: the summary strip, the charts and
+    // the panel's DISTANCE GAPS block all read this list, so they can never
+    // disagree. The gap basis follows the toggle (user decision 2026-10-16);
+    // the box-plot lanes inside the panel stay carry + total.
+    // Hoisted once per session — everything below (colours, traces, dots,
+    // gaps, the matrix section) reads this, so they all key on it instead of
+    // re-parsing the snapshot per remember block.
+    val rows = remember(session) { session.clubSnapshot() }
+    val colorByClub = remember(rows) {
+        rows.mapIndexed { index, (name, _) -> name to BagRamp.clubColor(index) }.toMap()
+    }
+    val traces = remember(rows, shots, basis) {
+        rows.mapNotNull { (name, _) ->
+            BagTrace.trace(name, shots.filter { it.clubName == name }, basis)
+        }
+    }
+    val dots = remember(rows, shots, basis) {
+        rows.map { (name, _) -> BagTrace.dots(name, shots.filter { it.clubName == name }, basis) }
+    }
+    // Gap flags are computed over medians in canonical long→short order
+    // DERIVED FROM CLUB IDENTITY, NOT the persisted test order — feeding the
+    // test order made every gap negative and all INVERTED (2026-10-16).
+    val gaps = remember(rows, shots, basis) {
+        GapAnalysis.analyzeByClubIdentity(
+            rows.mapNotNull { (name, type) ->
+                val kept = shots.filter { it.clubName == name && it.effectiveIncluded() }
+                    .map { it.distanceFor(basis) }
+                val dist = BagMappingStats.distribution(kept) ?: return@mapNotNull null
+                Triple(name, type, dist.median)
+            },
+        )
+    }
+    val summary = remember(gaps) { summarizeGaps(gaps) }
+    val density = LocalDensity.current
+    val maxAbsSideM = remember(dots) {
+        dots.flatMap { it.points }.maxOfOrNull { abs(it.first) } ?: 0.0
+    }
+    // ONE shared distance axis for the whole page (2026-10-16, user decision):
+    // min 0, step from the BoxPlotGeom ladder, max = whole multiple of the
+    // step ≥ 1.06 × the largest plotted distance — over ALL carries AND
+    // totals, kept AND filtered (the matrix plots filtered carries too).
+    // SIDE, TOP-DOWN and the matrix all consume it, so their ticks land at
+    // identical metre values.
+    val axis = remember(shots) {
+        BagDistanceAxis.fromDistances(shots.flatMap { listOf(it.carryM, it.totalM) })
+    }
+    BoxWithConstraints(
         modifier = modifier.fillMaxSize().background(GolfColors.Base).padding(GolfSpacing.Xl),
-        verticalArrangement = Arrangement.spacedBy(GolfSpacing.Md),
     ) {
+        // TOP-DOWN true-scale containment floor (2026-10-16 round 3, D):
+        // at 1:1 the chart pane must be at least minPaneHeightPx tall for the
+        // vertical reach to cover the widest dot at the full range — a fixed
+        // chart/panel weight ratio cannot guarantee that on every session.
+        // With the panel open, the chart gets exactly this height and the
+        // panel takes the remainder (harmless: the panel scrolls under its
+        // pinned scale). The plot canvas spans the content width; the pads
+        // come from the same constants the view insets by.
+        val minChartDp = if (view == BagResultsView.TOP_DOWN && panelOpen && axis != null) {
+            with(density) {
+                val plotWidthPx = constraints.maxWidth -
+                    (TOP_DOWN_LEFT_PAD_DP + TOP_DOWN_RIGHT_PAD_DP).dp.toPx()
+                // Guard: an absurd lateral spread must never swallow the
+                // page — such a session falls through to the geom's squash
+                // fallback instead. The floor is computed against the SHARED
+                // axis span (2026-10-16 shared-axis decision).
+                minPaneHeightPx(maxAbsSideM, plotWidthPx, axis.maxM)
+                    .coerceAtMost(constraints.maxHeight * 0.5f)
+                    .coerceAtLeast(0f)
+                    .toDp()
+            }
+        } else null
+        Column(
+            modifier = Modifier.fillMaxSize(),
+            verticalArrangement = Arrangement.spacedBy(GolfSpacing.Md),
+        ) {
         Text("BAG MAPPING", style = GolfTypography.ScreenTitle, color = GolfColors.TextPrimary)
         Text(
             BagMappingFormats.dateTime(session.completedAtMs ?: session.startedAtMs),
@@ -94,7 +179,57 @@ fun BagMappingResult(
                 }
             }
         }
-        CarryMatrixSection(session, shots, onDrillDown = { drillClub = it })
+        Row(horizontalArrangement = Arrangement.spacedBy(GolfSpacing.Sm)) {
+            SegmentedChoice("SIDE", view == BagResultsView.SIDE) { view = BagResultsView.SIDE }
+            SegmentedChoice("TOP-DOWN", view == BagResultsView.TOP_DOWN) { view = BagResultsView.TOP_DOWN }
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(GolfSpacing.Sm)) {
+            SegmentedChoice("CARRY", basis == DistanceBasis.CARRY) { basis = DistanceBasis.CARRY }
+            SegmentedChoice("TOTAL", basis == DistanceBasis.TOTAL) { basis = DistanceBasis.TOTAL }
+        }
+        BagResultsSummary(summary, gaps.size, basis)
+        when (view) {
+            BagResultsView.SIDE -> BagSideView(
+                traces = traces,
+                colors = colorByClub,
+                axis = axis,
+                onClubTap = { drillClub = it },
+                modifier = Modifier.weight(1f),
+            )
+            BagResultsView.TOP_DOWN -> BagTopDownView(
+                clubs = dots,
+                colors = colorByClub,
+                axis = axis,
+                onClubTap = { drillClub = it },
+                // With the panel open the chart gets its data-derived
+                // containment floor and the panel the remainder; otherwise
+                // the pane is tall enough for the fixed weight.
+                modifier = minChartDp?.let { Modifier.height(it) } ?: Modifier.weight(1f),
+            )
+        }
+        BagDistPanel(
+            open = panelOpen,
+            onToggle = { panelOpen = !panelOpen },
+            // Split rule (2026-10-16 rounds 2-3): SIDE keeps the 1.5x panel
+            // share (its chart has no containment floor to honour); with
+            // TOP-DOWN open the chart's height is fixed above and the panel
+            // simply takes the remainder.
+            modifier = when {
+                !panelOpen -> Modifier
+                view == BagResultsView.TOP_DOWN -> Modifier.weight(1f)
+                else -> Modifier.weight(1.5f)
+            },
+        ) {
+            CarryMatrixSection(
+                rows = rows,
+                shots = shots,
+                basis = basis,
+                axis = axis,
+                gaps = gaps,
+                onDrillDown = { drillClub = it },
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
         Row(horizontalArrangement = Arrangement.spacedBy(GolfSpacing.Md)) {
             if (!isStaleResult) {
                 Button(onClick = onRetest, colors = ButtonDefaults.buttonColors(containerColor = GolfColors.Teal)) {
@@ -102,6 +237,7 @@ fun BagMappingResult(
                 }
             }
             OutlinedButton(onClick = onOpenHistory) { Text("HISTORY") }
+        }
         }
     }
     drillClub?.let { clubName ->
@@ -135,43 +271,77 @@ private val RowInset = GolfSpacing.Sm
  */
 private val StatsColumnWidth = 184.dp
 
+/**
+ * The box-plot matrix (inside the collapsed-by-default DISTRIBUTION & GAPS
+ * panel). Medians and gap flags are computed ONCE in [BagMappingResult] and
+ * passed in as [gaps] — the section must not recompute them, or the strip and
+ * this block could disagree. The gap basis follows the page toggle ([basis])
+ * while the box-plot lanes stay carry + total.
+ */
 @Composable
-private fun ColumnScope.CarryMatrixSection(
-    session: BagMappingSessionEntity,
+private fun CarryMatrixSection(
+    rows: List<Pair<String, ClubType>>,
     shots: List<BagMappingShotEntity>,
+    basis: DistanceBasis,
+    axis: BagDistanceAxis?,
+    gaps: List<GapEntry>,
     onDrillDown: (String) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
-    // Bag order comes from the session snapshot (spec §4); clubs without
-    // shots render as "no data" rows (spec §9). The ClubType is kept (not
-    // just the label) — the gap analysis needs it for canonical ordering.
-    val rows = session.clubSnapshot().map { (name, type) ->
+    // Club order comes from the hoisted session snapshot (spec §4) — passed
+    // down from [BagMappingResult] so this never re-parses (or diverges from)
+    // the chart above; clubs without shots render as "no data" rows (spec §9).
+    // The ClubType is kept (not just the label) — the gap analysis needs it
+    // for canonical ordering.
+    val clubRows = rows.map { (name, type) ->
         val clubShots = shots.filter { it.clubName == name }
         Triple(name, type, clubShots)
     }
-    // ONE shared value axis over every club's kept+filtered carries AND kept
-    // totals (spec §6 + item 4): the matrix's whole point is cross-club
-    // comparison, so carry and total boxes render on the same metre scale.
-    // The pixel fields are per-canvas (rebuilt inside the painter from each
-    // canvas width); only the value bounds are shared here.
-    val sharedAxis = BoxPlotGeom.axis(
-        rows.flatMap { (_, _, clubShots) -> clubShots.flatMap { listOf(it.carryM, it.totalM) } },
-        leftPadPx = 0f,
-        plotWidthPx = 1f, // nominal — pixels are per-canvas; minM/maxM are width-independent
-    )
-    // Gap flags over medians in CANONICAL long→short order derived from
-    // club identity (type, then carry) — NOT the persisted test order,
-    // which is short→long for WEDGE_FIRST and shuffled for RANDOM. Feeding
-    // the test order made every gap negative → all INVERTED (2026-10-16).
-    val mappedMedians = rows.mapNotNull { (name, type, clubShots) ->
-        val kept = clubShots.filter { it.effectiveIncluded() }.map { it.carryM }
-        val dist = BagMappingStats.distribution(kept) ?: return@mapNotNull null
-        Triple(name, type, dist.median)
-    }
-    val gaps = GapAnalysis.analyzeByClubIdentity(mappedMedians)
-    LazyColumn(
-        modifier = Modifier.fillMaxWidth().weight(1f),
-        verticalArrangement = Arrangement.spacedBy(GolfSpacing.Sm),
-    ) {
+    // ONE SHARED value axis over every club's kept+filtered carries AND kept
+    // totals (spec §6 + item 4) — now the PAGE's shared [BagDistanceAxis]
+    // (2026-10-16, user decision), replacing the matrix's old tight 8 % fit:
+    // accepted cost, boxes compress toward the right of the 0-based axis and
+    // the wedges sit well left of the driver. The win: a metre value sits at
+    // the same place on the SIDE, TOP-DOWN and matrix scales. Only the value
+    // bounds are shared here; the pixel fields are per-canvas.
+    val sharedAxis = axis
+    // Scroll affordance (2026-10-16 review): the open panel holds far more
+    // content than fits (13 rows + the gap block), and a bare LazyColumn gave
+    // no cue that the cut-off rows below are reachable. A fade + "scroll for
+    // more" caption appears exactly while `canScrollForward` — it never lies.
+    val listState = rememberLazyListState()
+    // The metre scale is PINNED ABOVE the list rather than a stickyHeader
+    // (2026-10-16 round 2, F1): a sticky overlay strikes through whatever
+    // scrolls beneath it, and on this tablet the gap block is taller than
+    // the viewport below the sticky even with a trailing spacer — the
+    // heading could never fully clear it. Pinned outside the list, the scale
+    // stays visible for the club rows and can never obscure a row or the
+    // gap block, at any scroll position.
+    Column(modifier.fillMaxWidth()) {
+        if (sharedAxis != null) {
+            Column(modifier = Modifier.fillMaxWidth().background(GolfColors.Base)) {
+                Row(
+                    modifier = Modifier.padding(horizontal = RowInset),
+                    verticalAlignment = Alignment.Bottom,
+                ) {
+                    Spacer(Modifier.width(ClubLabelWidth))
+                    CarryMatrixScaleCanvas(
+                        minM = sharedAxis.minM,
+                        maxM = sharedAxis.maxM,
+                        ticksM = sharedAxis.ticksM,
+                        modifier = Modifier.weight(1f).height(ScaleHeight),
+                    )
+                    Spacer(Modifier.width(StatsColumnWidth))
+                }
+                Box(Modifier.fillMaxWidth().height(1.dp).background(GolfColors.Line))
+            }
+        }
+        Box(Modifier.weight(1f).fillMaxWidth()) {
+        LazyColumn(
+            state = listState,
+            modifier = Modifier.fillMaxSize(),
+            verticalArrangement = Arrangement.spacedBy(GolfSpacing.Sm),
+        ) {
         // Legend (shown once above the matrix): CARRY teal, TOTAL series blue.
         item {
             Row(
@@ -182,37 +352,16 @@ private fun ColumnScope.CarryMatrixSection(
                 LegendSwatch(TotalBoxColor, "TOTAL")
             }
         }
-        // Metre scale pinned to the top (stays visible while the rows scroll).
-        // Mirrors the row structure — same [RowInset] horizontal padding plus
-        // label spacer + plot area + stats spacer — so ticks sit exactly above
-        // the box-plot lanes. Opaque Base background so scrolling rows pass
-        // behind it. Only with data.
-        if (sharedAxis != null) {
-            stickyHeader {
-                Column(modifier = Modifier.fillMaxWidth().background(GolfColors.Base)) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = RowInset),
-                        verticalAlignment = Alignment.Bottom,
-                    ) {
-                        Spacer(Modifier.width(ClubLabelWidth))
-                        CarryMatrixScaleCanvas(
-                            minM = sharedAxis.minM,
-                            maxM = sharedAxis.maxM,
-                            modifier = Modifier.weight(1f).height(ScaleHeight),
-                        )
-                        Spacer(Modifier.width(StatsColumnWidth))
-                    }
-                    Box(Modifier.fillMaxWidth().height(1.dp).background(GolfColors.Line))
-                }
-            }
-        }
-        items(rows, key = { it.first }) { (name, type, clubShots) ->
+        items(clubRows, key = { it.first }) { (name, type, clubShots) ->
             ClubRow(name, type.label, clubShots, sharedAxis, onDrillDown)
         }
         if (gaps.isNotEmpty()) {
             item {
                 Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    Text("DISTANCE GAPS", style = GolfTypography.MetricLabel, color = GolfColors.TextMuted)
+                    Text(
+                        "DISTANCE GAPS · ${basis.name}",
+                        style = GolfTypography.MetricLabel, color = GolfColors.TextMuted,
+                    )
                     Text(
                         // Band is per-pair now, so the hint states the rule.
                         // ~93 chars at BodySmall ≈ 670 dp on the ~1015 dp
@@ -243,8 +392,35 @@ private fun ColumnScope.CarryMatrixSection(
                 }
             }
         }
+        }
+        if (listState.canScrollForward) {
+            Box(
+                Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .height(ScrollCueHeight)
+                    .background(
+                        Brush.verticalGradient(
+                            0f to Color.Transparent,
+                            1f to GolfColors.Base,
+                        ),
+                    ),
+            )
+            Text(
+                "scroll for more",
+                style = GolfTypography.Status,
+                color = GolfColors.TextMuted,
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = GolfSpacing.Xs),
+            )
+        }
+        }
     }
 }
+
+/** Height of the bottom fade behind the "scroll for more" cue. */
+private val ScrollCueHeight = 32.dp
 
 /** Range line at 12 sp (2026-10-16 bump from 10 sp — too small on tablet). */
 private val RangeTextStyle = GolfTypography.Status.copy(fontSize = 12.sp)
@@ -254,7 +430,7 @@ private fun ClubRow(
     clubName: String,
     typeLabel: String,
     clubShots: List<BagMappingShotEntity>,
-    sharedAxis: BoxPlotGeom.Axis?,
+    sharedAxis: BagDistanceAxis?,
     onDrillDown: (String) -> Unit,
 ) {
     val kept = clubShots.filter { it.effectiveIncluded() }.map { it.carryM }
@@ -681,6 +857,32 @@ private fun ShotTick(included: Boolean, onToggle: () -> Unit) {
             if (included) "✓" else "✕",
             style = GolfTypography.BodySmall,
             color = if (included) GolfColors.Teal else GolfColors.Amber,
+        )
+    }
+}
+
+/**
+ * Small chip-style segmented choice (the range VIEW chip treatment): teal
+ * border + teal text when active, line border + muted text otherwise.
+ * Semantics: `selectable` with [Role.Tab] so a screen reader announces which
+ * option is active; the visual treatment is unchanged.
+ */
+@Composable
+private fun SegmentedChoice(label: String, active: Boolean, onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .border(
+                width = 1.dp,
+                color = if (active) GolfColors.Teal else GolfColors.Line,
+                shape = RoundedCornerShape(GolfSpacing.Sm),
+            )
+            .selectable(selected = active, role = Role.Tab, onClick = onClick)
+            .padding(horizontal = GolfSpacing.Md, vertical = GolfSpacing.Xs),
+    ) {
+        Text(
+            text = label,
+            style = GolfTypography.MetricLabel,
+            color = if (active) GolfColors.Teal else GolfColors.TextSecondary,
         )
     }
 }
