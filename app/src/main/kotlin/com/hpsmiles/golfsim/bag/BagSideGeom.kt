@@ -57,10 +57,25 @@ fun computeSideFit(
 
 /**
  * Two-row stagger for the landing labels: alternating rows keep neighbouring
- * clubs' labels apart without rotating the text. The [index] is the club's
- * position in ascending landing order (bag order is descending distance, so the
- * caller sorts ascending by landing before indexing). Not a collision solver —
- * the accepted limitation is that two clubs ~48 px apart on the same row can
- * begin to touch with unusually long names.
+ * clubs' labels apart without rotating the text. [labelRow] is the alternating
+ * primitive over a club's RANK in ascending landing order.
  */
-fun labelRow(index: Int): Int = index.mod(2)
+fun labelRow(rank: Int): Int = rank.mod(2)
+
+/**
+ * Row per club, assigned by each club's rank in ASCENDING landing order —
+ * computed here, never by the caller's iteration order: `traces` arrive in
+ * persisted test order (WEDGE_FIRST short→long looks right by accident;
+ * RANDOM is a shuffled permutation, under which two clubs landing a few
+ * metres apart would share a row and collide — 2026-10-16 round 4, finding
+ * B). A stable sort keeps equal distances in input order, so the assignment
+ * is deterministic.
+ */
+fun labelRowsFor(distances: List<Double>): List<Int> {
+    val rows = IntArray(distances.size)
+    distances
+        .withIndex()
+        .sortedBy { it.value } // stable: equal distances keep input order
+        .forEachIndexed { rank, (index, _) -> rows[index] = labelRow(rank) }
+    return rows.toList()
+}

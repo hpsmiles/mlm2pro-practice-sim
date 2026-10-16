@@ -96,11 +96,12 @@ fun BagTopDownView(
         BoxWithConstraints(Modifier.fillMaxWidth().weight(1f)) {
             val widthPx = constraints.maxWidth.toFloat()
             val heightPx = constraints.maxHeight.toFloat()
-            // Pads in dp→px so the margins match the sibling top-downs
-            // (CombineTopDownView / FittingTopDown use 26.dp/12.dp too) at any
-            // density; the geom stays a pure pixel function.
-            val leftPadPx = with(LocalDensity.current) { 26.dp.toPx() }
-            val rightPadPx = with(LocalDensity.current) { 12.dp.toPx() }
+            // Pads in dp→px from the shared bag constants (finding D) so the
+            // page-level pane floor can never diverge from the canvas; the
+            // values match the sibling top-downs (CombineTopDownView /
+            // FittingTopDown use 26.dp/12.dp too) at any density.
+            val leftPadPx = with(LocalDensity.current) { TOP_DOWN_LEFT_PAD_DP.dp.toPx() }
+            val rightPadPx = with(LocalDensity.current) { TOP_DOWN_RIGHT_PAD_DP.dp.toPx() }
             val fit = remember(widthPx, heightPx, withData, leftPadPx, rightPadPx) {
                 computeBagTopDownFit(widthPx, heightPx, withData, leftPadPx, rightPadPx)
             }

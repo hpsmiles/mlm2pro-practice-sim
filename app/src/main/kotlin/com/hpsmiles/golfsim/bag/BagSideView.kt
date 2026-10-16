@@ -30,20 +30,21 @@ import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.isUnspecified
 import androidx.compose.ui.unit.sp
 import com.hpsmiles.golfsim.core.designsystem.GolfColors
 import com.hpsmiles.golfsim.core.designsystem.GolfTypography
 import java.util.Locale
 import kotlin.math.roundToInt
 
-private val LabelStripHeight = 36.dp
 private val LabelRowGap = 2.dp
 // Leader lines (spec §6.5): a quiet 1 dp connector from the axis down to each
-// label. Row 0 sits LeaderStub below the canvas; row 1 sits one full row band
-// lower, so its leader is longer by exactly that band. Deliberately not
+// label. Row 0 sits LeaderStub below the canvas; row 1 sits one full label
+// line lower, so its leader is longer by exactly that line. Deliberately not
 // hit-testable — the label text stays the tap target.
 private val LeaderStub = 6.dp
-private val LeaderRowBand = (LabelStripHeight - LabelRowGap) / 2
+/** Fallback when the label style leaves its line height unspecified. */
+private val FallbackLabelLineHeight = 16.sp
 private val ArcWidth = 2.dp
 private val LandingDotRadius = 4.dp
 private val LandingDotRim = 1.dp
@@ -76,8 +77,17 @@ fun BagSideView(
     val maxApex = traces.maxOf { it.apexM }
     BoxWithConstraints(modifier.fillMaxSize()) {
         val density = LocalDensity.current
+        // The label strip's height derives from the label style's line height
+        // (2026-10-16 round 4, finding G) so it scales with fontScale instead
+        // of a hard-coded 36 dp that the 10 sp Status labels could outgrow.
+        val labelLineHeightDp = with(density) {
+            (GolfTypography.Status.lineHeight.takeUnless { it.isUnspecified }
+                ?: FallbackLabelLineHeight).toDp()
+        }
+        val leaderRowBand = labelLineHeightDp
+        val labelStripHeight = LabelRowGap + LeaderStub + leaderRowBand + labelLineHeightDp
+        val stripPx = with(density) { labelStripHeight.toPx() }
         val boxWidth = constraints.maxWidth
-        val stripPx = with(density) { LabelStripHeight.toPx() }
         val plotHeightPx = (constraints.maxHeight - stripPx).coerceAtLeast(1f)
         // Bottom pad sized for the tick-digit row (2026-10-16 review): the
         // digits are drawn BELOW the axis baseline, in the pad the fit
@@ -120,6 +130,10 @@ fun BagSideView(
             }
             Layout(
                 content = {
+                    // Rows come from labelRowsFor — rank in ASCENDING landing
+                    // order, independent of the traces' (persisted test)
+                    // order — while the draw order below stays untouched.
+                    val rows = remember(traces) { labelRowsFor(traces.map { it.distanceM }) }
                     traces.forEachIndexed { index, trace ->
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             // Short leader from the axis to this label's row;
@@ -127,7 +141,7 @@ fun BagSideView(
                             Box(
                                 Modifier
                                     .width(1.dp)
-                                    .height(if (labelRow(index) == 0) LeaderStub else LeaderStub + LeaderRowBand)
+                                    .height(if (rows[index] == 0) LeaderStub else LeaderStub + leaderRowBand)
                                     .background(GolfColors.Line),
                             )
                             Text(
@@ -144,11 +158,18 @@ fun BagSideView(
             ) { measurables, layoutConstraints ->
                 val placeables = measurables.map { it.measure(Constraints()) }
                 val height = placeables.maxOfOrNull { it.height } ?: 0
-                layout(layoutConstraints.maxWidth, height) {
+                val rows = labelRowsFor(traces.map { it.distanceM })
+                layout(
+                    layoutConstraints.maxWidth,
+                    // Coerced: the strip reservation guarantees room, but a
+                    // pathological fontScale must never report a size taller
+                    // than the parent gave us.
+                    height.coerceAtMost(layoutConstraints.maxHeight),
+                ) {
                     // Row-1 cells first, so where a row-1 leader crosses a
                     // row-0 label's band the label's text draws on top.
                     placeables.indices
-                        .sortedByDescending { labelRow(it) }
+                        .sortedByDescending { rows[it] }
                         .forEach { index ->
                             val placeable = placeables[index]
                             val centreX = fit.x(traces[index].distanceM).roundToInt()

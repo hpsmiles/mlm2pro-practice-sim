@@ -1769,6 +1769,11 @@ Summarise what was verified, with the exact evidence, and list anything the obse
 - **Spec §6.5 says "the landing marker and the label both open the drill-down"** — implemented as written; the arc body is still not hit-tested.
 - **The 13 ramp hues in Task 2 are the proposed values from the spec.** If the rendered separation is poor on the dark base, adjust `BagRamp.hues` (keeping the first six) and re-run `BagRampTest` — no other file needs to change.
 
+### Deviations added during the 2026-10-16 results rework
+
+- **Spec section 7's lateral half-window ("corridor visibility scale x maxAbsSide + margin", as the combine view does) is replaced by true-scale parity.** `pxPerMSide` now equals `pxPerMM` - one px per metre on BOTH axes - because an independent lateral fit made rings read as tall, narrow ellipses that contradicted the tick spacing. Containment is instead guaranteed by (a) growing the distance window (zoom-out only, re-snapped to the 25 m grid, window start shifted down when the 330 m range cap clamps) until the vertical reach covers `maxAbsSide + margin`, (b) a page-level minimum chart-pane height (`minPaneHeightPx`) when the panel is open, and (c) a documented fallback that squashes the vertical scale only when even the full range cannot contain the data.
+- **Spec section 9's "sticky metre scale" is a header pinned above the matrix list, not a LazyColumn `stickyHeader`.** A sticky overlay strikes through whatever scrolls beneath it, and the DISTANCE GAPS block is taller than the viewport below the sticky on the target tablet - the heading could never fully clear it. Pinned outside the list, the scale never obscures a row or the gap block at any scroll position.
+
 ---
 
 # Plan corrections (authoritative)

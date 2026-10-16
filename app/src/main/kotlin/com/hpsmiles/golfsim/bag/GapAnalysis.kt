@@ -22,7 +22,8 @@ data class GapEntry(
  * Adjacent-club gap flags over the medians of the clubs SHOWN, in bag order
  * (spec §6 + §9: gaps only between adjacent mapped clubs — the caller passes
  * exactly the rows with data). Healthy band (2026-10-16, research-backed):
- * 4–10% of the LONGER club's carry, clamped to [BAND_FLOOR_M]–[BAND_CAP_M].
+ * 4–10% of the LONGER club's distance (carry in CARRY mode, total in TOTAL
+ * mode — the band is basis-neutral), clamped to [BAND_FLOOR_M]–[BAND_CAP_M].
  * Published fitting guidance puts iron-to-iron gaps at 9–14 m for an average
  * player, tighter in wedges and wider at the long end, scaling with speed
  * (short hitters 5–8 m, long hitters 9–16 m); the percentage band reproduces
@@ -40,21 +41,22 @@ object GapAnalysis {
     const val BAND_FLOOR_M = 3.0
     const val BAND_CAP_M = 20.0
 
-    fun bandLowM(longerCarryM: Double): Double = max(BAND_FLOOR_M, BAND_LOW_FRACTION * longerCarryM)
-    fun bandHighM(longerCarryM: Double): Double = min(BAND_CAP_M, BAND_HIGH_FRACTION * longerCarryM)
+    fun bandLowM(longerDistanceM: Double): Double = max(BAND_FLOOR_M, BAND_LOW_FRACTION * longerDistanceM)
+    fun bandHighM(longerDistanceM: Double): Double = min(BAND_CAP_M, BAND_HIGH_FRACTION * longerDistanceM)
 
-    /** Flag for one pair: [gapM] against the band set by the LONGER club's carry. */
-    fun flagFor(longerCarryM: Double, gapM: Double): GapFlag = when {
+    /** Flag for one pair: [gapM] against the band set by the LONGER club's distance. */
+    fun flagFor(longerDistanceM: Double, gapM: Double): GapFlag = when {
         gapM <= 0.0 -> GapFlag.INVERTED
-        gapM < bandLowM(longerCarryM) -> GapFlag.TIGHT
-        gapM > bandHighM(longerCarryM) -> GapFlag.WIDE
+        gapM < bandLowM(longerDistanceM) -> GapFlag.TIGHT
+        gapM > bandHighM(longerDistanceM) -> GapFlag.WIDE
         else -> GapFlag.HEALTHY
     }
 
     /**
-     * Generic list analysis over arbitrary (name, carry) pairs already in
+     * Generic list analysis over arbitrary (name, distance) pairs already in
      * long→short order — no ordering, NO filtering. Driver exclusion happens
-     * only in [analyzeByClubIdentity].
+     * only in [analyzeByClubIdentity]. The distance is basis-neutral: callers
+     * feed carry medians in CARRY mode, total medians in TOTAL mode.
      */
     fun analyze(clubsInBagOrder: List<Pair<String, Double>>): List<GapEntry> {
         if (clubsInBagOrder.size < 2) return emptyList()

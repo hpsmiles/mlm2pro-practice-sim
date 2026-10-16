@@ -57,20 +57,19 @@ class BagSideGeomTest {
     }
 
     @Test
-    fun `label rows follow ascending landing order even when clubs arrive out of order`() {
-        // Rows are assigned by a club's position in ASCENDING landing order
-        // (bag order is descending distance, so the caller sorts ascending by
-        // landing before indexing), so clubs that land closest together never
-        // share a row. Here the clubs arrive in an arbitrary order.
-        val clubs = listOf(
-            "7i" to 160.0,
-            "D" to 237.0,
-            "8i" to 140.0,
-            "5i" to 176.0,
-        )
-        val ascending = clubs.sortedBy { it.second }
-        val rows = ascending.mapIndexed { index, _ -> labelRow(index) }
-        assertEquals(listOf(0, 1, 0, 1), rows)
-        rows.zipWithNext().forEach { (a, b) -> assertTrue(a != b) }
+    fun `label rows follow ascending landing order regardless of input order, stable for ties`() {
+        // 2026-10-16 round 4 (finding B): the rows are assigned INSIDE
+        // labelRowsFor by rank in ascending distance — the caller's order
+        // (persisted test order, possibly RANDOM) must not matter, and equal
+        // distances keep input order (stable sort) so the assignment is
+        // deterministic. Unsorted input with a duplicate:
+        val rows = labelRowsFor(listOf(150.0, 120.0, 150.0, 90.0))
+        // Ascending, stable: 90 (idx 3), 120 (idx 1), 150 (idx 0), 150 (idx 2)
+        // get ranks 0..3 → rows 0,1,0,1 by rank, written back by index.
+        assertEquals(listOf(0, 1, 1, 0), rows)
+        // The invariant is over ASCENDING landing order (that is what keeps
+        // neighbours apart), so re-sort and check the alternation there.
+        val ascendingRows = listOf(90.0, 120.0, 150.0, 150.0).let { labelRowsFor(it) }
+        assertEquals(listOf(0, 1, 0, 1), ascendingRows)
     }
 }

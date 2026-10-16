@@ -12,11 +12,30 @@ const val TOP_DOWN_SNAP_M = 25.0
 /** Smallest distance window, metres — keeps pxPerMM sane on a thin session. */
 const val TOP_DOWN_MIN_WINDOW_M = 50.0
 
-/** Corridor visibility scale — the fitting top-down's constant. */
-const val TOP_DOWN_CORRIDOR_VISIBILITY_SCALE = 1.15
-
 /** Lateral breathing room the true-scale window must cover past the widest dot, metres. */
 const val TOP_DOWN_LATERAL_MARGIN_M = 2.0
+
+/**
+ * The canvas pads (dp) the TOP-DOWN canvas insets its plot by — the single
+ * source for both the view's own insets and the page-level pane floor
+ * ([minPaneHeightPx]), so the floor can never silently under-reserve if the
+ * view's pads change (2026-10-16 round 4, finding D).
+ */
+const val TOP_DOWN_LEFT_PAD_DP = 26
+const val TOP_DOWN_RIGHT_PAD_DP = 12
+
+/**
+ * Minimum chart-pane height (px) that satisfies the true-scale containment
+ * invariant at the full [RangeScene.FAIRWAY_END_Y] range: at 1:1 the vertical
+ * reach is span · heightPx / (2 · plotWidth), and the span can never exceed
+ * the range cap, so containment for the widest lateral dot requires
+ *     heightPx >= (maxAbsSideM + margin) * 2 * plotWidthPx / FAIRWAY_END_Y
+ * The page (BagMappingResult) reserves exactly this height for the chart pane
+ * when the panel is open; the fit grows its window toward the same bound.
+ */
+fun minPaneHeightPx(maxAbsSideM: Double, plotWidthPx: Float): Float =
+    ((maxAbsSideM + TOP_DOWN_LATERAL_MARGIN_M) * 2.0 * plotWidthPx /
+        RangeScene.FAIRWAY_END_Y).toFloat()
 
 /**
  * The TOP-DOWN view's fit. One instance drives both the canvas and the tap
@@ -51,8 +70,10 @@ fun computeBagTopDownFit(
     widthPx: Float,
     heightPx: Float,
     clubs: List<ClubDots>,
-    leftPadPx: Float = 26f,
-    rightPadPx: Float = 12f,
+    // Callers pass density-scaled px of TOP_DOWN_LEFT_PAD_DP / _RIGHT_PAD_DP
+    // (see BagTopDownView); the px defaults below only serve unit tests.
+    leftPadPx: Float = TOP_DOWN_LEFT_PAD_DP.toFloat(),
+    rightPadPx: Float = TOP_DOWN_RIGHT_PAD_DP.toFloat(),
 ): BagTopDownFit? {
     val points = clubs.flatMap { it.points }
     if (points.isEmpty()) return null
@@ -81,8 +102,13 @@ fun computeBagTopDownFit(
     // (and shifting the window's start down if the range end clamps it):
     //     span >= (maxAbsSide + margin) * 2 * plotWidth / heightPx
     val plotWidth = max(widthPx - leftPadPx - rightPadPx, 1f)
-    val requiredSpan =
-        (maxAbsSide + TOP_DOWN_LATERAL_MARGIN_M) * 2.0 * plotWidth / max(heightPx, 1f)
+    // Same containment arithmetic as [minPaneHeightPx], solved for the span:
+    // requiredSpan = minPaneHeightPx * FAIRWAY_END_Y / heightPx. The height
+    // is floored at 1 px everywhere (H) so a zero-height pane can never
+    // yield pxPerMSide = 0 (every dot collapsing onto y = 0).
+    val safeHeight = max(heightPx, 1f)
+    val requiredSpan = minPaneHeightPx(maxAbsSide, plotWidth) *
+        RangeScene.FAIRWAY_END_Y / safeHeight
     var span = max(windowMaxM - windowMinM, 1.0)
     if (span < requiredSpan) {
         val grown = ceil(requiredSpan / TOP_DOWN_SNAP_M) * TOP_DOWN_SNAP_M
@@ -100,9 +126,9 @@ fun computeBagTopDownFit(
     // to the largest value that still contains maxAbsSide + margin: the ring
     // shapes read slightly flat in that degenerate case, which beats both
     // clipping (hides data) and drawing outside the pane.
-    val reachM = span * heightPx / (2.0 * plotWidth)
+    val reachM = span * safeHeight / (2.0 * plotWidth)
     if (reachM < maxAbsSide + TOP_DOWN_LATERAL_MARGIN_M) {
-        pxPerMSide = (heightPx / 2f) / (maxAbsSide + TOP_DOWN_LATERAL_MARGIN_M)
+        pxPerMSide = (safeHeight / 2f) / (maxAbsSide + TOP_DOWN_LATERAL_MARGIN_M)
     }
     return BagTopDownFit(
         windowMinM = windowMinM,
@@ -110,6 +136,6 @@ fun computeBagTopDownFit(
         pxPerMM = (plotWidth / span).toFloat(),
         leftPadPx = leftPadPx,
         pxPerMSide = pxPerMSide.toFloat(),
-        midY = heightPx / 2f,
+        midY = safeHeight / 2f,
     )
 }

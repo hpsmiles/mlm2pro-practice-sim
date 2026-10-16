@@ -114,4 +114,43 @@ class BagTopDownGeomTest {
         assertTrue(fit.sy(-40.0) <= 100f)
         assertTrue(fit.sy(40.0) >= 0f)
     }
+
+    @Test
+    fun `minPaneHeightPx matches the tablet measurements and drives the fit`() {
+        // 2026-10-16 round 4 (finding D): the page-level floor and the fit's
+        // requiredSpan share this one function. Pinned against the numbers
+        // measured on the tablet: maxAbsSide ~23.5 m, plotWidth ~2761 px
+        // → (23.5 + 2) * 2 * 2761 / 330 = 426.7 px.
+        assertEquals(426.7f, minPaneHeightPx(23.5, 2761f), 0.5f)
+        // And it is exactly the pane height at which the 330 m window
+        // contains the data: a fit with that pane height needs no fallback.
+        val fit = computeBagTopDownFit(
+            widthPx = 2761f + 26f + 12f,
+            heightPx = minPaneHeightPx(23.5, 2761f),
+            clubs = listOf(
+                ClubDots(
+                    "D",
+                    listOf(-20.0 to 240.0, 23.5 to 237.0, 0.0 to 238.0, 5.0 to 239.0),
+                ),
+            ),
+            leftPadPx = 26f,
+            rightPadPx = 12f,
+        )!!
+        assertEquals(RangeScene.FAIRWAY_END_Y, fit.windowMaxM, 1e-9)
+        assertTrue(fit.sy(-23.5f.toDouble()) <= 426.7f)
+        assertTrue(fit.sy(23.5f.toDouble()) >= 0f)
+    }
+
+    @Test
+    fun `a zero-height pane never collapses every dot onto y zero`() {
+        // 2026-10-16 round 4 (finding H): the height floor must apply to the
+        // fallback and mid line too, not just requiredSpan.
+        val fit = computeBagTopDownFit(
+            1000f,
+            0f,
+            listOf(ClubDots("D", listOf(-5.0 to 200.0, 5.0 to 210.0, 0.0 to 205.0))),
+        )!!
+        assertTrue(fit.pxPerMSide > 0f)
+        assertTrue(fit.midY > 0f)
+    }
 }

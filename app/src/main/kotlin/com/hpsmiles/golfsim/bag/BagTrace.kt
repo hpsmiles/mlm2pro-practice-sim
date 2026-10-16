@@ -138,16 +138,27 @@ object BagTrace {
      * gets recalibrated, and it moves distance but never lateral deviation, so
      * this keeps every dot's distance identical to every other number on the
      * page.
+     *
+     * A non-positive cached distance is skipped (mirroring [trace]): a corrupt
+     * row would otherwise plant a dot at or behind the tee that the top-down
+     * clips away but `DispersionEllipse.fromKept` would still fit a ring
+     * around (2026-10-16 round 4, finding F). Known asymmetry, accepted: a
+     * cached distance beyond [RangeScene.FAIRWAY_END_Y] is clamped out of the
+     * top-down window (so its dot is not drawn there) while SIDE still draws
+     * the arc to the full cached distance — the top-down's world ends at the
+     * range fence, the side view's axis does not.
      */
     fun dots(clubName: String, shots: List<BagMappingShotEntity>, basis: DistanceBasis): ClubDots {
         val points = shots.filter { it.effectiveIncluded() }.mapNotNull { shot ->
+            val distance = shot.distanceFor(basis)
+            if (distance <= 0.0) return@mapNotNull null
             val launch = launchFor(shot) ?: return@mapNotNull null
             val simulated = BallFlightEngine.simulate(launch)
             val lateral = when (basis) {
                 DistanceBasis.CARRY -> simulated.samples.lastOrNull()?.px ?: return@mapNotNull null
                 DistanceBasis.TOTAL -> simulated.sideM
             }
-            lateral to shot.distanceFor(basis)
+            lateral to distance
         }
         return ClubDots(clubName, points)
     }

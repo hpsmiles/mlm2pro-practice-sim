@@ -51,7 +51,6 @@ import com.hpsmiles.golfsim.core.data.record.ClubType
 import com.hpsmiles.golfsim.core.designsystem.GolfColors
 import com.hpsmiles.golfsim.core.designsystem.GolfSpacing
 import com.hpsmiles.golfsim.core.designsystem.GolfTypography
-import com.hpsmiles.golfsim.range.RangeScene
 import java.util.Locale
 import kotlin.math.abs
 
@@ -124,24 +123,25 @@ fun BagMappingResult(
     BoxWithConstraints(
         modifier = modifier.fillMaxSize().background(GolfColors.Base).padding(GolfSpacing.Xl),
     ) {
-        // TOP-DOWN true-scale containment floor (2026-10-16 round 3): at 1:1
-        // the chart pane must be at least
-        //     (maxAbsSide + margin) * 2 * plotWidth / FAIRWAY_END_Y
-        // tall for the vertical reach to cover the widest dot at the full
-        // range — a fixed chart/panel weight ratio cannot guarantee that on
-        // every session. With the panel open, the chart gets exactly this
-        // height and the panel takes the remainder (harmless: the panel
-        // scrolls under its pinned scale). The plot canvas spans the content
-        // width, and the pads mirror BagTopDownView's 26/12 dp.
+        // TOP-DOWN true-scale containment floor (2026-10-16 round 3, D):
+        // at 1:1 the chart pane must be at least minPaneHeightPx tall for the
+        // vertical reach to cover the widest dot at the full range — a fixed
+        // chart/panel weight ratio cannot guarantee that on every session.
+        // With the panel open, the chart gets exactly this height and the
+        // panel takes the remainder (harmless: the panel scrolls under its
+        // pinned scale). The plot canvas spans the content width; the pads
+        // come from the same constants the view insets by.
         val minChartDp = if (view == BagResultsView.TOP_DOWN && panelOpen) {
             with(density) {
-                val plotWidthPx = constraints.maxWidth - (26.dp + 12.dp).toPx()
-                val minPanePx = ((maxAbsSideM + TOP_DOWN_LATERAL_MARGIN_M) * 2.0 *
-                    plotWidthPx / RangeScene.FAIRWAY_END_Y).toFloat()
+                val plotWidthPx = constraints.maxWidth -
+                    (TOP_DOWN_LEFT_PAD_DP + TOP_DOWN_RIGHT_PAD_DP).dp.toPx()
                 // Guard: an absurd lateral spread must never swallow the
                 // page — such a session falls through to the geom's squash
                 // fallback instead.
-                minPanePx.coerceAtMost(constraints.maxHeight * 0.5f).coerceAtLeast(0f).toDp()
+                minPaneHeightPx(maxAbsSideM, plotWidthPx)
+                    .coerceAtMost(constraints.maxHeight * 0.5f)
+                    .coerceAtLeast(0f)
+                    .toDp()
             }
         } else null
         Column(
@@ -177,7 +177,7 @@ fun BagMappingResult(
             SegmentedChoice("CARRY", basis == DistanceBasis.CARRY) { basis = DistanceBasis.CARRY }
             SegmentedChoice("TOTAL", basis == DistanceBasis.TOTAL) { basis = DistanceBasis.TOTAL }
         }
-        BagResultsSummary(summary, basis)
+        BagResultsSummary(summary, gaps.size, basis)
         when (view) {
             BagResultsView.SIDE -> BagSideView(
                 traces = traces,
