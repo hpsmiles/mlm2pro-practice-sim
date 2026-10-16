@@ -52,8 +52,8 @@ data class BagTopDownFit(
     /** Screen x of a downrange distance. */
     fun sx(distanceM: Double): Float = leftPadPx + ((distanceM - windowMinM) * pxPerMM).toFloat()
 
-    /** Screen y of a lateral offset (positive side drawn upward). */
-    fun sy(sideM: Double): Float = midY - (sideM * pxPerMSide).toFloat()
+    /** Screen y of a lateral offset (+ = right of target = down the screen; sign verified 2026-10-16). */
+    fun sy(sideM: Double): Float = midY + (sideM * pxPerMSide).toFloat()
 }
 
 /**

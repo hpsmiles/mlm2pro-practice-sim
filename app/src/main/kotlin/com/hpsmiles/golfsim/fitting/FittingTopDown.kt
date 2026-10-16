@@ -167,7 +167,11 @@ internal fun FittingTopDownPane(
                     vPadPx = vPadPx.toDouble(),
                 )
                 fun sx(distM: Double) = (fit.originX + distM * fit.pxPerMX).toFloat()
-                fun sy(sideM: Double) = (fit.midY - sideM * fit.pxPerMY).toFloat()
+                // Sign convention (verified 2026-10-16, M4c goldens): +side is
+                // RIGHT of the target looking down-range — with the tee at the
+                // left and distance increasing rightward, right-of-target draws
+                // DOWN the screen.
+                fun sy(sideM: Double) = (fit.midY + sideM * fit.pxPerMY).toFloat()
 
                 // Fairway corridor (tee 10 m → 330 m, lateral ±14 m — the
                 // constant 28 m band) in the range POV's fairway green, with
@@ -285,18 +289,18 @@ internal fun FittingTopDownPane(
                 // extent maps to screen x, its lateral extent to screen y.
                 drawRect(
                     color = RangeMat.BASE,
-                    topLeft = Offset(sx(RangeMat.BASE_Y_MIN), sy(RangeMat.BASE_X_MAX)),
+                    topLeft = Offset(sx(RangeMat.BASE_Y_MIN), sy(RangeMat.BASE_X_MIN)),
                     size = Size(
                         sx(RangeMat.BASE_Y_MAX) - sx(RangeMat.BASE_Y_MIN),
-                        sy(RangeMat.BASE_X_MIN) - sy(RangeMat.BASE_X_MAX),
+                        sy(RangeMat.BASE_X_MAX) - sy(RangeMat.BASE_X_MIN),
                     ),
                 )
                 drawRect(
                     color = RangeMat.STRIP,
-                    topLeft = Offset(sx(RangeMat.STRIP_Y_MIN), sy(RangeMat.STRIP_X_MAX)),
+                    topLeft = Offset(sx(RangeMat.STRIP_Y_MIN), sy(RangeMat.STRIP_X_MIN)),
                     size = Size(
                         sx(RangeMat.STRIP_Y_MAX) - sx(RangeMat.STRIP_Y_MIN),
-                        sy(RangeMat.STRIP_X_MIN) - sy(RangeMat.STRIP_X_MAX),
+                        sy(RangeMat.STRIP_X_MAX) - sy(RangeMat.STRIP_X_MIN),
                     ),
                 )
                 // Ball dot at the origin (same world point as the POV tee ball).

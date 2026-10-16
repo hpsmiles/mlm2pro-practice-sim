@@ -23,7 +23,9 @@ object BallFlightEngine {
         // Backspin axis (CalOf equivalent: omega along +x for launchDir 0):
         // tilt the horizontal backspin axis b = (cos az, -sin az, 0) around the
         // horizontal launch direction h = (sin az, cos az, 0) by spinAxisDeg.
-        // +spinAxisDeg curves the ball toward +x (sign unverified — M1 §9 list).
+        // +spinAxisDeg (fade) curves the ball toward +x — right of the target
+        // looking down-range (sign verified 2026-10-16 against the M4c
+        // on-device goldens and the reference BLE parsers).
         val tilt = Math.toRadians(launch.spinAxisDeg)
         val spinHat = Vec3(
             Math.cos(az) * Math.cos(tilt),

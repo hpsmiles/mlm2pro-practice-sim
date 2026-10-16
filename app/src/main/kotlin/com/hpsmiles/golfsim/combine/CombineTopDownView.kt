@@ -225,7 +225,10 @@ private fun CombineTopDownCanvas(
             ringLateralHalfM,
         ) + 2.0
         fun sx(restY: Double) = leftPad + ((restY - windowMinM) * pxPerM).toFloat()
-        fun sy(restX: Double) = midY - (restX * pxPerM).toFloat()
+        // Sign convention (verified 2026-10-16, M4c goldens): +x is right of
+        // the target looking down-range — with the tee at the left and distance
+        // increasing rightward, right-of-target draws DOWN the screen.
+        fun sy(restX: Double) = midY + (restX * pxPerM).toFloat()
 
         // Corridor (the constant 28 m fairway band) + centre line, spanning the
         // cropped window — the band is the backdrop, not content. Range palette

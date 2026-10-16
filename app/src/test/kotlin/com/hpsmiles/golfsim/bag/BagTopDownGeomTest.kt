@@ -46,10 +46,13 @@ class BagTopDownGeomTest {
     }
 
     @Test
-    fun `sy puts lateral zero at the mid line and positive side above it`() {
+    fun `sy puts lateral zero at the mid line and positive side below it`() {
+        // Sign convention (verified 2026-10-16): +side is RIGHT of the target
+        // looking down-range, which draws DOWN the screen with the tee left.
         val fit = computeBagTopDownFit(1000f, 400f, clubs)!!
         assertEquals(200f, fit.sy(0.0), 1e-3f)
-        assertTrue(fit.sy(10.0) < fit.sy(0.0))
+        assertTrue(fit.sy(10.0) > fit.sy(0.0))
+        assertTrue(fit.sy(-10.0) < fit.sy(0.0))
     }
 
     @Test
@@ -62,7 +65,7 @@ class BagTopDownGeomTest {
         assertEquals(fit.pxPerMM, fit.pxPerMSide, 1e-6f)
         // Lateral zero stays on the mid line and metres map symmetrically.
         assertEquals(200f, fit.sy(0.0), 1e-3f)
-        assertEquals(200f + fit.pxPerMSide * 5f, fit.sy(-5.0), 1e-3f)
+        assertEquals(200f - fit.pxPerMSide * 5f, fit.sy(-5.0), 1e-3f)
     }
 
     @Test
