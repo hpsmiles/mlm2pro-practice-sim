@@ -152,12 +152,12 @@ fun AppRoot() {
     // open-session restore run once at startup; appends ride the existing
     // main-thread mediation (single-writer discipline, spec §7).
     val sessionRepository = remember { SessionRepository.open(context) }
-    val activeClubStore = remember { ActiveClubStore(context) }
-    var activeClubName by remember { mutableStateOf(activeClubStore.get()) }
+    // Active club is SESSION state only (user request 2026-10-15): it is no
+    // longer persisted, so RANGE/FIT always start unselected ("—") on launch.
+    var activeClubName by remember { mutableStateOf<String?>(null) }
 
     fun selectClub(name: String?) {
         activeClubName = name
-        activeClubStore.set(name)
     }
 
     val greenConditionStore = remember { GreenConditionStore(context) }
@@ -230,6 +230,13 @@ fun AppRoot() {
             // gate would freeze History / picker / END SESSION forever.
             repoReady = true
         }
+        // 2026-10-16: backfill the bag-mapping auto gates (duff + misread)
+        // onto sessions collected before the misread gates shipped — their
+        // rows still carry the pre-gate `filtered=false`. Idempotent, runs
+        // as one Room transaction off the main thread, never touches the
+        // user's includeOverride; the observe flows re-emit when it lands,
+        // so any open results view refreshes on its own.
+        scope.launch { sessionRepository.backfillBagMappingAutoFilter() }
     }
 
     // M5: one gated club capture for all three tabs (replaces the three
@@ -1051,6 +1058,9 @@ fun AppRoot() {
                             onStartTest = ::startBagTest,
                             onOpenSettings = { requestTab(RangeTab.SETTINGS) },
                             onCompleteSession = ::completeBagTest,
+                            onSetIncludeOverride = { id, include ->
+                                scope.launch { sessionRepository.setBagMappingShotIncludeOverride(id, include) }
+                            },
                             latestShot = bagDisplayShot,
                         )
                     }

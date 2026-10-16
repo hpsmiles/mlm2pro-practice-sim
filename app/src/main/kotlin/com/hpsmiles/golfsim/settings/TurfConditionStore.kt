@@ -6,7 +6,7 @@ import com.hpsmiles.golfsim.core.physics.TurfCondition
 
 /**
  * User-selected off-green turf (Settings > TURF). SharedPreferences alongside
- * the SecretStore / ActiveClubStore / GreenConditionStore pattern.
+ * the SecretStore / GreenConditionStore pattern.
  */
 class TurfConditionStore(context: Context) {
 

@@ -13,6 +13,9 @@ interface BagMappingSessionDao {
     @Insert
     suspend fun insert(session: BagMappingSessionEntity): Long
 
+    @Query("SELECT * FROM bag_mapping_sessions ORDER BY id")
+    suspend fun findAll(): List<BagMappingSessionEntity>
+
     @Query("SELECT * FROM bag_mapping_sessions WHERE status = 'IN_PROGRESS' ORDER BY id DESC LIMIT 1")
     suspend fun findInProgress(): BagMappingSessionEntity?
 

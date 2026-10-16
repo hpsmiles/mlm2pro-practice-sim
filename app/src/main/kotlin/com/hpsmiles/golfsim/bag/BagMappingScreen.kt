@@ -38,6 +38,7 @@ fun BagMappingScreen(
     onStartTest: (BagOrderMode) -> Unit,
     onOpenSettings: () -> Unit,
     onCompleteSession: () -> Unit,
+    onSetIncludeOverride: (Long, Boolean) -> Unit,
     modifier: Modifier = Modifier,
     latestShot: com.hpsmiles.golfsim.range.DisplayShot? = null,
 ) {
@@ -113,6 +114,7 @@ fun BagMappingScreen(
                     onRetest = { onStartTest(BagOrderMode.WEDGE_FIRST) },
                     onResume = { view = BagView.COLLECTING },
                     onOpenHistory = { view = BagView.HISTORY },
+                    onSetIncludeOverride = onSetIncludeOverride,
                     modifier = modifier,
                 )
             }

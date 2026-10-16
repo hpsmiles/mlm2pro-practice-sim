@@ -89,6 +89,9 @@ class SessionRepository private constructor(private val context: Context) {
     /** Test seam: raw club rows, for reorder order/uniqueness assertions. */
     internal fun clubDao() = clubDao
 
+    /** Test seam: raw bag-mapping shot rows, for inserting pre-gate fixtures. */
+    internal fun bagMappingShotDao() = bagMappingShotDao
+
     fun observeShots(sessionId: Long): Flow<List<ShotRecord>> =
         shotDao.observeShots(sessionId).map { list -> list.map { it.toRecord() } }
 
@@ -402,6 +405,7 @@ class SessionRepository private constructor(private val context: Context) {
                 Mlm2proDatabase.MIGRATION_4_5,
                 Mlm2proDatabase.MIGRATION_5_6,
                 Mlm2proDatabase.MIGRATION_6_7,
+                Mlm2proDatabase.MIGRATION_7_8,
             )
             .build()
 
@@ -498,11 +502,14 @@ class SessionRepository private constructor(private val context: Context) {
 
     /**
      * Write-through append for one mapping shot (spec §4) — this is what
-     * makes resume-after-kill work. Inside the same transaction the duff
-     * filter is recomputed over the club's whole shot set (BagMappingStats)
-     * so kept-set, stats and plots stay consistent on every write, including
-     * retroactively re-judging early shots. Returns the new row id, or null
-     * on failure (persistError flags; never throws).
+     * makes resume-after-kill work. Inside the same transaction the AUTO gate
+     * verdict (duff + misread, BagMappingStats) is recomputed over the club's
+     * whole shot set so kept-set, stats and plots stay consistent on every
+     * write, including retroactively re-judging early shots. The recompute
+     * only ever writes [BagMappingShotDao.setFiltered] (filtered/filterReason)
+     * — it NEVER clobbers the user's [BagMappingShotEntity.includeOverride].
+     * Returns the new row id, or null on failure (persistError flags; never
+     * throws).
      */
     suspend fun appendBagMappingShot(
         sessionId: Long,
@@ -530,7 +537,7 @@ class SessionRepository private constructor(private val context: Context) {
                     totalM = totalM,
                 ),
             )
-            recomputeDuffFilter(sessionId, clubName)
+            recomputeAutoFilter(sessionId, clubName)
             shotId
         }.also { persistError.value = false }
     } catch (t: Throwable) {
@@ -540,15 +547,82 @@ class SessionRepository private constructor(private val context: Context) {
         null
     }
 
-    /** Recomputes the duff filter for one club and persists changed verdicts. Call inside a transaction. */
-    private suspend fun recomputeDuffFilter(sessionId: Long, clubName: String) {
+    /** Recomputes the auto gate verdict for one club and persists changed verdicts. Call inside a transaction. */
+    private suspend fun recomputeAutoFilter(sessionId: Long, clubName: String) {
         val shots = bagMappingShotDao.shotsForClub(sessionId, clubName)
         val byId = shots.associateBy { it.id }
-        for (verdict in BagMappingStats.applyDuffFilter(shots)) {
+        for (verdict in BagMappingStats.applyAutoFilter(shots)) {
             val current = byId[verdict.id] ?: continue
             if (current.filtered != verdict.filtered || current.filterReason != verdict.reason) {
                 bagMappingShotDao.setFiltered(verdict.id, verdict.filtered, verdict.reason)
             }
+        }
+    }
+
+    /**
+     * Recomputes the auto gate verdict for EVERY club in one session (the
+     * session-wide form of [recomputeAutoFilter]) and persists changed
+     * verdicts. Call inside a transaction. Never writes
+     * [BagMappingShotEntity.includeOverride].
+     */
+    private suspend fun recomputeSessionAutoFilter(sessionId: Long) {
+        val shots = bagMappingShotDao.shotsForSession(sessionId)
+        val byId = shots.associateBy { it.id }
+        for (clubShots in shots.groupBy { it.clubName }.values) {
+            for (verdict in BagMappingStats.applyAutoFilter(clubShots)) {
+                val current = byId[verdict.id] ?: continue
+                if (current.filtered != verdict.filtered || current.filterReason != verdict.reason) {
+                    bagMappingShotDao.setFiltered(verdict.id, verdict.filtered, verdict.reason)
+                }
+            }
+        }
+    }
+
+    /**
+     * 2026-10-16 backfill: re-judges EVERY stored bag-mapping shot with the
+     * auto gate (duff + misread, [BagMappingStats.applyAutoFilter]) — the
+     * exact recompute [appendBagMappingShot] performs on each write. Sessions
+     * collected before the misread gates shipped still carry
+     * `filtered=false` / `filterReason=null` on rows the gates would flag;
+     * this brings old sessions up to date with a fresh append's verdicts.
+     *
+     * Idempotent (only verdicts that CHANGED are written — safe to run on
+     * every app start) and NEVER touches
+     * [BagMappingShotEntity.includeOverride], so user overrides survive. Runs
+     * as one Room transaction off the main thread; the observe flows re-emit
+     * when it completes, so any open results view refreshes on its own. Never
+     * throws — persistError contract.
+     */
+    suspend fun backfillBagMappingAutoFilter() {
+        try {
+            db.withTransaction {
+                for (session in bagMappingSessionDao.findAll()) {
+                    recomputeSessionAutoFilter(session.id)
+                }
+            }
+            persistError.value = false
+        } catch (t: Throwable) {
+            if (t is CancellationException) throw t
+            Log.e(TAG, "backfillBagMappingAutoFilter failed", t)
+            persistError.value = true
+        }
+    }
+
+    /**
+     * Sets the user include/exclude override for one mapping shot (2026-10-16):
+     * null clears it (follow the auto gate), true forces include, false forces
+     * exclude. The effective state — [BagMappingShotEntity.effectiveIncluded] —
+     * drives every aggregate/gap/count, so this is the RESULT drill-down tick
+     * box's write path. Never throws — appendShot contract; flows re-emit.
+     */
+    suspend fun setBagMappingShotIncludeOverride(id: Long, includeOverride: Boolean?) {
+        try {
+            bagMappingShotDao.setIncludeOverride(id, includeOverride)
+            persistError.value = false
+        } catch (t: Throwable) {
+            if (t is CancellationException) throw t
+            Log.e(TAG, "setBagMappingShotIncludeOverride failed", t)
+            persistError.value = true
         }
     }
 

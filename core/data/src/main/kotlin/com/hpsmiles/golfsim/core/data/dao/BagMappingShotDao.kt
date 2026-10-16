@@ -29,4 +29,12 @@ interface BagMappingShotDao {
 
     @Query("UPDATE bag_mapping_shots SET filtered = :filtered, filterReason = :reason WHERE id = :id")
     suspend fun setFiltered(id: Long, filtered: Boolean, reason: String?)
+
+    /**
+     * Sets the user include/exclude override (2026-10-16): null clears it
+     * (back to following the auto gate verdict), true forces include, false
+     * forces exclude. The auto recompute path never touches this column.
+     */
+    @Query("UPDATE bag_mapping_shots SET includeOverride = :includeOverride WHERE id = :id")
+    suspend fun setIncludeOverride(id: Long, includeOverride: Boolean?)
 }

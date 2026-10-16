@@ -30,8 +30,22 @@ data class BagMappingShotEntity(
     // physics caches
     val carryM: Double,
     val totalM: Double,
-    /** Recomputed duff-filter cache (BagMappingStats); rewritten on every club write. */
+    /** Recomputed AUTO gate verdict (duff + misread, BagMappingStats); rewritten on every club write. */
     val filtered: Boolean = false,
-    /** Null when kept; DUFF_LOW_BALL_SPEED when filtered. */
+    /** Null when kept; DUFF_LOW_BALL_SPEED / MISREAD_* when filtered. */
     val filterReason: String? = null,
-)
+    /**
+     * User include/exclude override (2026-10-16): null = follow the auto gate
+     * verdict ([filtered]); true = user forces include; false = user forces
+     * exclude. Set per-shot from the RESULT drill-down tick box; the auto
+     * recompute NEVER writes here, so a user override survives every append.
+     */
+    val includeOverride: Boolean? = null,
+) {
+    /**
+     * Effective inclusion (2026-10-16) — the single source of truth for
+     * aggregates, gap analysis and kept-vs-filtered counts: the user's
+     * [includeOverride] wins when set, otherwise the auto gate verdict.
+     */
+    fun effectiveIncluded(): Boolean = includeOverride ?: !filtered
+}

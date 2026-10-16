@@ -28,7 +28,7 @@ import com.hpsmiles.golfsim.core.data.entity.ShotEntity
         FittingSessionEntity::class, FittingShotEntity::class,
         CombineSessionEntity::class, CombineShotEntity::class,
     ],
-    version = 7,
+    version = 8,
     exportSchema = true,
 )
 abstract class Mlm2proDatabase : RoomDatabase() {
@@ -195,6 +195,21 @@ abstract class Mlm2proDatabase : RoomDatabase() {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE combine_shots ADD COLUMN restXM REAL")
                 db.execSQL("ALTER TABLE combine_shots ADD COLUMN restYM REAL")
+            }
+        }
+
+        /**
+         * 2026-10-16: bag_mapping_shots gains the user include/exclude
+         * override. NULLABLE with no default — pre-v8 rows read back null
+         * (follow the auto gate verdict); only the RESULT drill-down tick box
+         * ever writes it. The entity's nullable Boolean? maps to INTEGER with
+         * no @ColumnInfo defaultValue, so there is nothing for the ALTER TABLE
+         * to match (restXM/restYM pattern, MIGRATION_6_7). Corrupt-file
+         * recovery reuses build(), so it inherits the migration.
+         */
+        val MIGRATION_7_8: Migration = object : Migration(7, 8) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE bag_mapping_shots ADD COLUMN includeOverride INTEGER")
             }
         }
     }

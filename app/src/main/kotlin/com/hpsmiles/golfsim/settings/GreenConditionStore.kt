@@ -6,7 +6,7 @@ import com.hpsmiles.golfsim.core.physics.GreenCondition
 
 /**
  * User-selected green condition (Settings > GREEN). SharedPreferences alongside
- * the SecretStore / ActiveClubStore pattern — a single enum name, so DataStore
+ * the SecretStore pattern — a single enum name, so DataStore
  * is unnecessary (requirements did not grow).
  */
 class GreenConditionStore(context: Context) {
