@@ -10,17 +10,21 @@ import java.io.File
  * simulated outcomes to the FUSE_COMPARE_OUT TSV. Vacuous pass unless BOTH
  * env vars are set, so the normal unit-test suite is unaffected.
  *
- * Input columns (0-based, matches WS/extract-shots.mjs):
+ * Input columns (0-based, matches WS/convert-benchmark.mjs):
  * 0 id, 1 clubName, 2 ballSpeedMps, 3 launchAngleDeg, 4 launchDirDeg,
  * 5 spinAxisDeg, 6 totalSpinRpm, 7 cachedCarryM, 8 cachedTotalM,
- * 9 filtered, 10 includeOverride.
+ * 9 filtered, 10 includeOverride, then optional v2 env/apex columns:
+ * 11 tempC, 12 pressureHpa, 13 airDensityKgM3 (unused here - fuse only),
+ * 14 measuredApexM. Bag TSVs stop at col 10 -> default env.
  *
  * Output columns: id, status, carryM, rolloutM, totalM, sideM, apexM,
  * flightTimeSec, carryCacheDeltaM, totalCacheDeltaM. status = OK, or
  * ERROR:<reason> (LaunchConditions guard rejected the row) with empty metrics.
+ * Deltas are blank when col 7/8 is blank (e.g. Mevo has no total distance).
  *
  * Conditions pinned to match the fuse harness: fairway everywhere,
- * zero wind, default ambient (15 C / 1013.25 hPa), dt = engine default 10 ms.
+ * zero wind, dt = engine default 10 ms. Ambient = per-shot columns 11/12
+ * when present (benchmark TSVs), else default (15 C / 1013.25 hPa).
  */
 class FuseCompareHarnessTest {
 
@@ -55,9 +59,16 @@ class FuseCompareHarnessTest {
                     spinAxisDeg = c[5].toDouble(),
                     spinRpm = c[6].toDouble().toInt(),
                 )
-                val r = BallFlightEngine.simulate(launch)
-                val carryDelta = r.carryM - c[7].toDouble()
-                val totalDelta = r.totalM - c[8].toDouble()
+                val env = if (c.size >= 13 && c[11].isNotBlank() && c[12].isNotBlank()) {
+                    Environment(temperatureC = c[11].toDouble(), pressureHpa = c[12].toDouble())
+                } else {
+                    Environment()
+                }
+                val r = BallFlightEngine.simulate(launch, env)
+                val cc = c[7].toDoubleOrNull()
+                val ct = c[8].toDoubleOrNull()
+                val carryDelta = cc?.let { r.carryM - it } ?: ""
+                val totalDelta = ct?.let { r.totalM - it } ?: ""
                 out.appendLine(
                     listOf(
                         id, "OK",
