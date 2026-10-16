@@ -4,6 +4,7 @@ import com.hpsmiles.golfsim.core.data.bag.BagMappingStats
 import com.hpsmiles.golfsim.core.data.entity.BagMappingShotEntity
 import com.hpsmiles.golfsim.core.physics.BallFlightEngine
 import com.hpsmiles.golfsim.core.physics.LaunchConditions
+import com.hpsmiles.golfsim.range.RangeRollout
 import kotlin.math.hypot
 import kotlin.math.roundToInt
 
@@ -73,8 +74,40 @@ object BagTrace {
     fun medianDistance(shots: List<BagMappingShotEntity>, basis: DistanceBasis): Double? =
         BagMappingStats.median(shots.filter { it.effectiveIncluded() }.map { it.distanceFor(basis) })
 
-    /** Task 4 implements this. */
-    fun trace(clubName: String, shots: List<BagMappingShotEntity>, basis: DistanceBasis): ClubTrace? = null
+    /**
+     * The club's median flight, ready to draw.
+     *
+     * The trace is simulated from the **median of the launch metrics**, which
+     * does not land at the **median of the distances** (the median of a function
+     * is not the function of the medians). It is therefore uniformly scaled by
+     * `medianDistance / traceEndDistance` so it ends exactly on the number
+     * printed under it — one number per club across the whole page. The
+     * persisted caches were also written at capture time by an engine whose
+     * bounce/roll law is periodically recalibrated, so a fresh simulation's
+     * total can drift from the stored one. Scaling keeps the shape (which is
+     * what carries the launch-angle and spin information) and discards an
+     * absolute distance the trace was never authoritative for.
+     *
+     * Null when the club has no kept shots, its medians cannot build launch
+     * conditions, or the trace has no forward extent.
+     */
+    fun trace(clubName: String, shots: List<BagMappingShotEntity>, basis: DistanceBasis): ClubTrace? {
+        val launch = medianLaunch(shots) ?: return null
+        val distance = medianDistance(shots, basis) ?: return null
+        if (distance <= 0.0) return null
+        val simulated = BallFlightEngine.simulate(launch)
+        val samples = when (basis) {
+            DistanceBasis.CARRY -> simulated.samples
+            DistanceBasis.TOTAL -> simulated.samples + RangeRollout.samples(simulated)
+        }
+        if (samples.isEmpty()) return null
+        val raw = samples.map { TracePoint(hypot(it.px, it.py), it.pz) }
+        val end = raw.last().downrangeM
+        if (end <= 0.0) return null
+        val k = distance / end
+        val scaled = raw.map { TracePoint(it.downrangeM * k, it.heightM * k) }
+        return ClubTrace(clubName, scaled, distance, scaled.maxOf { it.heightM })
+    }
 
     /** Task 5 implements this. */
     fun dots(clubName: String, shots: List<BagMappingShotEntity>, basis: DistanceBasis): ClubDots =

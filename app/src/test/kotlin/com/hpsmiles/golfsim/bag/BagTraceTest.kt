@@ -4,6 +4,7 @@ import com.hpsmiles.golfsim.core.data.entity.BagMappingShotEntity
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class BagTraceTest {
@@ -82,5 +83,43 @@ class BagTraceTest {
     @Test
     fun `medianDistance is null with no kept shots`() {
         assertNull(BagTrace.medianDistance(emptyList(), DistanceBasis.CARRY))
+    }
+
+    @Test
+    fun `trace ends exactly on the authoritative median distance`() {
+        val shots = listOf(
+            shot(carryM = 130.0), shot(carryM = 140.0), shot(carryM = 150.0),
+        )
+        val trace = BagTrace.trace("7i", shots, DistanceBasis.CARRY)
+        assertNotNull(trace)
+        assertEquals(140.0, trace!!.distanceM, 1e-9)
+        // Scale-to-fit: the drawn trace lands on the printed number, whatever
+        // the simulation's own carry was.
+        assertEquals(140.0, trace.points.last().downrangeM, 1e-6)
+        assertTrue(trace.points.size > 1)
+    }
+
+    @Test
+    fun `trace starts at the tee and its apex is positive`() {
+        val trace = BagTrace.trace("7i", listOf(shot()), DistanceBasis.CARRY)!!
+        assertEquals(0.0, trace.points.first().downrangeM, 1e-9)
+        assertEquals(0.0, trace.points.first().heightM, 1e-9)
+        assertTrue(trace.apexM > 0.0)
+    }
+
+    @Test
+    fun `total basis runs further than carry basis`() {
+        val shots = listOf(shot(carryM = 140.0, totalM = 152.0))
+        val carry = BagTrace.trace("7i", shots, DistanceBasis.CARRY)!!
+        val total = BagTrace.trace("7i", shots, DistanceBasis.TOTAL)!!
+        assertTrue(total.distanceM > carry.distanceM)
+        assertTrue(total.points.size > carry.points.size)
+    }
+
+    @Test
+    fun `trace is null with no kept shots or unbuildable launch`() {
+        assertNull(BagTrace.trace("7i", emptyList(), DistanceBasis.CARRY))
+        assertNull(BagTrace.trace("7i", listOf(shot(included = false)), DistanceBasis.CARRY))
+        assertNull(BagTrace.trace("7i", listOf(shot(launchAngleDeg = 90.0)), DistanceBasis.CARRY))
     }
 }
